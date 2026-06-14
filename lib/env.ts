@@ -1,0 +1,33 @@
+// Typed public env. Reads NEXT_PUBLIC_* at module load. A missing value must
+// NOT throw at module scope (that would crash the bundle before any UI mounts);
+// instead we capture the failure as `envError` so a config-error screen can
+// show a friendly message. This module stays pure (no react/I-O).
+//
+// NOTE: Next inlines `process.env.NEXT_PUBLIC_*` at build time, so the literal
+// `process.env.NEXT_PUBLIC_API_URL` reference below is required — it can't be
+// read dynamically.
+
+interface PublicEnv {
+  apiUrl: string
+}
+
+const API_URL_HELP =
+  'Copy .env.example to .env.local and set NEXT_PUBLIC_API_URL to the backend (e.g. http://localhost:4000).'
+
+function read(value: string | undefined): string | null {
+  if (!value || value.trim().length === 0) return null
+  return value.replace(/\/$/, '')
+}
+
+const apiUrl = read(process.env.NEXT_PUBLIC_API_URL)
+
+// Non-null when configuration is incomplete. UI reads this to render a friendly
+// config-error screen instead of surfacing a cryptic failure later.
+export const envError: string | null =
+  apiUrl === null ? `Missing NEXT_PUBLIC_API_URL. ${API_URL_HELP}` : null
+
+// `apiUrl` falls back to '' when unconfigured so consumers stay strongly typed.
+// Check `envError` before relying on it for a real request.
+export const env: PublicEnv = {
+  apiUrl: apiUrl ?? '',
+}

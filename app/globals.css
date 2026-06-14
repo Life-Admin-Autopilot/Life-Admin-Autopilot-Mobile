@@ -1,0 +1,177 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * Mo V2 design tokens — "white marble + crimson" silent sovereign.
+ * See docs/tokens.md (values), docs/aesthetic.md (vibe), AGENTS.md (rules).
+ * Tailwind v4 is CSS-first: tokens in `@theme` generate the semantic utilities
+ * (bg-canvas, text-ink-muted, text-display-hero, shadow-card, text-accent).
+ * Colors are rgb(R G B) so `/alpha` modifiers work. App is light-only.
+ *
+ * shadcn primitives consume their own vars (--primary, --card, …); we map those
+ * onto Mo tokens in :root so Button/Card/Input inherit crimson-on-marble.
+ */
+
+@theme inline {
+  /* shadcn semantic colors → Mo CSS vars (defined in :root) */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Type families (loaded via next/font in layout.tsx) */
+  --font-wordmark: var(--font-cinzel), ui-serif, Georgia, serif;
+  --font-display: var(--font-cormorant), ui-serif, Georgia, serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Radius — architectural, composed */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 22px;
+  --radius-pill: 9999px;
+}
+
+@theme {
+  /* ---- Surfaces — marble ---- */
+  --color-canvas: rgb(243 240 234);
+  --color-canvas-veined: rgb(236 232 224);
+  --color-surface: rgb(255 255 255);
+  --color-surface-sunken: rgb(236 233 227);
+  --color-border-strong: rgb(212 206 194);
+
+  /* ---- Ink — carved graphite ---- */
+  --color-ink: rgb(28 26 23);
+  --color-ink-muted: rgb(107 102 94);
+  --color-ink-subtle: rgb(154 149 139);
+  --color-ink-nav: rgb(122 116 107);
+
+  /* ---- Accent — deep crimson (the seal) ---- */
+  --color-accent-pressed: rgb(127 20 22);
+  --color-accent-soft: rgb(244 226 225);
+  --color-accent-ink: rgb(255 255 255);
+
+  /* ---- Gold — premium tier only (sparing) ---- */
+  --color-gold: rgb(176 137 47);
+  --color-gold-soft: rgb(239 230 210);
+
+  /* ---- Status — restrained ---- */
+  --color-danger: rgb(142 20 24);
+  --color-danger-soft: rgb(244 226 225);
+  --color-warning: rgb(154 107 31);
+  --color-warning-soft: rgb(241 231 212);
+
+  /* ---- Domains — low-chroma stone tints ---- */
+  --color-domain-health: rgb(228 234 229);
+  --color-domain-health-ink: rgb(58 74 64);
+  --color-domain-home: rgb(236 229 221);
+  --color-domain-home-ink: rgb(90 74 58);
+  --color-domain-car: rgb(230 230 226);
+  --color-domain-car-ink: rgb(69 69 63);
+  --color-domain-finance: rgb(227 230 236);
+  --color-domain-finance-ink: rgb(58 66 84);
+  --color-domain-family: rgb(236 227 229);
+  --color-domain-family-ink: rgb(90 62 68);
+  --color-domain-pets: rgb(232 227 236);
+  --color-domain-pets-ink: rgb(76 66 86);
+
+  /* ---- Type scale (size / line-height / weight / tracking) ---- */
+  --text-wordmark: 20px;
+  --text-wordmark--line-height: 24px;
+  --text-wordmark--font-weight: 600;
+  --text-wordmark--letter-spacing: 0.18em;
+  --text-display-hero: 40px;
+  --text-display-hero--line-height: 46px;
+  --text-display-hero--font-weight: 600;
+  --text-display-md: 32px;
+  --text-display-md--line-height: 38px;
+  --text-display-md--font-weight: 600;
+  --text-heading-xl: 24px;
+  --text-heading-xl--line-height: 30px;
+  --text-heading-xl--font-weight: 600;
+  --text-heading-md: 20px;
+  --text-heading-md--line-height: 28px;
+  --text-heading-md--font-weight: 600;
+  --text-heading-sm: 17px;
+  --text-heading-sm--line-height: 24px;
+  --text-heading-sm--font-weight: 600;
+  --text-body: 15px;
+  --text-body--line-height: 22px;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 20px;
+  --text-caption: 13px;
+  --text-caption--line-height: 18px;
+  --text-label: 12px;
+  --text-label--line-height: 16px;
+  --text-label--font-weight: 600;
+  --text-label--letter-spacing: 0.12em;
+  --text-micro: 11px;
+  --text-micro--line-height: 14px;
+  --text-micro--font-weight: 500;
+
+  /* ---- Motion ---- */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-quad: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---- Shadows — soft, low, warm-graphite tint ---- */
+  --shadow-card: 0 1px 2px rgb(28 26 23 / 0.04), 0 4px 12px rgb(28 26 23 / 0.05);
+  --shadow-elevated: 0 8px 28px rgb(28 26 23 / 0.08), 0 2px 6px rgb(28 26 23 / 0.04);
+}
+
+/*
+ * shadcn semantic vars mapped onto the marble/crimson palette. Crimson is the
+ * single brand accent, so --primary and --accent both resolve to crimson.
+ */
+:root {
+  --background: rgb(243 240 234); /* canvas */
+  --foreground: rgb(28 26 23); /* ink */
+  --card: rgb(255 255 255); /* surface */
+  --card-foreground: rgb(28 26 23);
+  --popover: rgb(255 255 255);
+  --popover-foreground: rgb(28 26 23);
+  --primary: rgb(164 22 26); /* crimson */
+  --primary-foreground: rgb(255 255 255);
+  --secondary: rgb(255 255 255); /* white (secondary = white + crimson) */
+  --secondary-foreground: rgb(164 22 26);
+  --muted: rgb(236 233 227); /* surface-sunken */
+  --muted-foreground: rgb(107 102 94); /* ink-muted */
+  --accent: rgb(164 22 26); /* crimson — bg-accent CTA */
+  --accent-foreground: rgb(255 255 255);
+  --destructive: rgb(142 20 24); /* danger */
+  --border: rgb(226 221 212); /* warm stone hairline */
+  --input: rgb(226 221 212);
+  --ring: rgb(164 22 26); /* crimson focus ring */
+  --radius: 10px; /* md — button radius */
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+  }
+  body {
+    @apply bg-canvas text-ink antialiased;
+  }
+  /* Tabular numerals on time / money / date / count fields */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}

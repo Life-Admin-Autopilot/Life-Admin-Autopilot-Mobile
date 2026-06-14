@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Capacitor native projects (generated; regenerate with `npx cap add`)
+/ios/
+/android/
+
+# Env / secrets — NEVER commit real values
+.env
+.env.local
+.env.*.local
+server/.env
+
+# Misc
+.DS_Store
+*.log
+npm-debug.log*
+.vscode/*
+!.vscode/extensions.json
+coverage/
+.turbo/
+
+# TypeScript / Next
+*.tsbuildinfo
+next-env.d.ts
