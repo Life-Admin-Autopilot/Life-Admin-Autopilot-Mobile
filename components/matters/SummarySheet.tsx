@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowDown, ArrowUp, Loader2, Sparkles } from 'lucide-react'
+import { ArrowDown, ArrowUp, Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { cn } from '@/lib/cn'
@@ -248,7 +248,6 @@ function Report({
 
       {summary.question ? (
         <p className="mt-3 rounded-md bg-accent-soft px-3 py-2.5 text-body-sm text-ink">
-          <Sparkles size={12} className="mr-1 inline text-accent" />
           {summary.question.text}
         </p>
       ) : null}

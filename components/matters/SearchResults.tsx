@@ -1,7 +1,5 @@
 'use client'
 
-import { Sparkles } from 'lucide-react'
-
 import { SketchEmptyTrayGlyph } from '@/components/icons/sketch/flowGlyphs'
 import type { SearchResult } from '@/queries/mattersAi'
 import type { Task } from '@/queries/tasks'
@@ -22,7 +20,6 @@ import { MatterListRow } from './MatterListRow'
 
 export function SearchResults({
   result,
-  query,
   selectMode,
   selected,
   onToggleSelect,
@@ -31,7 +28,6 @@ export function SearchResults({
   onClear,
 }: {
   result: SearchResult
-  query: string
   selectMode: boolean
   selected: Set<string>
   onToggleSelect: (task: Task) => void
@@ -54,13 +50,12 @@ export function SearchResults({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-lg border border-accent/30 bg-accent-soft px-4 py-3">
-        <span className="flex items-center gap-1 text-label uppercase text-accent">
-          <Sparkles size={11} />
-          {query}
-        </span>
-        <p className="mt-0.5 text-body-sm text-ink">{result.answer}</p>
-      </div>
+      {/* Just the answer, in a sentence, the way a person would say it. No
+          sparkle, no shouting label: the question is still sitting in the search
+          box above, so echoing it here only adds furniture. */}
+      <p className="rounded-lg bg-accent-soft px-4 py-3 text-body text-ink">
+        {result.answer}
+      </p>
 
       {/* Says so out loud rather than quietly answering from a slice — a search
           that only looked at part of your backlog is a different claim. */}

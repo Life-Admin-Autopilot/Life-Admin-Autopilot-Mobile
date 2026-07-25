@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence } from 'framer-motion'
-import { ArrowRight, ListFilter, ArrowUpDown, CheckSquare, Sparkles } from 'lucide-react'
+import { ArrowRight, ListFilter, ArrowUpDown, CalendarRange, CheckSquare } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { SketchEmptyTrayGlyph } from '@/components/icons/sketch/flowGlyphs'
@@ -271,7 +271,7 @@ export default function MattersPage() {
               }}
             />
             <Control
-              icon={<Sparkles size={14} />}
+              icon={<CalendarRange size={14} />}
               label="Summary"
               onClick={(rect) => {
                 setTriggerRect(rect)
@@ -305,7 +305,6 @@ export default function MattersPage() {
         {result ? (
           <SearchResults
             result={result}
-            query={answered ?? ''}
             selectMode={selectMode}
             selected={selected}
             onToggleSelect={toggleSelect}

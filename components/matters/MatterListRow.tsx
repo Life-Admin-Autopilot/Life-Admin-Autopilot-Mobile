@@ -124,12 +124,12 @@ export function MatterListRow({
         </span>
       </button>
 
+      {/* Sentence case, not caps. A shouted HIGH next to every other row is the
+          same nagging that makes people stop opening the app — the tint already
+          carries the signal. */}
       {priority && !done ? (
         <span
-          className={cn(
-            'shrink-0 rounded-pill px-2 py-0.5 text-micro uppercase',
-            priority.className,
-          )}
+          className={cn('shrink-0 rounded-pill px-2 py-0.5 text-micro', priority.className)}
         >
           {priority.label}
         </span>

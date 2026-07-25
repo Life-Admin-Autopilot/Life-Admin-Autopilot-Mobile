@@ -78,6 +78,37 @@ and avoid excessive exclamation. The product noun is **"tasks"/"matters"**.
 The emotional goal is **relief with a smile**. The system does not create
 urgency — it helps the user feel supported in getting through it.
 
+## AI surfaces must not look like AI
+
+Anything the assistant produces — a search answer, a summary, a suggestion — is
+just **something the app is telling you**. It gets no special costume. The house
+style for machine-generated text is the same as for everything else, and the
+tells below are banned because they read as generic-AI-product rather than as Mo.
+
+- ❌ **No sparkle/star/wand icons.** No ✨, no `Sparkles`, no "magic" glyph,
+  anywhere. If a surface needs an icon, use one that describes what it actually
+  is (a calendar range for a time summary, a magnifier for search).
+- ❌ **No UPPERCASE label over an AI answer.** The uppercase `text-label` eyebrow
+  is for structural section headers ("TODAY", "THEMES", "SCAN A DOCUMENT") — it
+  is a navigational device, not a badge to hang on generated prose.
+- ❌ **No "AI"/"Powered by"/"Assistant" branding, no gradient text or borders, no
+  shimmer or typewriter effect on results.**
+- ❌ **No echoing the user's question back at them** above the answer. It is
+  already on screen in the input they typed it into.
+- ❌ **No shouted status words** (`HIGH`, `URGENT`) in list rows. Sentence case;
+  the tint carries the signal.
+
+- ✅ Answer in a plain sentence, body type, on `accent-soft` — the same soft
+  lavender any other informational card uses.
+- ✅ Say what was found the way a person would: *"Two renewals next month — your
+  gym membership and the car insurance."* Not *"I found 2 matching tasks."*
+- ✅ Per-result provenance in one lowercase clause (`related to car insurance
+  renewal, due august 8`), so "why is this here?" is answerable without a badge.
+
+The test: cover the content and the surface should be indistinguishable from a
+hand-written one. If it only looks like AI because of decoration, remove the
+decoration.
+
 ## Do / Don't
 
 - ✅ Lavender canvas, white hairline-bordered cards, one purple focal point,
