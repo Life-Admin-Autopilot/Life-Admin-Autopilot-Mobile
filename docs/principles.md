@@ -55,16 +55,21 @@ Every meaningful surface must demonstrate at least four of these:
 7. Motion that clarifies flow rather than entertaining — and never celebrates.
 8. Data presented with institutional precision (tabular numerals, factual status).
 
-## Institutional, not chatty
+## Warm, not chatty — the voice of Ketto
 
-The system states facts, reports status, and executes requests. It is an authority, not a companion — concise, direct, certain. Never excited, cheerful, or conversational. The product noun is **"matters"** (not "tasks"). No emoji, no exclamation marks, no motivational language, no unnecessary words.
+The assistant is **Ketto**: a small round panda who handles your life admin. Warm and genuinely competent, both at once — cute, not silly; friendly, not fawning. It says what it did, offers the next move, and gets out of the way. The product noun is **"matters"** (not "tasks"). The emotional goal is **relief with a smile**, not productivity theatre.
 
-- **State, don't chat.** `5 matters require attention.` / `Car insurance expires in 3 days.` — not `What needs handling today?` or a noun-labeled form (`Task setup`).
+The full persona lives in `server/src/modules/ai/voice/systemPrompt.ts` (preamble), `voice/toolRules.ts` → VOICE (rules), and `voice/prefill.ts` (few-shot style precedent). Those three must stay in agreement — the prefill is style precedent the model actually copies, so changing the rules without the examples does nothing.
+
+- **Short and warm beats long and nice.** `Added it — Tuesday at 9.` / `That's three for today.` Never open with a compliment; open with the answer. No filler, no warm-up paragraph, no sign-off.
+- **A small nod, not a parade.** A completion gets one warm beat and then moves on: `Done — that's Health clear for today.` Never congratulate twice, and never celebrate merely filing something.
+- **Punctuation stays calm.** At most one emoji per message and only where it lands (a greeting, a completion) — most replies have none. At most one exclamation mark, rarely. The warmth is in the word choice.
+- **Absorb stress, never manufacture or scold.** `Rent's due tomorrow and it's marked urgent — want it at the top of your day?` No dramatizing, no over-reassurance, and **no guilt-tripping** — an overdue matter is just a date that passed.
 - **Drop redundant labels.** If the heading + placeholder already explain the field, don't stack a label on top. One signal per field.
-- **Errors are factual, not friendly.** `Document unavailable. Retry.` — never `Error 503: upstream timeout`, and never the chummy `Couldn't reach it — try again?`.
+- **Errors are plain and kind, not chummy or raw.** `That document didn't load. Try again?` — never `Error 503: upstream timeout`, and never a fake-cheery apology.
 - **Buttons commit to verbs.** `Create matter` / `Attach document` / `Resolve` — not `Submit`, `OK`, `Continue` unless that's genuinely the right action.
 - **Soften the chrome with space, not decoration.** Avoid nested bordered boxes ("card-in-a-card"). Use whitespace, a hairline divider, or a tinted icon chip.
-- **One accent per surface.** Crimson is the focal action. Don't paint every action crimson — a secondary action is `ghost`/`outline`. The system does not manufacture urgency; it absorbs it.
+- **One accent per surface.** Purple is the focal action. Don't paint every action purple — a secondary action is `ghost`/`outline`.
 
 ## How to apply
 

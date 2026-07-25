@@ -1,6 +1,6 @@
 // Per-turn renderer.
-//   user      → right-aligned crimson bubble, white text
-//   assistant → left-aligned marble card with inline citation chips + stacked
+//   user      → right-aligned purple bubble, white text
+//   assistant → left-aligned lavender card with inline citation chips + stacked
 //               tool-call / clarification cards below
 //
 // A streaming assistant turn shows a static caret (handled by AssistantText) or

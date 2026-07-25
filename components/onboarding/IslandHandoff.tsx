@@ -4,14 +4,11 @@ import { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
 import { MORPH_SPRING } from '@/lib/motion'
-
-// Mirrors --color-surface (white island) / --color-canvas (marble) — tokens.md.
-const SURFACE = 'rgb(255 255 255)'
-const CANVAS = 'rgb(243 240 234)'
+import { useMorphColors } from '@/lib/motion-colors'
 
 // The onboarding → home handoff: the island EXTENDS to fill the screen. It
 // starts from the live island rect (captured by OnboardingIsland) — same size,
-// position, white surface, 26px radius — and grows to fullscreen marble with the
+// position, white surface, 26px radius — and grows to fullscreen lavender with the
 // island spring, so it reads as the Dynamic Island itself expanding rather than
 // a new pill popping in. The home greeting fades in over the morph. `onComplete`
 // fires when the morph settles (the page then commits the session + routes to
@@ -26,6 +23,7 @@ export function IslandHandoff({
   onComplete: () => void
 }) {
   const reduced = useReducedMotion()
+  const { surface, canvas } = useMorphColors()
   const [vp] = useState(() => ({
     w: typeof window === 'undefined' ? 1024 : window.innerWidth,
     h: typeof window === 'undefined' ? 768 : window.innerHeight,
@@ -48,7 +46,7 @@ export function IslandHandoff({
         width: start.width,
         height: start.height,
         borderRadius: 26,
-        backgroundColor: SURFACE,
+        backgroundColor: surface,
       }}
       animate={{
         top: 0,
@@ -56,7 +54,7 @@ export function IslandHandoff({
         width: vp.w,
         height: vp.h,
         borderRadius: 0,
-        backgroundColor: CANVAS,
+        backgroundColor: canvas,
       }}
       transition={reduced ? { duration: 0 } : MORPH_SPRING}
       onAnimationComplete={onComplete}

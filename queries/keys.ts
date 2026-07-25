@@ -8,5 +8,16 @@ export const queryKeys = {
   },
   notifications: ['notifications'] as const,
   clarifications: ['clarifications'] as const,
-  tasks: ['tasks'] as const,
+  // A factory, not a flat key: the Matters list caches per filter set, so the
+  // list needs its own namespace while `all` stays the blunt invalidation
+  // handle every task mutation reaches for.
+  tasks: {
+    all: ['tasks'] as const,
+    list: (filters: unknown) => ['tasks', 'list', filters] as const,
+    counts: () => ['tasks', 'counts'] as const,
+    detail: (id: string) => ['tasks', 'detail', id] as const,
+    tags: () => ['tasks', 'tags'] as const,
+    trash: () => ['tasks', 'trash'] as const,
+  },
+  documentScans: ['documentScans'] as const,
 }

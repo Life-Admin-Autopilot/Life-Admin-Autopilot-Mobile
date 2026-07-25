@@ -79,6 +79,28 @@ export async function refreshAccessToken(): Promise<boolean> {
   return refreshPromise
 }
 
+// Serialize a filter object into a querystring. `api()` takes the query baked
+// into `path`, so every list caller would otherwise hand-roll this.
+//
+// Undefined/null/empty-string values are dropped rather than sent blank — the
+// task list schema is `.strict()` and rejects an empty `?status=`, so a filter
+// the user cleared must vanish from the URL entirely. Arrays join with commas
+// to match the server's multi-value filters.
+export function toQuery(params: Record<string, unknown>): string {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '') continue
+    if (Array.isArray(value)) {
+      if (value.length === 0) continue
+      search.set(key, value.join(','))
+    } else {
+      search.set(key, String(value))
+    }
+  }
+  const qs = search.toString()
+  return qs ? `?${qs}` : ''
+}
+
 export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const { method = 'GET', body, authenticated = true } = options
 
@@ -181,4 +203,35 @@ export async function apiBinary<T>(path: string, options: ApiBinaryOptions): Pro
     )
   }
   return data as T
+}
+
+// GET variant that returns a raw Blob instead of parsed JSON — for
+// authenticated binary resources (e.g. viewing an original scanned
+// document). Shares the same bearer-token + one-shot-401-refresh behavior as
+// api()/apiBinary(); error bodies are still JSON so failures parse the same way.
+export async function apiBlob(path: string, signal?: AbortSignal): Promise<Blob> {
+  const send = async (): Promise<Response> => {
+    const headers: Record<string, string> = {}
+    const access = useSessionStore.getState().accessToken
+    if (access) headers.Authorization = `Bearer ${access}`
+    return fetch(`${resolveApiBaseUrl()}${path}`, { headers, signal })
+  }
+
+  let res = await send()
+  if (res.status === 401) {
+    const refreshed = await refreshAccessToken()
+    if (refreshed) res = await send()
+  }
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => null)) as ErrorBody | null
+    const err = data?.error
+    throw new ApiError(
+      err?.code ?? 'unknown_error',
+      err?.message ?? 'Could not load that file.',
+      res.status,
+      err?.details,
+    )
+  }
+  return res.blob()
 }

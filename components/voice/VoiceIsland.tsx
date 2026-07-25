@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Mic, X, Square, Check } from 'lucide-react'
 
@@ -12,17 +13,19 @@ import { useVoiceCapture } from '@/lib/voice/captureStore'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
 import { MORPH_BACKDROP_FADE, MORPH_SPRING } from '@/lib/motion'
+import { isAppChatRoute } from '@/lib/appRoutes'
 import type { AiSource } from '@/lib/ai/types'
 
 type Phase = 'recording' | 'review' | 'transcribing' | 'thinking' | 'done' | 'error'
 
-// Voice capture — the bridge to the King by voice. Opened from the TabBar mic, it
+// Voice capture — the bridge to the panda by voice. Opened from the TabBar mic, it
 // rises from the bar into an ~80% surface with a live, voice-reactive meter. The
 // user can cancel, stop, then save: saving transcribes the audio and streams it
-// to the King, who records the matters and replies.
+// to the panda, who records the matters and replies.
 export function VoiceIsland() {
   const open = useVoiceCapture((s) => s.open)
   const close = useVoiceCapture((s) => s.close)
+  const pathname = usePathname()
   const recorder = useVoiceRecorder()
   const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
 
@@ -59,10 +62,18 @@ export function VoiceIsland() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
+  // The mic only opens from the TabBar, which the auth screens don't render —
+  // but a sign-out mid-capture would otherwise strand an open, still-recording
+  // surface over /welcome. Closing routes through the effect above, so the
+  // recorder and the in-flight stream are torn down properly.
+  useEffect(() => {
+    if (open && !isAppChatRoute(pathname)) close()
+  }, [open, pathname, close])
+
   // Surface a denied mic instead of a dead recording state.
   useEffect(() => {
     if (open && recorder.phase === 'denied') {
-      setError('Microphone access is blocked. Enable it to speak to the King.')
+      setError('Microphone access is blocked. Enable it to speak to the panda.')
       setPhase('error')
     }
   }, [open, recorder.phase])
@@ -85,7 +96,7 @@ export function VoiceIsland() {
     setPhase('review')
   }
 
-  const runKing = async (text: string) => {
+  const askPanda = async (text: string) => {
     setPhase('thinking')
     setReply('')
     const controller = new AbortController()
@@ -103,7 +114,7 @@ export function VoiceIsland() {
       setPhase('done')
     } catch (err) {
       if (controller.signal.aborted) return
-      setError(translateBackendError(err, 'The King could not be reached.'))
+      setError(translateBackendError(err, 'The panda could not be reached.'))
       setPhase('error')
     }
   }
@@ -119,7 +130,7 @@ export function VoiceIsland() {
         return
       }
       setTranscript(text)
-      await runKing(text)
+      await askPanda(text)
     } catch (err) {
       setError(translateBackendError(err, 'Could not transcribe that.'))
       setPhase('error')
@@ -144,7 +155,7 @@ export function VoiceIsland() {
         <motion.div
           key="voice-panel"
           role="dialog"
-          aria-label="Speak to the King"
+          aria-label="Speak to the panda"
           initial={{ width: 56, height: 56, opacity: 0.4 }}
           animate={{ width: panelW, height: panelH, opacity: 1 }}
           exit={{ width: 56, height: 56, opacity: 0 }}
@@ -173,7 +184,7 @@ export function VoiceIsland() {
                     {reply ? (
                       <AssistantText text={reply} sources={sources} streaming={phase === 'thinking'} />
                     ) : (
-                      <p className="text-body text-ink-muted">The King is recording your matters…</p>
+                      <p className="text-body text-ink-muted">The panda is recording your matters…</p>
                     )}
                   </div>
                 ) : (
@@ -204,14 +215,14 @@ function Header({ phase }: { phase: Phase }) {
         : phase === 'transcribing'
           ? 'Transcribing'
           : phase === 'thinking'
-            ? 'The King responds'
+            ? 'The panda responds'
             : phase === 'done'
               ? 'Order follows'
               : 'Something went wrong'
   return <span className="text-label uppercase tracking-wide text-accent">{label}</span>
 }
 
-// A crimson disc that scales with the live mic level — the voice made visible.
+// A purple disc that scales with the live mic level — the voice made visible.
 function Pulse({ level, active }: { level: number; active: boolean }) {
   const scale = active ? 1 + level * 0.9 : 1
   return (

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Bell, AlarmClock, HelpCircle } from 'lucide-react'
+import { Bell, AlarmClock, HelpCircle, FileText } from 'lucide-react'
 
 import { MorphPanel } from '@/components/ui/MorphPanel'
 import { useNotifications, useMarkNotificationsRead, type AppNotification } from '@/queries/notifications'
@@ -87,7 +87,7 @@ export function NotificationBell() {
 }
 
 function NotificationRow({ n, onNavigate }: { n: AppNotification; onNavigate: () => void }) {
-  const Icon = n.kind === 'uncertainty' ? HelpCircle : AlarmClock
+  const Icon = n.kind === 'uncertainty' ? HelpCircle : n.kind === 'document_scan' ? FileText : AlarmClock
   const body = (
     <div className="flex items-start gap-3 px-4 py-3">
       <Icon size={18} className="mt-0.5 shrink-0 text-accent" />
@@ -102,6 +102,15 @@ function NotificationRow({ n, onNavigate }: { n: AppNotification; onNavigate: ()
     return (
       <li className="border-b border-border last:border-0 hover:bg-surface-sunken">
         <Link href="/uncertainties" onClick={onNavigate}>
+          {body}
+        </Link>
+      </li>
+    )
+  }
+  if (n.kind === 'document_scan') {
+    return (
+      <li className="border-b border-border last:border-0 hover:bg-surface-sunken">
+        <Link href="/documents" onClick={onNavigate}>
           {body}
         </Link>
       </li>

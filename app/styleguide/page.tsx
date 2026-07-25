@@ -11,9 +11,18 @@ import {
   User,
 } from 'lucide-react'
 
-import kingImg from '@/assets/brand/king1.png'
+import pandaImg from '@/assets/panda/hero-image.png'
 import { Plus } from '@/components/icons/Plus'
 import { DomainIcon, type Domain } from '@/components/icons/DomainIcon'
+import {
+  SketchCameraGlyph,
+  SketchUploadGlyph,
+  SketchScanGlyph,
+  SketchCheckGlyph,
+  SketchEmptyTrayGlyph,
+} from '@/components/icons/sketch/flowGlyphs'
+import { SketchDomainIcon } from '@/components/icons/sketch/domainGlyphs'
+import { ScanningDocumentGlyph } from '@/components/icons/sketch/ScanningDocumentGlyph'
 import { Button } from '@/components/ui/button'
 import { MorphDemo } from '@/components/showcase/MorphDemo'
 import { ChatbotPopup } from '@/components/showcase/ChatbotPopup'
@@ -21,8 +30,8 @@ import { VoiceRecordPopup } from '@/components/showcase/VoiceRecordPopup'
 import { MorphMenuDemo } from '@/components/showcase/MorphMenuDemo'
 import { MorphToastDemo } from '@/components/showcase/MorphToastDemo'
 
-// Design-system styleguide — the "white marble + crimson" silent sovereign made
-// visible. Static preview; no backend. Lives at /styleguide; / is the app gate.
+// Design-system styleguide — the "lavender + panda" identity made visible.
+// Static preview; no backend. Lives at /styleguide; / is the app gate.
 export default function StyleguidePage() {
   return (
     <main className="min-h-dvh pb-28">
@@ -53,7 +62,7 @@ export default function StyleguidePage() {
         <Section eyebrow="Motion" title="Dynamic Island morph">
           <p className="text-caption text-ink-subtle">
             The one core animation — ported verbatim from Wiscord. Tap the pill below, or the
-            floating crimson buttons (assistant, bottom-right · voice, bottom-left).
+            floating purple buttons (assistant, bottom-right · voice, bottom-left).
           </p>
           <MorphDemo />
         </Section>
@@ -83,7 +92,7 @@ export default function StyleguidePage() {
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-lg border border-border bg-surface p-4 shadow-card">
               <p className="text-body-sm text-ink-muted">shadow-card</p>
-              <p className="text-caption text-ink-subtle">a whisper on marble</p>
+              <p className="text-caption text-ink-subtle">a whisper on lavender</p>
             </div>
             <div className="rounded-lg border border-border bg-surface p-4 shadow-elevated">
               <p className="text-body-sm text-ink-muted">shadow-elevated</p>
@@ -123,7 +132,7 @@ export default function StyleguidePage() {
 
         <Section eyebrow="Type" title="Typography">
           <div className="flex flex-col gap-3 border-l-2 border-border-strong pl-4">
-            <p className="font-wordmark text-wordmark text-ink">AUTOPILOT</p>
+            <p className="font-wordmark text-wordmark text-ink">Autopilot</p>
             <p className="font-display text-display-hero text-ink">Good morning, Alex.</p>
             <p className="font-display text-display-md text-ink">Order, restored.</p>
             <p className="font-display text-heading-xl text-ink">Section title</p>
@@ -153,6 +162,22 @@ export default function StyleguidePage() {
             ))}
           </div>
         </Section>
+
+        <Section eyebrow="TEMP QA" title="Sketch icons (documents flow)">
+          <div className="flex flex-wrap items-center gap-4">
+            <SketchCameraGlyph size={32} />
+            <SketchUploadGlyph size={32} />
+            <SketchScanGlyph size={32} />
+            <SketchCheckGlyph size={32} />
+            <SketchEmptyTrayGlyph size={64} />
+            <ScanningDocumentGlyph size={40} />
+          </div>
+          <div className="flex flex-wrap gap-3 pt-1">
+            {(['health', 'home', 'car', 'finance', 'family', 'pets'] as Domain[]).map((d) => (
+              <SketchDomainIcon key={d} domain={d} size={32} />
+            ))}
+          </div>
+        </Section>
       </div>
 
       <TabBarPreview />
@@ -171,7 +196,7 @@ function AppBar() {
       <div className="flex flex-col items-center gap-1">
         <Plus size={16} />
         <span className="text-label uppercase text-ink-subtle">Life Admin</span>
-        <span className="font-wordmark text-wordmark leading-none text-ink">AUTOPILOT</span>
+        <span className="font-wordmark text-wordmark leading-none text-ink">Autopilot</span>
       </div>
       <span className="relative">
         <Bell size={22} className="text-ink-muted" />
@@ -186,10 +211,10 @@ function Hero() {
     <section className="flex flex-col items-center px-6 pt-6 text-center">
       <div className="flex w-full justify-center bg-transparent pt-2">
         <Image
-          src={kingImg}
-          alt="The silent sovereign — a weathered marble king on a throne"
+          src={pandaImg}
+          alt="Our panda companion, ready to help"
           priority
-          className="h-64 w-auto object-contain mix-blend-darken"
+          className="h-64 w-auto object-contain"
           style={{ scale: '1.5', position: 'relative', top: '-7px' }}
         />
       </div>

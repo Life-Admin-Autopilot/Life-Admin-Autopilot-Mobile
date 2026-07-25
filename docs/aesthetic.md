@@ -1,55 +1,51 @@
-# Aesthetic — the Silent Sovereign
+# Aesthetic — the Panda Autopilot
 
 > The visual target for Life Admin Autopilot. Pair with `tokens.md` (exact values)
-> and `primitives.md` (component contracts). The brand brief is `new-direction.md`;
-> this doc turns it into a buildable spec. Tokens win over raw values — always.
+> and `primitives.md` (component contracts). Tokens win over raw values — always.
 
 ## The aesthetic in one sentence
 
-> **White marble and deep crimson — a monumental, institutional calm. The product
-> feels like a royal archive, not a startup app: timeless, certain, restrained.**
+> **Soft lavender and a friendly panda — calm, warm, and a little playful. The
+> product feels like a caring companion clearing your admin clutter, not an
+> institution or an archive.**
 
-This is **not** a productivity app, a friendly assistant, or a playful task manager.
-It is an **institution** — a permanent presence that brings order to complexity. It
-communicates authority, clarity, structure, and calm confidence. The old warm-cream /
-indigo / Nunito / mascot system is fully retired.
+This is a productivity app with a genuine personality: warm, encouraging, a
+little cute — but never noisy or childish. The previous "silent sovereign"
+marble-and-crimson system (the King) is fully retired.
 
-## The silent sovereign (the King)
+## The panda
 
-A weathered **white-marble sovereign seated upon a throne** (`assets/brand/king.png`).
-His face is hidden; his expression unknowable. Cracks of **crimson energy** run
-through the marble — immense power and awareness beneath stillness.
-
-He is **a symbol, not a mascot.** He has no emotions, jokes, or personality. He does
-not wave, celebrate, or react. He represents the system itself: memory, judgment,
-responsibility, permanence. He remembers what the user does not.
+A soft, round, big-eyed panda (`assets/panda/hero-image.png`, `assets/panda/chatbot.png`).
+Unlike the old King symbol, the panda **is** a mascot — it waves, it reacts, it has
+a face and a personality. It represents warmth and reassurance: an assistant, not
+a monument.
 
 **Rules:**
-- The King appears **only** in hero / splash / empty-state surfaces, centered, with
-  monumental negative space around him. Never as chrome, never small, never an icon.
-- He is **never animated playfully**. The only motion permitted is a slow, subtle
-  crimson-vein opacity pulse (see `tokens.md → Motion`), and even that is optional.
-- The **cross** (crimson) is the system's action mark — it is the center
-  create-action and the brand glyph, distinct from the King himself.
+- The panda appears in hero / splash / chat-avatar surfaces, generally centered,
+  with soft glow/sparkle accents echoing the reference art.
+- Motion is allowed but restrained — a gentle wave, bounce, or blink on key
+  moments (task completed, session opened). Nothing frantic, no confetti storms.
+- The center create-action (a plus, in purple) is the system's action mark,
+  distinct from the panda itself.
 
 ## Material & color (tokens, not hex — see `tokens.md`)
 
-- **Marble** is the primary material: `bg-canvas` (warm marble) everywhere, white
-  `surface` cards, hairline `border` stone dividers.
-- **Crimson** (`accent` `#A4161A`) is the seal — importance, urgency, authority. It
-  is the single working accent: primary action, active tab, due/overdue, the cross,
-  key icons. One crimson focal point per surface; never paint everything red.
-- **Gold** appears **only** on the premium surface, sparingly — a subtle mark of
-  craftsmanship, never a general accent.
-- **No green, no celebration color.** "Resolved" is stated in `ink-muted`.
-- **Massive negative space** signals confidence and restraint. Nothing crowded,
-  busy, playful, or decorative.
+- **Lavender** is the primary material: `bg-canvas` (soft lavender) everywhere,
+  white `surface` cards, hairline `border` lavender dividers.
+- **Purple** (`accent` `#8E7AE0`) is the single working accent: primary action,
+  active tab, due/overdue, the plus, key icons. One purple focal point per
+  surface; never paint everything purple.
+- **Gold** appears **only** on the premium surface, sparingly.
+- **Pastel domain tints** (health/home/car/finance/family/pets) give warmth and
+  variety without competing with the purple accent.
+- **Cozy negative space** — generous but not monumental; the app should feel
+  approachable, not cavernous.
 
 ## Typography
 
-Monumental serif over clean sans (see `tokens.md` for the scale):
-- **Cinzel** (caps, letter-spaced) — the "LIFE ADMIN / AUTOPILOT" wordmark only.
-- **Cormorant Garamond** (serif) — greetings and section titles. Elegant, timeless.
+Rounded, single display family over clean sans (see `tokens.md` for the scale):
+- **Comfortaa** (rounded, friendly) — wordmark ("LIFE ADMIN / Autopilot") and all
+  display/heading text (greetings, section titles).
 - **Inter** (sans) — body, rows, labels, data. Structured and highly readable, with
   tabular numerals on every time / amount / date / count.
 
@@ -57,39 +53,36 @@ Hierarchy comes from **family + scale + space**, not color or weight tricks.
 
 ## Layout & composition
 
-- **Deliberate and composed.** Every screen feels intentional; the user is never
-  overwhelmed. Generous gutters (`px-6`), large vertical rhythm, content allowed to
-  breathe.
-- **Hero pattern:** centered King (or wordmark + cross) → serif greeting/title →
-  muted `ink` subtitle → composed list of matters. Mirrors `assets/screenshots/home-reference.png`.
+- **Warm and composed.** Every screen feels intentional but approachable.
+  Comfortable gutters (`px-6`), clear vertical rhythm.
+- **Hero pattern:** centered panda → rounded greeting/title → muted `ink`
+  subtitle → composed list of matters.
 - **Cards:** white `surface`, `rounded-lg` (14), `shadow-card` (a whisper), hairline
-  border. Rows are individually-spaced cards, not dense tables — but never busy.
-- **Tab bar:** five slots with the **crimson cross center action** (create). Active
-  tab is crimson; inactive is `ink-subtle`.
-- Information is presented "with confidence and precision." Tasks/matters, reminders,
-  and documents are the focus; the King sits in the background as a symbol.
+  border. Rows are individually-spaced cards, not dense tables.
+- **Tab bar:** five slots with the **purple plus center action** (create). Active
+  tab is purple; inactive is `ink-subtle`.
+- Information is presented clearly and warmly; the panda sits alongside as a
+  companion, not a distant symbol.
 
-## Voice (see `principles.md` → Institutional voice)
+## Voice
 
-Concise, direct, authoritative. The system **states facts, reports status, executes
-requests.** Never excited, cheerful, or conversational. No motivational language, no
-emoji, no exclamation marks, no unnecessary words. The product noun is **"matters."**
+Warm, clear, encouraging. The system **reports status and celebrates small wins**
+without being saccharine. Light personality is welcome; avoid corporate stiffness
+and avoid excessive exclamation. The product noun is **"tasks"/"matters"**.
 
-> "Good morning, Alex. 5 matters require attention."
-> "Car insurance expires in 3 days."
+> "Good evening, Mina. 5 smaller steps, big calm ahead."
+> "4 minutes need your focus. Pick a small win to free your rest — now."
+> "Car insurance due today."
 > "Task created. Policy attached."
-> "3 overdue. 5 due today. 2 approaching."
-> "Speak once. Order follows."
 
-The emotional goal is **relief**, not productivity. The system does not create
-urgency — it **absorbs** it. Every interaction should leave the user feeling that
-order has been restored.
+The emotional goal is **relief with a smile**. The system does not create
+urgency — it helps the user feel supported in getting through it.
 
 ## Do / Don't
 
-- ✅ Marble canvas, white hairline-bordered cards, one crimson focal point, monumental
-  serif greeting + muted subtitle, the King centered in hero with space around him,
-  factual institutional copy.
-- ❌ Warm pastels, indigo, rounded mascots, bright red or green, glow/confetti/celebration,
-  exclamation marks, emoji, crowded layouts, the King as a small decorative icon or an
-  emotive character, gold used as a general accent.
+- ✅ Lavender canvas, white hairline-bordered cards, one purple focal point,
+  rounded Comfortaa greeting + muted subtitle, the panda present and expressive
+  in hero/chat surfaces, warm encouraging copy.
+- ❌ Marble/crimson/gold-as-accent, the King, stiff institutional copy, crowded
+  layouts, harsh saturated colors, the panda used as a small decorative icon with
+  no personality.

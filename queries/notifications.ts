@@ -9,11 +9,12 @@ import { queryKeys } from '@/queries/keys'
 
 export interface AppNotification {
   id: string
-  kind: 'reminder' | 'uncertainty'
+  kind: 'reminder' | 'uncertainty' | 'document_scan'
   title: string
   body?: string
   taskId?: string
   clarificationId?: string
+  documentId?: string
   readAt?: string
   createdAt: string
 }

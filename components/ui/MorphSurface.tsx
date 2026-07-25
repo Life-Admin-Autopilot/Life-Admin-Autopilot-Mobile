@@ -9,7 +9,7 @@ import { MORPH_CONTENT_VARIANTS, MORPH_SHAPE_STYLE, MORPH_SPRING } from '@/lib/m
 /**
  * MorphSurface — the Dynamic Island morph engine (Wiscord), reusable across
  * Mo's expanding surfaces (chatbot popup, voice record popup, dropdowns,
- * toasts). Physics are identical to Wiscord; the skin is Mo marble.
+ * toasts). Physics are identical to Wiscord; the skin is Mo lavender.
  *
  * How it works (mirrors Wiscord's DynamicIsland.tsx):
  *  - The shell animates `width`/`height` directly via `animate` (NOT `layout`,
@@ -38,7 +38,7 @@ export interface MorphShape {
   paddingY?: number
   /**
    * Optional shell background, animated with the spring so a colored launcher
-   * (e.g. a crimson FAB) morphs into a white panel without a flash. Must be a
+   * (e.g. a purple FAB) morphs into a white panel without a flash. Must be a
    * CONCRETE color framer can interpolate (`rgb(…)`/hex), not a CSS var. When a
    * MorphSurface uses backgrounds, set it on every shape. When omitted, the
    * shell stays `bg-surface` (white).

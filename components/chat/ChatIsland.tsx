@@ -2,36 +2,48 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
+import { usePathname } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Mic, RotateCcw, SendHorizontal, Square, X } from 'lucide-react'
 
-import chatbotImg from '@/assets/brand/chatbot.png'
+import chatbotImg from '@/assets/panda/chatbot.png'
 import { ChatMessage } from '@/components/chat/ChatMessage'
 import { MorphSurface, type MorphShape } from '@/components/ui/MorphSurface'
+import { isAppChatRoute } from '@/lib/appRoutes'
 import { MORPH_BACKDROP_FADE, MORPH_SPRING } from '@/lib/motion'
+import { useMorphColors } from '@/lib/motion-colors'
 import { useAskAi } from '@/queries/ai'
 import { useVoiceRecorder } from '@/lib/ai/useVoiceRecorder'
 import { transcribeAudio } from '@/lib/ai/transcribe'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
 
-// Motion seam: framer interpolates concrete colors, not CSS vars. Mirror
-// --color-accent (crimson) / --color-surface (white) from tokens.md.
-const CRIMSON = 'rgb(164 22 26)'
-const WHITE = 'rgb(255 255 255)'
-
-const SHAPES: Record<'fab' | 'panel', MorphShape> = {
-  fab: { width: 50, height: 50, radius: 32, background: CRIMSON },
-  panel: { width: 360, height: 520, radius: 24, background: WHITE },
+// The chatbot — the bridge to our panda assistant. A purple medallion FAB
+// (with an explicit "Ask the panda" label so the affordance is unmistakable)
+// morphs (Dynamic Island engine) into a chat panel wired to the live AI
+// backend: streamed replies, task tools with destructive confirmation, voice.
+// Mounted once in Providers, as a sibling of the route slot, so it decides for
+// itself where it belongs: signed-in app surfaces only, never the auth /
+// onboarding screens, which run their own morphing island. Gating out here
+// (rather than inside the surface) also unmounts the panel on the way out, so
+// an open conversation can't spring back when the next app route mounts.
+export function ChatIsland() {
+  const pathname = usePathname()
+  if (!isAppChatRoute(pathname)) return null
+  return <ChatIslandSurface />
 }
 
-// The chatbot — the bridge to the King. A crimson medallion FAB (with an
-// explicit "Ask the King" label so the affordance is unmistakable) morphs
-// (Dynamic Island engine) into a chat panel wired to the live AI backend:
-// streamed replies, task tools with destructive confirmation, and voice.
-export function ChatIsland() {
+function ChatIslandSurface() {
   const [open, setOpen] = useState(false)
   const state: 'fab' | 'panel' = open ? 'panel' : 'fab'
+  const { accent, surface } = useMorphColors()
+  const shapes: Record<'fab' | 'panel', MorphShape> = useMemo(
+    () => ({
+      fab: { width: 50, height: 50, radius: 32, background: accent },
+      panel: { width: 330, height: 620, radius: 24, background: surface },
+    }),
+    [accent, surface],
+  )
 
   return (
     <>
@@ -52,22 +64,22 @@ export function ChatIsland() {
         ) : null}
       </AnimatePresence>
 
-      <div className="fixed bottom-24 right-5 z-40 flex items-center gap-2.5">
+      <div className="fixed bottom-24 right-3 z-40 flex items-center gap-2.5">
         {!open ? (
           <button
             type="button"
             onClick={() => setOpen(true)}
             className="rounded-pill border border-border bg-surface px-3.5 py-2 text-label uppercase tracking-wide text-ink shadow-elevated transition-colors hover:bg-surface-sunken"
           >
-            Ask the King
+            Ask the panda
           </button>
         ) : null}
       <MorphSurface
         state={state}
-        shapes={SHAPES}
+        shapes={shapes}
         onClick={open ? undefined : () => setOpen(true)}
         role={open ? 'dialog' : 'button'}
-        aria-label={open ? 'The King' : 'Ask the King'}
+        aria-label={open ? 'The panda assistant' : 'Ask the panda'}
         className={`shadow-2xl ${open ? '' : 'cursor-pointer ring-2 ring-accent/40'}`}
       >
         {state === 'fab' ? (
@@ -143,7 +155,7 @@ function ChatPanel({ onClose }: { onClose: () => void }) {
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
-        <span className="font-display text-heading-md text-ink">The King</span>
+        <span className="font-display text-heading-md text-ink">The panda</span>
         <div className="flex items-center gap-1">
           <button
             onClick={() => void clear()}
@@ -281,7 +293,7 @@ function formatElapsed(ms: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-// Calm crimson level bars — static heights (no bouncing spectacle), per the
+// Calm purple level bars — static heights (no bouncing spectacle), per the
 // restrained motion philosophy (matches the showcase recording island).
 function Meter() {
   const bars = [6, 12, 8, 16, 10, 14, 7]

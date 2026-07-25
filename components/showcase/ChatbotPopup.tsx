@@ -1,32 +1,31 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { X, SendHorizontal } from 'lucide-react'
 
 import { Plus } from '@/components/icons/Plus'
 import { MorphSurface, type MorphShape } from '@/components/ui/MorphSurface'
+import { useMorphColors } from '@/lib/motion-colors'
 
-// Motion seam: framer interpolates concrete colors, not CSS vars. These mirror
-// --color-accent (crimson) and --color-surface (white) from tokens.md.
-const CRIMSON = 'rgb(164 22 26)'
-const WHITE = 'rgb(255 255 255)'
-
-const SHAPES: Record<'fab' | 'panel', MorphShape> = {
-  fab: { width: 56, height: 56, radius: 28, background: CRIMSON },
-  panel: { width: 340, height: 440, radius: 24, background: WHITE },
-}
-
-// Chatbot popup — the literal Dynamic Island morph: a crimson cross FAB expands
+// Chatbot popup — the literal Dynamic Island morph: a purple cross FAB expands
 // into a chat panel and collapses back. Same MorphSurface engine. Mock content
 // until the real chat backend is wired.
 export function ChatbotPopup() {
   const [open, setOpen] = useState(false)
   const state: 'fab' | 'panel' = open ? 'panel' : 'fab'
+  const { accent, surface } = useMorphColors()
+  const shapes: Record<'fab' | 'panel', MorphShape> = useMemo(
+    () => ({
+      fab: { width: 56, height: 56, radius: 28, background: accent },
+      panel: { width: 340, height: 440, radius: 24, background: surface },
+    }),
+    [accent, surface],
+  )
 
   return (
     <MorphSurface
       state={state}
-      shapes={SHAPES}
+      shapes={shapes}
       onClick={open ? undefined : () => setOpen(true)}
       role={open ? 'dialog' : 'button'}
       aria-label={open ? 'Assistant' : 'Open assistant'}

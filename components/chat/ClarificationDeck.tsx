@@ -1,5 +1,5 @@
 // One consolidated card for ALL the held questions in a turn — instead of a
-// stack of separate alerts. The King asks each held item in sequence inside a
+// stack of separate alerts. The panda asks each held item in sequence inside a
 // single surface (with a "1 of N" counter and Back/Next). Once every question
 // is answered the deck submits ONE combined reply, so the agent files all the
 // held matters in a single turn.

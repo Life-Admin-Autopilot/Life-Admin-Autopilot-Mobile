@@ -1,8 +1,8 @@
 // Renders one tool call below an assistant message.
 //
 // Since the agent now acts directly on every per-item mutation, a tool call is
-// almost always a passive RECEIPT of what the King did — rendered as a quiet
-// ledger row (crimson tick · verb · matter · date), not a card. The single
+// almost always a passive RECEIPT of what the panda did — rendered as a quiet
+// ledger row (purple tick · verb · matter · date), not a card. The single
 // exception is the bulk `deleteAllTasks` wipe, which still pauses for a
 // Confirm / Decline card because it is irreversible.
 //
@@ -138,7 +138,7 @@ export function ToolCallCard({ call, onConfirm, onDecline, pendingAction = null 
     )
   }
 
-  // executed — the quiet ledger row: crimson tick · verb · matter · date.
+  // executed — the quiet ledger row: purple tick · verb · matter · date.
   const verb = PAST_VERB[call.name] ?? call.name
   const matter = matterLabel(call)
   const meta = metaLabel(call)

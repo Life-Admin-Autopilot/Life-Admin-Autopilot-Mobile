@@ -7,7 +7,7 @@ import { Plus } from '@/components/icons/Plus'
 import { MorphSurface, type MorphShape } from '@/components/ui/MorphSurface'
 
 // Live demo of the Wiscord Dynamic Island morph — a pill that expands into a
-// card and back, identical physics, marble skin. Stand-in for the real chatbot
+// card and back, identical physics, lavender skin. Stand-in for the real chatbot
 // / voice-record popups, which use the same MorphSurface engine.
 const SHAPES: Record<'pill' | 'card', MorphShape> = {
   pill: { width: 208, height: 44, radius: 22, paddingX: 6, paddingY: 6 },
@@ -44,7 +44,7 @@ export function MorphDemo() {
             </div>
             <p className="text-body-sm text-ink-muted">
               This panel morphed out of the pill with the exact Wiscord Dynamic Island
-              spring — identical physics, marble skin.
+              spring — identical physics, lavender skin.
             </p>
             <span className="mt-auto text-label uppercase text-accent">Tap to collapse</span>
           </div>

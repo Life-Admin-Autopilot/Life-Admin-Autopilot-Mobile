@@ -1,6 +1,6 @@
 import Image from 'next/image'
 
-import kingImg from '@/assets/brand/king1.png'
+import pandaImg from '@/assets/panda/hero-image.png'
 
 function greeting(d: Date): string {
   const h = d.getHours()
@@ -9,7 +9,7 @@ function greeting(d: Date): string {
   return 'Good evening'
 }
 
-// Home hero — the King over marble, a serif greeting by name, an institutional
+// Home hero — the panda over lavender, a rounded greeting by name, a friendly
 // status line, and the three stat cards. `now` is passed in so the greeting is
 // deterministic at the call site (Date.now() isn't available everywhere).
 export function HomeHero({
@@ -27,11 +27,11 @@ export function HomeHero({
     <section className="flex flex-col items-center px-6 pt-6 text-center">
       <div className="flex w-full justify-center bg-transparent pt-2">
         <Image
-          src={kingImg}
-          alt="The silent sovereign — a weathered marble king on a throne"
+          src={pandaImg}
+          alt="Our panda companion, ready to help"
           priority
-          className="h-64 w-auto object-contain mix-blend-darken"
-          style={{ scale: '1.5', position: 'relative', top: '-7px' }}
+          className="h-[220px] opacity-[0.85] w-auto object-contain"
+          style={{ scale: '1', position: 'relative', top: '0px' }}
         />
       </div>
       <h1 className="mt-4 font-display text-display-hero text-ink" suppressHydrationWarning>

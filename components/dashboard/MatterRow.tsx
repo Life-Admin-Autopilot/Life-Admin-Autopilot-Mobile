@@ -2,7 +2,7 @@ import { ChevronRight } from 'lucide-react'
 
 import { DomainIcon, type Domain } from '@/components/icons/DomainIcon'
 
-// A single matter row — DomainIcon chip · title · due (crimson) · trailing
+// A single matter row — DomainIcon chip · title · due (purple) · trailing
 // state. Shared by the dashboard list and the styleguide pattern.
 export function MatterRow({
   domain,

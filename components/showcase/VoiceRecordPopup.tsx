@@ -1,30 +1,30 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Mic, Square } from 'lucide-react'
 
 import { MorphSurface, type MorphShape } from '@/components/ui/MorphSurface'
+import { useMorphColors } from '@/lib/motion-colors'
 
-// Mirrors --color-accent (crimson) / --color-surface (white) — see tokens.md.
-const CRIMSON = 'rgb(164 22 26)'
-const WHITE = 'rgb(255 255 255)'
-
-const SHAPES: Record<'idle' | 'recording', MorphShape> = {
-  idle: { width: 56, height: 56, radius: 28, background: CRIMSON },
-  recording: { width: 264, height: 88, radius: 24, background: WHITE, paddingX: 16, paddingY: 14 },
-}
-
-// Voice-record popup — a crimson mic FAB morphs into a recording panel (calm
+// Voice-record popup — a purple mic FAB morphs into a recording panel (calm
 // level meter + timer + stop) and back. Same MorphSurface engine; capture is
 // foreground-started (AGENTS.md → Capacitor). Mock until lib/voice is wired.
 export function VoiceRecordPopup() {
   const [rec, setRec] = useState(false)
   const state: 'idle' | 'recording' = rec ? 'recording' : 'idle'
+  const { accent, surface } = useMorphColors()
+  const shapes: Record<'idle' | 'recording', MorphShape> = useMemo(
+    () => ({
+      idle: { width: 56, height: 56, radius: 28, background: accent },
+      recording: { width: 264, height: 88, radius: 24, background: surface, paddingX: 16, paddingY: 14 },
+    }),
+    [accent, surface],
+  )
 
   return (
     <MorphSurface
       state={state}
-      shapes={SHAPES}
+      shapes={shapes}
       onClick={rec ? undefined : () => setRec(true)}
       role="button"
       aria-label={rec ? 'Recording' : 'Start voice capture'}
@@ -51,7 +51,7 @@ export function VoiceRecordPopup() {
   )
 }
 
-// Calm crimson level bars — static heights (no bouncing spectacle), per the
+// Calm purple level bars — static heights (no bouncing spectacle), per the
 // restrained motion philosophy.
 function Meter() {
   const bars = [6, 12, 8, 16, 10, 14, 7]

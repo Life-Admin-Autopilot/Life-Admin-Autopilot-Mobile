@@ -60,7 +60,7 @@ export function useResolveClarification() {
     onError: (_e, _v, ctx) => restore(queryClient, ctx),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.clarifications })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
     },
   })

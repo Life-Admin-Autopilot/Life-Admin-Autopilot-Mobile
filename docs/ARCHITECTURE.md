@@ -76,7 +76,7 @@ Auth differs from v1: instead of Zustand + `expo-secure-store`, prefer **httpOnl
 
 1. **Web/PWA first.** `next build` → deploy `out/` to Vercel/Netlify as a normal site + PWA manifest + service worker (offline). Fastest feedback, zero native.
 2. **Android via PWABuilder TWA.** PWABuilder packages the PWA as a Trusted Web Activity — runs real Chrome, full web push, passes Play review easily. Cheap Android presence.
-3. **iOS (and richer Android) via Capacitor.** Wrap the same build: `npx cap add ios android`, add `@capacitor/push-notifications` (native APNs/FCM), add a native audio-recorder plugin for background capture. This is where native push + background audio become real. (Don't use PWABuilder's iOS wrapper — its WKWebView can't do Web Push and risks guideline-4.2 rejection; Capacitor's native plugins are the fix. See `PLATFORM-DECISION.md`.)
+3. **iOS (and richer Android) via Capacitor.** Wrap the same build: `npx cap add ios android`, add `@capacitor/push-notifications` (native APNs/FCM), add a native audio-recorder plugin for background capture. This is where native push + background audio become real. (Don't use PWABuilder's iOS wrapper — its WKWebView can't do Web Push and risks guideline-4.2 rejection; Capacitor's native plugins are the fix. See `PLATFORM-DECISION.md`.) The base pipeline (packages, `capacitor.config.ts`, env profiles, dev scripts) is already wired up — see `CAPACITOR.md` for day-to-day usage.
 
 ## Backend (`server/`)
 

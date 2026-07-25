@@ -3,15 +3,21 @@
 @import "shadcn/tailwind.css";
 
 /*
- * Mo V2 design tokens — "white marble + crimson" silent sovereign.
+ * Mo V2 design tokens — "lavender + panda" identity.
  * See docs/tokens.md (values), docs/aesthetic.md (vibe), AGENTS.md (rules).
  * Tailwind v4 is CSS-first: tokens in `@theme` generate the semantic utilities
  * (bg-canvas, text-ink-muted, text-display-hero, shadow-card, text-accent).
- * Colors are rgb(R G B) so `/alpha` modifiers work. App is light-only.
+ * Colors are rgb(R G B) so `/alpha` modifiers work.
+ *
+ * Dark mode: class-based (`.dark` on <html>, toggled by next-themes). The
+ * @theme tokens below stay runtime CSS vars (Tailwind v4 doesn't inline
+ * them), so `.dark { --color-canvas: ...; }` overrides everywhere bg-canvas
+ * etc. are used — no per-component dark: variants needed for token colors.
  *
  * shadcn primitives consume their own vars (--primary, --card, …); we map those
- * onto Mo tokens in :root so Button/Card/Input inherit crimson-on-marble.
+ * onto Mo tokens in :root/.dark so Button/Card/Input inherit purple-on-lavender.
  */
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
   /* shadcn semantic colors → Mo CSS vars (defined in :root) */
@@ -35,8 +41,8 @@
   --color-ring: var(--ring);
 
   /* Type families (loaded via next/font in layout.tsx) */
-  --font-wordmark: var(--font-cinzel), ui-serif, Georgia, serif;
-  --font-display: var(--font-cormorant), ui-serif, Georgia, serif;
+  --font-wordmark: var(--font-comfortaa), ui-rounded, ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-comfortaa), ui-rounded, ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 
   /* Radius — architectural, composed */
@@ -49,47 +55,47 @@
 }
 
 @theme {
-  /* ---- Surfaces — marble ---- */
-  --color-canvas: rgb(243 240 234);
-  --color-canvas-veined: rgb(236 232 224);
+  /* ---- Surfaces — lavender ---- */
+  --color-canvas: rgb(245 242 251);
+  --color-canvas-veined: rgb(238 233 249);
   --color-surface: rgb(255 255 255);
-  --color-surface-sunken: rgb(236 233 227);
-  --color-border-strong: rgb(212 206 194);
+  --color-surface-sunken: rgb(237 231 249);
+  --color-border-strong: rgb(210 199 235);
 
-  /* ---- Ink — carved graphite ---- */
-  --color-ink: rgb(28 26 23);
-  --color-ink-muted: rgb(107 102 94);
-  --color-ink-subtle: rgb(154 149 139);
-  --color-ink-nav: rgb(122 116 107);
+  /* ---- Ink — plum-charcoal ---- */
+  --color-ink: rgb(45 42 61);
+  --color-ink-muted: rgb(107 100 130);
+  --color-ink-subtle: rgb(150 143 173);
+  --color-ink-nav: rgb(130 122 158);
 
-  /* ---- Accent — deep crimson (the seal) ---- */
-  --color-accent-pressed: rgb(127 20 22);
-  --color-accent-soft: rgb(244 226 225);
+  /* ---- Accent — soft purple (the panda's ribbon) ---- */
+  --color-accent-pressed: rgb(111 90 194);
+  --color-accent-soft: rgb(232 225 250);
   --color-accent-ink: rgb(255 255 255);
 
   /* ---- Gold — premium tier only (sparing) ---- */
   --color-gold: rgb(176 137 47);
   --color-gold-soft: rgb(239 230 210);
 
-  /* ---- Status — restrained ---- */
-  --color-danger: rgb(142 20 24);
-  --color-danger-soft: rgb(244 226 225);
-  --color-warning: rgb(154 107 31);
-  --color-warning-soft: rgb(241 231 212);
+  /* ---- Status — soft but legible ---- */
+  --color-danger: rgb(194 58 58);
+  --color-danger-soft: rgb(250 230 230);
+  --color-warning: rgb(178 122 40);
+  --color-warning-soft: rgb(250 238 217);
 
-  /* ---- Domains — low-chroma stone tints ---- */
-  --color-domain-health: rgb(228 234 229);
-  --color-domain-health-ink: rgb(58 74 64);
-  --color-domain-home: rgb(236 229 221);
-  --color-domain-home-ink: rgb(90 74 58);
-  --color-domain-car: rgb(230 230 226);
-  --color-domain-car-ink: rgb(69 69 63);
-  --color-domain-finance: rgb(227 230 236);
-  --color-domain-finance-ink: rgb(58 66 84);
-  --color-domain-family: rgb(236 227 229);
-  --color-domain-family-ink: rgb(90 62 68);
-  --color-domain-pets: rgb(232 227 236);
-  --color-domain-pets-ink: rgb(76 66 86);
+  /* ---- Domains — pastel tints on lavender ---- */
+  --color-domain-health: rgb(226 241 231);
+  --color-domain-health-ink: rgb(42 92 66);
+  --color-domain-home: rgb(246 231 219);
+  --color-domain-home-ink: rgb(120 82 48);
+  --color-domain-car: rgb(226 229 238);
+  --color-domain-car-ink: rgb(62 68 92);
+  --color-domain-finance: rgb(221 232 247);
+  --color-domain-finance-ink: rgb(42 74 122);
+  --color-domain-family: rgb(248 224 232);
+  --color-domain-family-ink: rgb(122 48 76);
+  --color-domain-pets: rgb(234 224 248);
+  --color-domain-pets-ink: rgb(92 56 140);
 
   /* ---- Type scale (size / line-height / weight / tracking) ---- */
   --text-wordmark: 20px;
@@ -129,35 +135,101 @@
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out-quad: cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* ---- Shadows — soft, low, warm-graphite tint ---- */
-  --shadow-card: 0 1px 2px rgb(28 26 23 / 0.04), 0 4px 12px rgb(28 26 23 / 0.05);
-  --shadow-elevated: 0 8px 28px rgb(28 26 23 / 0.08), 0 2px 6px rgb(28 26 23 / 0.04);
+  /* ---- Shadows — soft, low, cool-plum tint ---- */
+  --shadow-card: 0 1px 2px rgb(45 42 61 / 0.04), 0 4px 12px rgb(45 42 61 / 0.05);
+  --shadow-elevated: 0 8px 28px rgb(45 42 61 / 0.08), 0 2px 6px rgb(45 42 61 / 0.04);
 }
 
 /*
- * shadcn semantic vars mapped onto the marble/crimson palette. Crimson is the
- * single brand accent, so --primary and --accent both resolve to crimson.
+ * shadcn semantic vars mapped onto the lavender/panda palette. Purple is the
+ * single brand accent, so --primary and --accent both resolve to it.
  */
 :root {
-  --background: rgb(243 240 234); /* canvas */
-  --foreground: rgb(28 26 23); /* ink */
+  --background: rgb(245 242 251); /* canvas */
+  --foreground: rgb(45 42 61); /* ink */
   --card: rgb(255 255 255); /* surface */
-  --card-foreground: rgb(28 26 23);
+  --card-foreground: rgb(45 42 61);
   --popover: rgb(255 255 255);
-  --popover-foreground: rgb(28 26 23);
-  --primary: rgb(164 22 26); /* crimson */
+  --popover-foreground: rgb(45 42 61);
+  --primary: rgb(142 122 224); /* purple */
   --primary-foreground: rgb(255 255 255);
-  --secondary: rgb(255 255 255); /* white (secondary = white + crimson) */
-  --secondary-foreground: rgb(164 22 26);
-  --muted: rgb(236 233 227); /* surface-sunken */
-  --muted-foreground: rgb(107 102 94); /* ink-muted */
-  --accent: rgb(164 22 26); /* crimson — bg-accent CTA */
+  --secondary: rgb(255 255 255); /* white (secondary = white + purple) */
+  --secondary-foreground: rgb(142 122 224);
+  --muted: rgb(237 231 249); /* surface-sunken */
+  --muted-foreground: rgb(107 100 130); /* ink-muted */
+  --accent: rgb(142 122 224); /* purple — bg-accent CTA */
   --accent-foreground: rgb(255 255 255);
-  --destructive: rgb(142 20 24); /* danger */
-  --border: rgb(226 221 212); /* warm stone hairline */
-  --input: rgb(226 221 212);
-  --ring: rgb(164 22 26); /* crimson focus ring */
+  --destructive: rgb(194 58 58); /* danger */
+  --border: rgb(228 221 242); /* lavender hairline */
+  --input: rgb(228 221 242);
+  --ring: rgb(142 122 224); /* purple focus ring */
   --radius: 10px; /* md — button radius */
+}
+
+/*
+ * Dark palette — deep plum-charcoal surfaces, brightened purple accent for
+ * contrast, domain tints darkened with lightened ink. Mirrors the :root
+ * token set 1:1 so every bg-canvas / text-ink / bg-domain-* utility just
+ * works once `.dark` is on <html>.
+ */
+.dark {
+  --color-canvas: rgb(23 21 31);
+  --color-canvas-veined: rgb(29 26 40);
+  --color-surface: rgb(36 33 48);
+  --color-surface-sunken: rgb(30 27 41);
+  --color-border-strong: rgb(66 60 86);
+
+  --color-ink: rgb(237 234 245);
+  --color-ink-muted: rgb(176 168 196);
+  --color-ink-subtle: rgb(138 130 160);
+  --color-ink-nav: rgb(150 142 172);
+
+  --color-accent-pressed: rgb(138 118 205);
+  --color-accent-soft: rgb(54 46 84);
+  --color-accent-ink: rgb(255 255 255);
+
+  --color-gold: rgb(212 168 92);
+  --color-gold-soft: rgb(64 54 34);
+
+  --color-danger: rgb(224 100 100);
+  --color-danger-soft: rgb(58 30 30);
+  --color-warning: rgb(214 158 74);
+  --color-warning-soft: rgb(58 46 22);
+
+  --color-domain-health: rgb(30 46 38);
+  --color-domain-health-ink: rgb(150 214 178);
+  --color-domain-home: rgb(48 38 28);
+  --color-domain-home-ink: rgb(224 176 130);
+  --color-domain-car: rgb(38 40 52);
+  --color-domain-car-ink: rgb(168 176 204);
+  --color-domain-finance: rgb(28 38 54);
+  --color-domain-finance-ink: rgb(140 176 224);
+  --color-domain-family: rgb(50 30 38);
+  --color-domain-family-ink: rgb(224 140 168);
+  --color-domain-pets: rgb(42 32 56);
+  --color-domain-pets-ink: rgb(180 150 224);
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 12px rgb(0 0 0 / 0.35);
+  --shadow-elevated: 0 8px 28px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3);
+
+  --background: rgb(23 21 31);
+  --foreground: rgb(237 234 245);
+  --card: rgb(36 33 48);
+  --card-foreground: rgb(237 234 245);
+  --popover: rgb(36 33 48);
+  --popover-foreground: rgb(237 234 245);
+  --primary: rgb(168 150 235);
+  --primary-foreground: rgb(255 255 255);
+  --secondary: rgb(36 33 48);
+  --secondary-foreground: rgb(168 150 235);
+  --muted: rgb(30 27 41);
+  --muted-foreground: rgb(176 168 196);
+  --accent: rgb(168 150 235);
+  --accent-foreground: rgb(255 255 255);
+  --destructive: rgb(224 100 100);
+  --border: rgb(52 47 68);
+  --input: rgb(52 47 68);
+  --ring: rgb(168 150 235);
 }
 
 @layer base {

@@ -1,25 +1,16 @@
 import type { Metadata } from 'next'
-import { Cinzel, Cormorant_Garamond, Inter } from 'next/font/google'
+import { Comfortaa, Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
 
-// "White marble + crimson" type system (docs/tokens.md):
-//   Cinzel    — the wordmark only (Trajan-style caps)
-//   Cormorant — serif display: greetings, section titles
+// Lavender + panda type system (docs/tokens.md):
+//   Comfortaa — wordmark + display: rounded, friendly, hand-drawn feel
 //   Inter     — body, rows, labels, data (tabular numerals)
 // Exposed as CSS variables, mapped to --font-wordmark/display/sans in globals.
-const cinzel = Cinzel({
+const comfortaa = Comfortaa({
   subsets: ['latin'],
-  weight: ['600', '700'],
-  variable: '--font-cinzel',
-  display: 'swap',
-})
-
-const cormorant = Cormorant_Garamond({
-  subsets: ['latin'],
-  weight: ['500', '600'],
-  style: ['normal', 'italic'],
-  variable: '--font-cormorant',
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-comfortaa',
   display: 'swap',
 })
 
@@ -40,9 +31,10 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${cinzel.variable} ${cormorant.variable} ${inter.variable} h-full`}
+      className={`${comfortaa.variable} ${inter.variable} h-full`}
+      suppressHydrationWarning
     >
-      <body className="min-h-dvh">
+      <body className="min-h-dvh bg-canvas">
         <Providers>{children}</Providers>
       </body>
     </html>

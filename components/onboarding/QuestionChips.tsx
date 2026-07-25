@@ -3,7 +3,7 @@
 import { DomainIcon, type Domain } from '@/components/icons/DomainIcon'
 import { cn } from '@/lib/cn'
 
-// A quick-pick choice chip — selected = crimson wash + hairline.
+// A quick-pick choice chip — selected = purple wash + hairline.
 export function ChoiceChip({
   label,
   selected,
@@ -30,7 +30,7 @@ export function ChoiceChip({
   )
 }
 
-// A domain toggle chip — stone DomainIcon + label, crimson wash when selected.
+// A domain toggle chip — stone DomainIcon + label, purple wash when selected.
 export function DomainChip({
   domain,
   label,

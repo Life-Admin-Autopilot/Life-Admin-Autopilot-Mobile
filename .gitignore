@@ -13,6 +13,9 @@ dist/
 /ios/
 /android/
 
+# Backend — lives outside this repo
+/server
+
 # Env / secrets — NEVER commit real values
 .env
 .env.local
