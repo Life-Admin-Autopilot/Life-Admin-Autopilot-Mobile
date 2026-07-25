@@ -31,7 +31,7 @@ export function MattersSearchBar({
 }: {
   value: string
   onValueChange: (v: string) => void
-  onSearched: (result: SearchResult, query: string) => void
+  onSearched: (result: SearchResult) => void
   onClear: () => void
   searching: boolean
   hasResults: boolean
@@ -47,7 +47,7 @@ export function MattersSearchBar({
     const q = query.trim()
     if (!q) return
     search.mutate(q, {
-      onSuccess: (res) => onSearched(res, q),
+      onSuccess: (res) => onSearched(res),
       onError: (err) => toast.error(translateBackendError(err, "Couldn't run that search.")),
     })
   }

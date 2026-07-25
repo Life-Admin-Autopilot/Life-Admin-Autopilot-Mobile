@@ -85,7 +85,6 @@ export default function MattersPage() {
   // the matched matters IN THE ORDER THEY CAME BACK — relevance order is the
   // whole point of a search, so it is deliberately not re-grouped by date.
   const [result, setResult] = useState<SearchResult | null>(null)
-  const [answered, setAnswered] = useState<string | null>(null)
 
   // Typing deliberately does NOT filter.
   //
@@ -94,14 +93,12 @@ export default function MattersPage() {
   // the list to an empty state before the search had even run, which reads as
   // "you have nothing" rather than "you haven't asked yet". The list stays put
   // until the question is actually submitted.
-  const onSearched = useCallback((res: SearchResult, query: string) => {
+  const onSearched = useCallback((res: SearchResult) => {
     setResult(res)
-    setAnswered(query)
   }, [])
 
   const clearSearch = useCallback(() => {
     setResult(null)
-    setAnswered(null)
     setFilters(DEFAULT_FILTERS)
     setSearch('')
   }, [])
@@ -300,7 +297,24 @@ export default function MattersPage() {
       </div>
 
       <div className="flex flex-col gap-4 px-4 pt-2">
-
+        {/* Slipped matters get one calm, bounded prompt — never a red count
+            badge. "3 slipped" is actionable; "62 overdue" is just shame, and
+            shame is what makes people stop opening the app. Hidden while an
+            answer or a filter is on screen, so it can't compete with the thing
+            the user actually asked for. */}
+        {!filtered && !result && (counts.data?.slipping ?? 0) > 0 ? (
+          <button
+            type="button"
+            onClick={() => setFilters({ ...DEFAULT_FILTERS, overdue: true })}
+            className="flex items-center justify-between gap-2 rounded-lg border border-accent/30 bg-accent-soft px-4 py-3 text-left"
+          >
+            <span className="text-body-sm text-ink">
+              <span className="tabular font-medium">{counts.data?.slipping}</span>{' '}
+              {counts.data?.slipping === 1 ? 'matter has' : 'matters have'} slipped. Sort them out.
+            </span>
+            <ArrowRight size={16} className="shrink-0 text-accent" />
+          </button>
+        ) : null}
 
         {result ? (
           <SearchResults
@@ -426,7 +440,6 @@ export default function MattersPage() {
         // screen is dropped, since the drill-down replaces it.
         onDrillDown={(next) => {
           setResult(null)
-          setAnswered(null)
           setSearch('')
           setFilters({ ...DEFAULT_FILTERS, ...next })
           setExpanded(true)
