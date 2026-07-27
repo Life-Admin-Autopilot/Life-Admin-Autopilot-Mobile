@@ -9,10 +9,16 @@
 
 interface PublicEnv {
   apiUrl: string
+  /** Product name shown in chrome, the wordmark, and the document title. */
+  appName: string
 }
 
 const API_URL_HELP =
   'Copy .env.example to .env.local and set NEXT_PUBLIC_API_URL to the backend (e.g. http://localhost:4000).'
+
+// Unlike apiUrl, a missing app name is not a broken configuration — it is a
+// branding default. It falls back rather than raising envError.
+const DEFAULT_APP_NAME = 'Kitto'
 
 function read(value: string | undefined): string | null {
   if (!value || value.trim().length === 0) return null
@@ -20,6 +26,7 @@ function read(value: string | undefined): string | null {
 }
 
 const apiUrl = read(process.env.NEXT_PUBLIC_API_URL)
+const appName = process.env.NEXT_PUBLIC_APP_NAME?.trim() || DEFAULT_APP_NAME
 
 // Non-null when configuration is incomplete. UI reads this to render a friendly
 // config-error screen instead of surfacing a cryptic failure later.
@@ -30,4 +37,5 @@ export const envError: string | null =
 // Check `envError` before relying on it for a real request.
 export const env: PublicEnv = {
   apiUrl: apiUrl ?? '',
+  appName,
 }

@@ -58,12 +58,12 @@ export function AuthForm({ mode }: { mode: 'signin' | 'signup' }) {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-8 px-6 py-12">
-      <header className="flex flex-col gap-1">
-        <h1 className="font-display text-display-md text-ink">{copy.title}</h1>
+      <header className="flex flex-col gap-1.5">
+        <h1 className="font-display text-display-hero text-balance text-ink">{copy.title}</h1>
         <p className="text-body text-ink-muted">{copy.subtitle}</p>
       </header>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5" noValidate>
         <Field label="Email" error={errors.email?.message}>
           <Input
             type="email"
@@ -90,9 +90,9 @@ export function AuthForm({ mode }: { mode: 'signin' | 'signup' }) {
               type="button"
               onClick={() => setReveal((r) => !r)}
               aria-label={reveal ? 'Hide password' : 'Show password'}
-              className="absolute inset-y-0 right-0 grid w-10 place-items-center text-ink-subtle"
+              className="absolute inset-y-0 right-0 grid w-12 place-items-center text-ink-muted transition-colors hover:text-ink"
             >
-              {reveal ? <EyeOff size={16} /> : <Eye size={16} />}
+              {reveal ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
         </Field>
@@ -103,14 +103,20 @@ export function AuthForm({ mode }: { mode: 'signin' | 'signup' }) {
           </p>
         ) : null}
 
-        <Button type="submit" disabled={mutation.isPending} className="mt-2 h-12 w-full">
+        <Button
+          type="submit"
+          variant="solid"
+          size="lg"
+          disabled={mutation.isPending}
+          className="mt-2 w-full"
+        >
           {mutation.isPending ? 'One moment…' : copy.submit}
         </Button>
       </form>
 
-      <p className="text-center text-body-sm text-ink-muted">
+      <p className="text-center text-body text-ink-muted">
         {copy.switchText}{' '}
-        <Link href={copy.switchHref} className="text-accent">
+        <Link href={copy.switchHref} className="font-bold text-accent">
           {copy.switchCta}
         </Link>
       </p>
@@ -128,10 +134,10 @@ function Field({
   children: React.ReactNode
 }) {
   return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-body-sm text-ink-muted">{label}</span>
+    <label className="flex flex-col gap-2">
+      <span className="text-label uppercase text-ink-muted">{label}</span>
       {children}
-      {error ? <span className="text-caption text-danger">{error}</span> : null}
+      {error ? <span className="text-body-sm text-danger">{error}</span> : null}
     </label>
   )
 }

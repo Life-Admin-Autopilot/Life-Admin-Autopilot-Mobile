@@ -24,7 +24,7 @@ Dependencies: standard `npm install` (this is web — the `expo install` rule is
 - `docs/tokens.md` — design tokens for `app/globals.css` (`@theme`, Tailwind v4)
 - `docs/new-direction.md` — the brand brief (the silent sovereign) — source of truth
 - `docs/overview.md` / `docs/principles.md` — product scope, the single product test
-- `docs/aesthetic.md` / `docs/design.md` — **the visual direction** (white marble + crimson)
+- `docs/aesthetic.md` / `docs/design.md` — **the visual direction** (soft planner: Fraunces + Nunito, near-white lilac canvas, coral accent, near-black CTA pills)
 - `docs/primitives.md` — component contracts (re-mapped to web; see PORTING-GUIDE)
 - `docs/stack.md` — **out of date** on backend; trust the code in `server/`
 
@@ -67,11 +67,23 @@ Vitest against mocks is necessary, not sufficient — "all unit tests pass" ship
 
 Real Tailwind now (**v4 — CSS-first**). Tokens live in `app/globals.css` inside `@theme` blocks — there is **no `tailwind.config.ts`**. Use the semantic tokens from `docs/tokens.md`. **No hex literals, no `text-[15px]`, no `gray-500`/`red-600`/etc.** in components. Semantic names only (`bg-canvas`, `text-ink-muted`, `text-display-hero`, `text-accent`).
 
-**Aesthetic = "white marble + crimson" — the silent sovereign.** Canvas is warm marble (`bg-canvas` `#F3F0EA`); cards are white `surface` with a hairline `border` and a whisper-soft shadow. **Deep crimson (`accent` `#A4161A`) is the single working accent + brand color** — primary button = crimson filled rounded rectangle (`rounded-md`, not a pill), secondary = white + crimson text + hairline. One crimson focal point per surface; never paint everything red. Display type is **serif** (Cormorant); body is **Inter**. **Gold is premium-tier only.** No green, no celebration color. Monumental negative space is part of the brand. See `docs/aesthetic.md`.
+**Aesthetic = "soft planner" — the app that hugs you.** Canvas is near-white with a faint lilac cast (`bg-canvas` `#F9F8FC`); cards are pure-white `surface` with a whisper-soft `shadow-card` and **no border** — depth is shadow in light mode and surface-lightness stepping in dark.
+
+**Two fills carry meaning and must never be swapped:**
+- `solid` (near-black `#1C1A17`, inverting to near-white in dark) is **the primary CTA**. `<Button variant="solid">`.
+- `accent` (coral `#FA6A5A`) means **live** — active, selected, in-progress, the FAB. Never the default CTA.
+
+**Nothing is sharp.** Every corner is either a pill (`rounded-pill`) or a large round (≥`rounded-lg` 16px; cards are `rounded-2xl` 24px, sheets `rounded-3xl` 30px).
+
+**Type is a pairing, and the pairing is the identity.** **Fraunces** (`font-display`) for headline moments only — hero greetings, day/date headers, card titles, affirmations, big numerals. **Nunito** (`font-sans`) for everything functional. Hierarchy comes from scale contrast and the serif/sans split, never from colour. Fraunces needs its axes set: use `font-display`, which applies `font-optical-sizing: auto` plus `SOFT`; left at the defaults it renders the dense low-contrast text cut and looks clunky at hero sizes.
+
+**Gradient is rationed** to four emotional surfaces — welcome, onboarding, celebration, AI preview (`bg-hero-gradient` / `bg-celebrate-gradient` / `bg-ai-gradient`). Cards, rows, and chips stay flat. Spacing is deliberately airy (page `px-5`, 12px row gaps, 24px+ section gaps); never dense. Both themes must feel intentional — dark is near-true-black, not a dimmed light theme. See `docs/aesthetic.md`.
+
+**`cn()` knows the custom scale.** `lib/utils.ts` extends tailwind-merge with Steward's `text-*` / `shadow-*` / `rounded-*` token names. Add any new token there too, or `cn('text-display-md','text-accent')` will silently drop the size.
 
 ### Primitives are the only UI surface
 
-Need a button, sheet, dialog, input, toast, skeleton? Use `components/ui/*` built on **shadcn/ui (Radix)**, preserving the contracts (`Button`, `Card`, `Input`, `ScreenShell`, `GlassSheet`→Radix sheet/drawer, `Toast`→`sonner`, `CircleIconButton`, `TabBar` — five slots with the crimson **cross** center create-action). No raw `<button>` for buttons. No `window.alert()`/`confirm()`. `lib/toast.ts` is the only toast source. See `docs/primitives.md`.
+Need a button, sheet, dialog, input, toast, skeleton? Use `components/ui/*`, preserving the contracts (`Button`, `Card`, `Input`, `MorphSheet`, `MorphPanel`, `Toast`→`sonner`, `TabBar` — five slots with the coral **mic** centre action, plus `EmojiChip`, `TaskRow`, `SectionHeaderChip`, `Pill`, `CompletionRing`/`Toggle`, `StatStrip`/`StatTile`, `SegmentedControl`, `GradientHero`). No raw `<button>` for buttons. No `window.alert()`/`confirm()`. `lib/toast.ts` is the only toast source. See `docs/primitives.md`.
 
 ### Component file shape
 
@@ -96,8 +108,19 @@ v1 shipped with **all** animations stripped because React Native's Reanimated/Mo
 - **CSS transitions/`@keyframes` are allowed** for small, GPU-friendly effects (`transform`, `opacity`) — introduce them deliberately, not everywhere.
 - **No heavy JS animation libraries by default.** The **one sanctioned exception** is `framer-motion`, approved for the core "Dynamic Island" morph (ported verbatim from Wiscord — do not retune the physics; see `lib/motion.ts`). It is used **only** through the morph primitives — `components/ui/MorphSurface.tsx` (persistent shell, e.g. chatbot/voice FAB↔panel), `components/ui/MorphPanel.tsx` (transient mount/unmount, e.g. dropdowns), `components/ui/MorphToast.tsx` (via `lib/toast.ts`), and `app/template.tsx` (page-transition enter) — and only on these surfaces: dropdowns, page transitions, chatbot popup, voice record popup, toasts. Anywhere else, raise it with the user first.
 - Never animate layout properties (`width`, `height`, `margin`, `padding`).
-- **No celebration.** The institution does not congratulate — no confetti, streak pops, or success bursts. The one signature flourish permitted is a slow crimson-vein opacity pulse on the hero King (opacity only, honors `prefers-reduced-motion`).
+- **Celebration is earned, not sprinkled.** Closing a loop (last uncertainty resolved, day cleared) gets ONE gradient surface with a serif affirmation — see `GradientHero variant="celebrate"`. No confetti on every tap, no streak pops, no success bursts on routine actions. All motion is transform/opacity/blur only and honors `prefers-reduced-motion`.
 See `docs/LESSONS.md` for the full story.
+
+### Sheets — one primitive, always morphing from its trigger
+
+**Every bottom sheet, modal, confirm, and editing surface uses `components/ui/Sheet.tsx`.** No exceptions, no second sheet implementation, no hand-rolled `fixed inset-x-0 bottom-0` panel.
+
+- **Always pass `trigger`** — the `DOMRect` of the control that opened it, captured at click time with `e.currentTarget.getBoundingClientRect()`. The sheet grows out of that control and collapses back into it. A sheet that slides up from nowhere is the bug; the morph is the house style, shared with the Dynamic Island surfaces above.
+- **Editing is a sheet, never an inline expansion.** A form that unfolds inside a list row pushes every row below it down the page, so the thing being edited jumps away from the finger that tapped it. Open a sheet instead.
+- **One sheet per list, not one per row.** Render it once beside the list and pass it the active item; mounting a screen-level overlay inside every `<li>` puts N copies in the tree to show at most one.
+- **Draft state lives in the sheet**, not the caller. The caller says *what* is being edited; the sheet owns the in-progress edit and hands back a finished value on save, so an abandoned edit cannot leak into the list.
+- **`eyebrowTone="danger"` for anything irreversible.** An eyebrow reading "this cannot be undone" in the same accent colour as one reading "this can be undone" tells the user nothing.
+- Physics come from `lib/motion.ts` (`MORPH_SPRING`, `MORPH_CONTENT_VARIANTS`) — **do not retune.**
 
 ### UI voice — institutional, not chatty
 
@@ -118,11 +141,14 @@ The biggest accuracy risk is the AI extracting a wrong value (wrong renewal date
 
 ### Icons and emoji
 
-- **No emoji in UI, anywhere.** Domain identity uses a `DomainIcon` component; generic icons use lucide outline in crimson or `ink`. Custom SVGs live in `components/icons/`.
-- **The cross** (crimson) is the system's action/brand mark — the center create-action and the brand glyph. Don't repurpose it as a generic icon.
-- **The King is a symbol, not an icon.** The marble sovereign (`assets/brand/king.png`) appears only in hero / splash / empty surfaces — centered, monumental, never as chrome, never small, never animated playfully. No "magic" sparkle/wand/bot icons — AI is invisible and institutional here; the King "simply knows."
-- **The mic/record affordance** is a restrained crimson control — never a mascot, never a beige badge. (The old clay-mic mascot under `assets/images/mascot/` is obsolete.)
-- **Domain colors** come from `DOMAIN_INK` in `lib/colors.ts` (re-derived as low-chroma stone tints — see `tokens.md`).
+- **Category identity is an emoji in a pastel circle** — `components/ui/EmojiChip.tsx`, 44px. This is the signature mark of the system: it tells you which part of your life a row belongs to before you read a word of it. `DomainIcon` renders it by default; `variant="glyph"` falls back to the lucide outline for surfaces where a full-colour emoji would shout.
+  - **Circle** = a matter / task / domain. **Rounded square** (`square`) = a document type.
+  - The pastel set is **theme-invariant** — identical in light and dark. It is the one place hue carries meaning, and dimming it in dark mode would throw that away.
+  - Emoji belongs in chips and celebration surfaces. It is still not a substitute for a label, and it does not go in body copy.
+- **Chrome icons stay lucide** (`strokeWidth={1.75}`), in `ink` / `ink-muted`. Custom SVGs live in `components/icons/`; the hand-drawn `sketch/*` set is an intentional texture for the scan flow and empty states — keep it.
+- **The panda is Steward's, and stays.** It appears on hero / splash / empty surfaces. Do not swap in any third-party app's mascot or wordmark.
+- **The mic/record affordance** is the coral FAB in the tab bar centre — the one place coral is a filled circle.
+- **Domain colors** come from the `--color-domain-*` tokens, which map the six domains onto the shared pastel palette (health→sage, home→peach, car→periwinkle, finance→sky, family→blush, pets→lilac).
 - **Third-party brands use real logos** under `assets/logo/<service>`.
 - **No raw IDs in UI** (UUIDs, hash slices) — generate deterministic friendly names.
 

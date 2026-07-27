@@ -11,9 +11,14 @@ import {
   ModelDocumentExtractionSchema,
   MAX_EXTRACTED_CANDIDATES,
   CONFIDENCE_BUCKETS,
+  DOCUMENT_TYPES,
+  DOCUMENT_TITLE_MAX,
+  DOCUMENT_SUBTITLE_MAX,
+  DOCUMENT_ISSUER_MAX,
   type ModelCandidate,
   type DraftCandidate,
   type ConfidenceBucket,
+  type DocumentType,
 } from './contract'
 
 // Scanned document -> structured task candidates, in one Gemini vision call.
@@ -58,11 +63,32 @@ PER CANDIDATE, SET:
   if the title already says everything there is to say.
 - sourcePage: 1-based page number (of the images provided, in order) the candidate came from.
 
-documentSummary: a one-to-two-sentence AI overview of the document as a whole — what kind of
-document it is, who it's from, and the single most important fact (total amount, main deadline,
-etc.) if there is one. Written in prose, for display as the document's own overview. Null if you
-cannot tell. Example: "An electricity bill from City Power for the March cycle, totaling
-$142.37 and due July 30."
+ALSO DESCRIBE THE DOCUMENT ITSELF. These five fields describe the whole document, not any one
+candidate, and they are what the user sees in their document list — set them even when there
+are no candidates at all.
+
+- documentType: exactly one of ${DOCUMENT_TYPES.join(', ')}. Classify what the document IS, not
+  what it asks of you — a bill you have already paid is still "bill", and a letter that happens
+  to demand payment is still "letter" if it isn't itemized like an invoice. Use "other" honestly
+  when nothing fits; a confidently wrong type is worse than a generic one.
+- documentTitle: a SHORT NOUN PHRASE naming the document, ≤${DOCUMENT_TITLE_MAX} characters, in
+  the document's own language. No sentence punctuation, no leading article, not a sentence.
+  Good: "Electricity bill". "Car insurance renewal". "Blood test results". Bad: "This is an
+  electricity bill from City Power" (that's a sentence). Do NOT put the sender's name in here —
+  it belongs in issuer.
+- documentSubtitle: ONE line, ≤${DOCUMENT_SUBTITLE_MAX} characters, carrying the most useful
+  concrete facts — amount, deadline, reference number, period covered. It is displayed on one
+  line and CUT OFF at the end if it overflows, so put the single most important thing FIRST and
+  the least important last. Good: "Due July 30 · $142.37 · account 88213-4471". Bad: "This
+  document, which was issued by the utility company, concerns..." (the useful part is past the
+  cut). Null if the title already says everything.
+- issuer: the organization or person the document came from, verbatim as printed
+  ("City Power", "Dr. Amira Hassan"), ≤${DOCUMENT_ISSUER_MAX} characters. Null if not stated.
+- documentSummary: a one-to-two-sentence overview in prose — what kind of document it is, who
+  it's from, and the single most important fact if there is one. This one is shown on the
+  document's detail screen where there is room for a full sentence, so it may repeat what the
+  title and subtitle say. Null if you cannot tell. Example: "An electricity bill from City Power
+  for the March cycle, totaling $142.37 and due July 30."
 
 Return ONLY the JSON object matching the schema. No prose.
 `.trim()
@@ -71,6 +97,10 @@ const responseSchema = {
   type: Type.OBJECT,
   properties: {
     documentSummary: { type: Type.STRING, nullable: true },
+    documentType: { type: Type.STRING, enum: [...DOCUMENT_TYPES], nullable: true },
+    documentTitle: { type: Type.STRING, nullable: true },
+    documentSubtitle: { type: Type.STRING, nullable: true },
+    issuer: { type: Type.STRING, nullable: true },
     candidates: {
       type: Type.ARRAY,
       maxItems: String(MAX_EXTRACTED_CANDIDATES),
@@ -109,7 +139,28 @@ export interface ExtractDocumentArgs {
 
 export interface DocumentExtractionResult {
   documentSummary?: string
+  documentType?: DocumentType
+  documentTitle?: string
+  documentSubtitle?: string
+  issuer?: string
   candidates: DraftCandidate[]
+}
+
+// Trim, collapse whitespace, clamp. A row-copy field that arrives as a
+// paragraph is a layout bug waiting to happen, and an empty string is not the
+// same as "absent" downstream — the row falls back only on undefined.
+function clampCopy(value: string | null | undefined, max: number): string | undefined {
+  if (!value) return undefined
+  const normalized = value.trim().replace(/\s+/g, ' ')
+  return normalized ? normalized.slice(0, max) : undefined
+}
+
+function hardenDocumentType(value: string | null | undefined): DocumentType | undefined {
+  if (!value) return undefined
+  // An unrecognized type falls back to 'other' rather than undefined: the model
+  // did classify the document, it just used a word outside our set, and 'other'
+  // is a truer record of that than "never classified".
+  return (DOCUMENT_TYPES as readonly string[]).includes(value) ? (value as DocumentType) : 'other'
 }
 
 export async function extractDocumentCandidates(
@@ -163,6 +214,10 @@ export async function extractDocumentCandidates(
 
   return {
     documentSummary: parsed.data.documentSummary?.trim() || undefined,
+    documentType: hardenDocumentType(parsed.data.documentType),
+    documentTitle: clampCopy(parsed.data.documentTitle, DOCUMENT_TITLE_MAX),
+    documentSubtitle: clampCopy(parsed.data.documentSubtitle, DOCUMENT_SUBTITLE_MAX),
+    issuer: clampCopy(parsed.data.issuer, DOCUMENT_ISSUER_MAX),
     candidates,
   }
 }

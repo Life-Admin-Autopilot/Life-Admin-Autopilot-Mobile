@@ -8,6 +8,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/queries/keys'
 
+// Mirrors DOCUMENT_TYPES on the server. Drives the row's leading icon; see
+// components/scan/DocumentTypeIcon.tsx for the glyph mapping.
+export type ScanDocumentType =
+  | 'bill'
+  | 'statement'
+  | 'letter'
+  | 'form'
+  | 'receipt'
+  | 'insurance'
+  | 'medical'
+  | 'legal'
+  | 'identity'
+  | 'tax'
+  | 'other'
+
 export type ScanCandidateDomain = 'health' | 'home' | 'car' | 'finance' | 'family' | 'pets'
 export type ScanCandidatePriority = 'low' | 'normal' | 'high' | 'urgent'
 export type ScanCandidateConfidence = 'high' | 'medium' | 'low'
@@ -32,8 +47,18 @@ export interface ScannedDocument {
   byteSize: number
   status: 'pending' | 'processing' | 'ready_for_review' | 'failed'
   failureReason?: string
-  /** One-to-two-sentence AI overview of the document itself. */
+  /** One-to-two-sentence AI overview, for the detail surfaces (review card,
+   *  task overview) — not the list row. */
   documentSummary?: string
+  /** Document kind, for the list row's leading icon. */
+  documentType?: ScanDocumentType
+  /** Short noun-phrase headline for the list row ("Electricity bill"). */
+  documentTitle?: string
+  /** One-line row description, written most-important-first so it survives
+   *  truncation ("Due July 30 · $142.37"). */
+  documentSubtitle?: string
+  /** Who the document came from ("City Power"). */
+  issuer?: string
   candidates: ScanCandidate[]
   reviewedAt?: string
   createdAt: string
@@ -51,6 +76,40 @@ export function useScannedDocuments() {
       const docs = query.state.data?.scannedDocuments ?? []
       const active = docs.some((d) => d.status === 'pending' || d.status === 'processing')
       return active ? 4_000 : false
+    },
+  })
+}
+
+export interface DeleteScansResult {
+  deleted: number
+  failed: number
+}
+
+// Bulk delete is a client-side fan-out over the single-id endpoint — the server
+// delete is idempotent, so a partial failure is safe to retry wholesale rather
+// than needing a bulk transaction and an undo token like the matters bulk ops.
+//
+// There is no undo: deleting destroys the stored original, so there is nothing
+// to restore. The caller confirms before invoking rather than offering a
+// take-back afterwards.
+//
+// Settles every request before reporting, so one failure doesn't hide the
+// deletions that did land — the count is what the caller tells the user.
+export function useDeleteScannedDocuments() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (ids: string[]): Promise<DeleteScansResult> => {
+      const results = await Promise.allSettled(
+        ids.map((id) => api<void>(`/me/document-scans/${id}`, { method: 'DELETE' })),
+      )
+      const deleted = results.filter((r) => r.status === 'fulfilled').length
+      return { deleted, failed: results.length - deleted }
+    },
+    onSettled: () => {
+      // Invalidated even on failure: a partial success left the cache stale for
+      // whichever ids did delete.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.documentScans })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
     },
   })
 }

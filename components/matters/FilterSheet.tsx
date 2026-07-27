@@ -11,7 +11,7 @@ import {
   useTaskTags,
   type TaskFilters,
 } from '@/queries/tasks'
-import { ChipToggle, Sheet, SheetSection } from './Sheet'
+import { ChipToggle, Sheet, SheetSection } from '@/components/ui/Sheet'
 
 // Every filter the list supports, in one sheet.
 //

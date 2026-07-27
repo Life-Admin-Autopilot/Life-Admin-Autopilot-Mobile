@@ -16,6 +16,14 @@ dist/
 # Backend — lives outside this repo
 # /server
 
+# Runtime upload artifacts written by the document-scan storage adapter —
+# user data, not source. Regenerated per environment.
+server/uploads/
+
+# Design reference dumps (third-party app screenshots) — kept locally, far too
+# large to version.
+/Tiimo ios Feb 2026/
+
 # Env / secrets — NEVER commit real values
 .env
 .env.local

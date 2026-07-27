@@ -13,24 +13,24 @@ export default function HealthPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 px-6 py-12">
       <header className="flex flex-col gap-1">
-        <span className="text-label uppercase text-ink-subtle">Mo V2 · foundation</span>
-        <h1 className="font-display text-display-hero text-ink">Backend reachable?</h1>
+        <span className="text-label uppercase text-ink-muted">Steward · foundation</span>
+        <h1 className="font-display text-display-hero text-balance text-ink">Backend reachable?</h1>
         <p className="text-body text-ink-muted">
           End-to-end check against{' '}
-          <code className="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-body-sm">/health</code>.
+          <code className="rounded-md bg-surface-sunken px-1.5 py-0.5 text-body-sm">/health</code>.
         </p>
       </header>
 
       <Card className="shadow-card">
         <CardHeader>
-          <CardTitle className="font-display text-heading-md">Status</CardTitle>
+          <CardTitle>Status</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {isLoading ? (
             <div className="flex animate-pulse flex-col gap-3" aria-hidden>
-              <div className="h-5 rounded-sm bg-surface-sunken" />
-              <div className="h-5 w-2/3 rounded-sm bg-surface-sunken" />
-              <div className="h-5 w-1/2 rounded-sm bg-surface-sunken" />
+              <div className="h-5 rounded-pill bg-surface-sunken" />
+              <div className="h-5 w-2/3 rounded-pill bg-surface-sunken" />
+              <div className="h-5 w-1/2 rounded-pill bg-surface-sunken" />
             </div>
           ) : error ? (
             <div className="flex flex-col gap-3">
@@ -38,7 +38,7 @@ export default function HealthPage() {
                 Backend unreachable. Is <code className="text-body-sm">npm run dev</code> running in{' '}
                 <code className="text-body-sm">server/</code>?
               </p>
-              <Button onClick={() => void refetch()} disabled={isFetching}>
+              <Button variant="outline" onClick={() => void refetch()} disabled={isFetching}>
                 {isFetching ? 'Retrying…' : 'Retry'}
               </Button>
             </div>
@@ -62,7 +62,7 @@ function Row({ label, value, accent }: { label: string; value: string; accent?: 
       <dd
         className={
           accent
-            ? 'rounded-pill bg-accent-soft px-2.5 py-0.5 text-body-sm text-accent tabular'
+            ? 'rounded-pill bg-success-soft px-3 py-1 text-body-sm font-bold text-success tabular'
             : 'text-body-sm text-ink tabular'
         }
       >

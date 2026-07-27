@@ -4,7 +4,7 @@ import { Check } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
 import { SORT_LABEL, TASK_SORTS, type TaskSort } from '@/queries/tasks'
-import { Sheet, SheetSection } from './Sheet'
+import { Sheet, SheetSection } from '@/components/ui/Sheet'
 
 export const GROUP_MODES = ['time', 'domain', 'priority', 'flat'] as const
 export type GroupMode = (typeof GROUP_MODES)[number]

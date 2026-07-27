@@ -82,7 +82,7 @@ export function OriginalDocumentPeek({ doc }: { doc: ScannedDocument }) {
         type="button"
         onClick={handleTap}
         disabled={!url}
-        className="flex w-full items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 text-left transition-colors hover:bg-surface-sunken disabled:opacity-60"
+        className="flex w-full items-center gap-3 rounded-xl bg-surface-field px-3.5 py-3 text-left transition-colors hover:brightness-[0.97] disabled:opacity-60"
       >
         {isImage && url ? (
           // eslint-disable-next-line @next/next/no-img-element -- blob object URL thumbnail, not an optimizable asset

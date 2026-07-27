@@ -3,7 +3,8 @@
 import { DomainIcon, type Domain } from '@/components/icons/DomainIcon'
 import { cn } from '@/lib/cn'
 
-// A quick-pick choice chip — selected = purple wash + hairline.
+// A quick-pick choice chip. Unselected floats on the canvas as a soft white
+// pill; selected fills coral. No outlines in either state.
 export function ChoiceChip({
   label,
   selected,
@@ -19,10 +20,8 @@ export function ChoiceChip({
       onClick={onClick}
       aria-pressed={selected}
       className={cn(
-        'rounded-pill border px-4 py-2 text-body-sm transition-colors',
-        selected
-          ? 'border-accent bg-accent-soft text-accent'
-          : 'border-border bg-surface text-ink hover:bg-surface-sunken',
+        'rounded-pill px-4 py-2.5 text-body-sm font-bold transition-colors active:scale-[0.98]',
+        selected ? 'bg-accent text-accent-ink' : 'bg-surface text-ink shadow-card',
       )}
     >
       {label}
@@ -30,7 +29,7 @@ export function ChoiceChip({
   )
 }
 
-// A domain toggle chip — stone DomainIcon + label, purple wash when selected.
+// A domain toggle chip — emoji chip + label, coral fill when selected.
 export function DomainChip({
   domain,
   label,
@@ -48,13 +47,11 @@ export function DomainChip({
       onClick={onClick}
       aria-pressed={selected}
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-pill border border-transparent py-2 pl-2 pr-4 text-body-sm transition-colors',
-        selected
-          ? 'bg-accent text-white'
-          : 'bg-surface-sunken text-ink-muted hover:bg-surface-sunken/70',
+        'flex w-full items-center gap-2.5 rounded-pill py-1.5 pl-1.5 pr-4 text-body-sm font-bold transition-colors active:scale-[0.98]',
+        selected ? 'bg-accent text-accent-ink' : 'bg-surface-field text-ink',
       )}
     >
-      <DomainIcon domain={domain} size={30} className="rounded-full" />
+      <DomainIcon domain={domain} size={34} />
       {label}
     </button>
   )

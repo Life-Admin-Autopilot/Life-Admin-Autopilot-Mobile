@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { AppHeader } from '@/components/layout/AppHeader'
 import { HomeHero } from '@/components/dashboard/HomeHero'
 import { MatterRow } from '@/components/dashboard/MatterRow'
+import { SectionHeaderChip } from '@/components/ui/SectionHeaderChip'
 import { UncertaintyBanner } from '@/components/uncertainty/UncertaintyBanner'
 import { useSessionStore, selectUser } from '@/lib/auth/sessionStore'
 import { bucketOf, formatDue } from '@/lib/taskFormat'
@@ -36,7 +37,7 @@ export default function DashboardPage() {
   const attention = (counts.data?.overdue ?? 0) + (counts.data?.today ?? 0)
 
   return (
-    <main className="min-h-dvh pb-28">
+    <main className="min-h-dvh pb-32">
       <AppHeader />
       <HomeHero
         name={name}
@@ -49,33 +50,31 @@ export default function DashboardPage() {
         }}
       />
 
-      <div className="mx-auto mt-6 max-w-md px-6">
+      <div className="mx-auto mt-6 max-w-md px-5">
         <UncertaintyBanner />
       </div>
 
       {upcoming.length > 0 ? (
-        <div className="mx-auto mt-8 flex max-w-md flex-col gap-3 px-6">
-          <div className="flex items-baseline justify-between">
-            <span className="text-label uppercase text-accent">Coming up</span>
-            <Link href="/matters" className="text-caption text-ink-subtle hover:text-ink">
+        <div className="mx-auto mt-7 flex max-w-md flex-col gap-3 px-5">
+          <div className="flex items-center justify-between">
+            <SectionHeaderChip label="Coming up" tone="morning" count={upcoming.length} />
+            <Link
+              href="/matters"
+              className="rounded-pill px-2 py-1 text-body-sm font-bold text-accent hover:bg-accent-soft"
+            >
               View all
             </Link>
           </div>
-          <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-card">
-            {upcoming.map((task, i) => (
-              <div key={task.id}>
-                {i > 0 ? <div className="mx-4 h-px bg-border" /> : null}
-                <Link href="/matters" className="block">
-                  <MatterRow
-                    domain={task.domain}
-                    title={task.title}
-                    due={formatDue(task.dueAt)}
-                    overdue={bucketOf(task) === 'overdue'}
-                  />
-                </Link>
-              </div>
-            ))}
-          </div>
+          {upcoming.map((task) => (
+            <Link key={task.id} href="/matters" className="block">
+              <MatterRow
+                domain={task.domain}
+                title={task.title}
+                due={formatDue(task.dueAt)}
+                overdue={bucketOf(task) === 'overdue'}
+              />
+            </Link>
+          ))}
         </div>
       ) : null}
     </main>

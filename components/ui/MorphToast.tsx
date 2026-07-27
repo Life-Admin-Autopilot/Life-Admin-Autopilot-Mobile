@@ -18,7 +18,7 @@ export function MorphToast({ title, description }: { title: string; description?
       initial={reduced ? false : { width: 44, height: 34, borderRadius: 17 }}
       animate={{ width: 232, height: description ? 56 : 42, borderRadius: 14 }}
       transition={reduced ? { duration: 0 } : MORPH_SPRING}
-      className="overflow-hidden border border-border bg-surface text-ink shadow-elevated"
+      className="overflow-hidden bg-surface text-ink shadow-elevated"
     >
       <motion.div
         variants={MORPH_CONTENT_VARIANTS}

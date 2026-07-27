@@ -53,20 +53,25 @@ export function NotificationBell() {
 
   return (
     <div ref={ref} className="relative">
-      <button onClick={toggle} aria-label="Notifications" aria-expanded={open} className="relative block">
-        <Bell size={22} className="text-ink-muted" />
+      <button
+        onClick={toggle}
+        aria-label="Notifications"
+        aria-expanded={open}
+        className="relative grid size-11 place-items-center rounded-full text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
+      >
+        <Bell size={20} strokeWidth={1.75} />
         {unread > 0 ? (
-          <span className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-micro text-accent-ink">
+          <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-micro text-accent-ink">
             {unread > 9 ? '9+' : unread}
           </span>
         ) : null}
       </button>
 
       <div className="absolute right-0 top-full z-40 mt-2">
-        <MorphPanel open={open} width={WIDTH} height={height} radius={16}>
+        <MorphPanel open={open} width={WIDTH} height={height} radius={24}>
           <div className="flex h-full flex-col" style={{ width: WIDTH }}>
-            <header className="flex items-center justify-between border-b border-border px-4 py-3">
-              <span className="font-display text-heading-md text-ink">Notifications</span>
+            <header className="flex items-center justify-between px-5 pb-2 pt-4">
+              <span className="font-display text-heading-serif text-ink">Notifications</span>
             </header>
             {items.length === 0 ? (
               <p className="grid flex-1 place-items-center px-4 text-center text-body-sm text-ink-subtle">
@@ -100,7 +105,7 @@ function NotificationRow({ n, onNavigate }: { n: AppNotification; onNavigate: ()
   )
   if (n.kind === 'uncertainty') {
     return (
-      <li className="border-b border-border last:border-0 hover:bg-surface-sunken">
+      <li className="mx-2 rounded-xl hover:bg-surface-sunken">
         <Link href="/uncertainties" onClick={onNavigate}>
           {body}
         </Link>
@@ -109,12 +114,12 @@ function NotificationRow({ n, onNavigate }: { n: AppNotification; onNavigate: ()
   }
   if (n.kind === 'document_scan') {
     return (
-      <li className="border-b border-border last:border-0 hover:bg-surface-sunken">
+      <li className="mx-2 rounded-xl hover:bg-surface-sunken">
         <Link href="/documents" onClick={onNavigate}>
           {body}
         </Link>
       </li>
     )
   }
-  return <li className="border-b border-border last:border-0">{body}</li>
+  return <li className="mx-2">{body}</li>
 }

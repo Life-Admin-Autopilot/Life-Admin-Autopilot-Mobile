@@ -26,6 +26,33 @@ export const SCANNED_DOCUMENT_CLAIMABLE_STATUSES: readonly ScannedDocumentStatus
 export const SCANNED_DOCUMENT_SOURCES = ['camera', 'pdf', 'gallery'] as const
 export type ScannedDocumentSource = (typeof SCANNED_DOCUMENT_SOURCES)[number]
 
+// What the document IS, not what it asks of you — a bill you've already paid is
+// still a bill. Drives the leading icon on the /documents row, so the set is
+// deliberately small enough that every value maps to a glyph a user can learn.
+// `other` is the honest fallback; a misclassified icon is worse than a generic
+// one.
+export const DOCUMENT_TYPES = [
+  'bill',
+  'statement',
+  'letter',
+  'form',
+  'receipt',
+  'insurance',
+  'medical',
+  'legal',
+  'identity',
+  'tax',
+  'other',
+] as const
+export type DocumentType = (typeof DOCUMENT_TYPES)[number]
+
+// Row-copy budgets. Enforced server-side (the model is asked to respect them
+// but is not trusted to) so the list row can rely on a bounded string rather
+// than defending against a paragraph arriving in a title slot.
+export const DOCUMENT_TITLE_MAX = 60
+export const DOCUMENT_SUBTITLE_MAX = 120
+export const DOCUMENT_ISSUER_MAX = 80
+
 // Every scanned-document item is held for the user to accept/edit/discard —
 // per product decision, nothing auto-saves from a scan the way a high-
 // confidence voice item does. Confidence is still carried for the review UI
@@ -53,8 +80,20 @@ export interface ScannedDocumentAttrs {
   rawExtractedText?: string
   failureReason?: string
   /** One-to-two-sentence AI-generated overview of the document itself (what
-   *  it is, sender, key facts) — set once extraction completes. */
+   *  it is, sender, key facts) — set once extraction completes. Feeds the
+   *  detail surfaces (review card, task overview), NOT the list row. */
   documentSummary?: string
+  /** Document kind, for the list row's leading icon. */
+  documentType?: DocumentType
+  /** Short noun-phrase headline for the list row ("Electricity bill"). Kept
+   *  separate from `documentSummary` because a truncated prose sentence spends
+   *  the visible half of the row on preamble and cuts the actual fact. */
+  documentTitle?: string
+  /** One-line description for the list row, written most-important-token-first
+   *  so it survives truncation ("Due July 30 · $142.37"). */
+  documentSubtitle?: string
+  /** Organization or person the document came from ("City Power"). */
+  issuer?: string
   candidates: ExtractedTaskCandidate[]
   clientCapturedAt: Date
   timezone?: string
@@ -95,6 +134,10 @@ const ScannedDocumentSchema = new Schema<ScannedDocumentAttrs>(
     rawExtractedText: { type: String },
     failureReason: { type: String },
     documentSummary: { type: String },
+    documentType: { type: String, enum: DOCUMENT_TYPES },
+    documentTitle: { type: String, maxlength: DOCUMENT_TITLE_MAX },
+    documentSubtitle: { type: String, maxlength: DOCUMENT_SUBTITLE_MAX },
+    issuer: { type: String, maxlength: DOCUMENT_ISSUER_MAX },
     candidates: { type: [ExtractedTaskCandidateSchema], default: [] },
     clientCapturedAt: { type: Date, required: true },
     timezone: { type: String },

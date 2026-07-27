@@ -8,6 +8,8 @@ import { enqueueDocumentScan } from '../lib/documentScanWorker'
 import { admitDocumentScan, releaseDocumentScanSlot } from '../lib/documentScanQuota'
 import { requireAuth } from '../middleware/auth'
 import { documentScanLimiter } from '../middleware/rateLimit'
+import { logger } from '../logger'
+import { Notification } from '../models/Notification'
 import {
   SCANNED_DOCUMENT_SOURCES,
   ScannedDocument,
@@ -170,6 +172,56 @@ meDocumentScansRouter.get(
     res.setHeader('Content-Disposition', 'inline')
     res.setHeader('Cache-Control', 'private, max-age=86400')
     res.status(200).send(bytes)
+  }),
+)
+
+// Permanently delete a scan: the stored bytes, the record, and any notification
+// pointing at it. Irreversible by construction — the original file is gone, so
+// there is nothing an undo could restore, and the client confirms before
+// calling rather than offering an undo afterwards.
+//
+// Tasks already filed from this document are deliberately NOT touched. Once a
+// candidate has been accepted it is a matter in its own right; deleting the
+// scan it came from must never make matters disappear from the user's list.
+//
+// The monthly quota slot is deliberately NOT released either. The quota guards
+// sustained AI cost, and the extraction call for this document has already been
+// paid for — refunding on delete would make scan-then-delete an unlimited loop
+// around the cap. releaseDocumentScanSlot() stays scoped to its original case:
+// an upload that failed before any AI work happened.
+meDocumentScansRouter.delete(
+  '/me/document-scans/:id',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const auth = req.auth
+    if (!auth) throw Unauthorized()
+
+    const doc = await ScannedDocument.findOne({ _id: req.params.id, userId: auth.sub })
+    // Idempotent: a second delete (double-tap, retry of a request that actually
+    // succeeded) is a no-op success, not a 404 the client has to special-case
+    // when deleting several at once.
+    if (!doc) {
+      res.status(204).end()
+      return
+    }
+
+    const storageKey = doc.storageKey
+
+    // Record first, bytes second. The reverse order can leave a row pointing at
+    // a file that no longer exists, so opening the document 500s while it still
+    // sits in the list — strictly worse than leaking a file on disk.
+    await doc.deleteOne()
+    await Notification.deleteMany({ userId: auth.sub, documentId: doc._id })
+
+    try {
+      await getDocumentScanStorage().remove(storageKey)
+    } catch (err: unknown) {
+      // Best-effort: an already-missing file must not fail a delete the user
+      // has, from their side, already completed.
+      logger.warn({ err, storageKey }, 'documentScan:delete-storage-failed')
+    }
+
+    res.status(204).end()
   }),
 )
 

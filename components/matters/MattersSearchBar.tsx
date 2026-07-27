@@ -87,14 +87,14 @@ export function MattersSearchBar({
         run(value)
       }}
       className={cn(
-        'flex items-center gap-2 rounded-pill border bg-surface px-3 py-2 transition-colors',
-        recording || hasResults ? 'border-accent' : 'border-border',
+        'flex items-center gap-2.5 rounded-pill bg-surface-field px-4 py-2.5 transition-shadow',
+        (recording || hasResults) && 'ring-2 ring-accent',
       )}
     >
       {busy ? (
-        <Loader2 size={16} className="shrink-0 animate-spin text-accent" />
+        <Loader2 size={17} className="shrink-0 animate-spin text-accent" />
       ) : (
-        <Search size={16} className="shrink-0 text-ink-subtle" />
+        <Search size={17} className="shrink-0 text-ink-muted" />
       )}
 
       <input
@@ -105,7 +105,7 @@ export function MattersSearchBar({
         aria-label="Search matters"
         enterKeyHint="search"
         disabled={recording}
-        className="min-w-0 flex-1 bg-transparent text-body-sm text-ink outline-none placeholder:text-ink-subtle"
+        className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-muted"
       />
 
       {value && !recording ? (

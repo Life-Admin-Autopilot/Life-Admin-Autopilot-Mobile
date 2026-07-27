@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Pill } from '@/components/ui/Pill'
+import { ChoiceChip } from '@/components/onboarding/QuestionChips'
 import { MorphSurface, type MorphShape } from '@/components/ui/MorphSurface'
 import {
   useClarifications,
@@ -78,33 +80,44 @@ function Walker({ initial }: { initial: Clarification[] }) {
   const state = done ? 'done' : current!.id
   const typing = !done && (showCustom || current!.kind === 'detail')
   const optionCount = done ? 0 : Math.min(current!.options.length, 4)
-  const height = done ? 200 : 244 + (typing ? 64 : optionCount * 50)
-  const shapes: Record<string, MorphShape> = { [state]: { width: WIDTH, height, radius: 26 } }
+  const height = done ? 236 : 262 + (typing ? 76 : optionCount * 52)
+  const shapes: Record<string, MorphShape> = { [state]: { width: WIDTH, height, radius: 30 } }
 
   return (
     <main className="grid min-h-dvh place-items-center px-6">
       <MorphSurface state={state} shapes={shapes}>
         {done ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 p-5 text-center">
-            <h2 className="font-display text-display-md text-ink">All clear.</h2>
+          // Closing the loop earns the celebration surface — one of the four
+          // places gradient is allowed to appear.
+          <div className="bg-celebrate-gradient flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+            <span aria-hidden className="text-[34px] leading-none">
+              🌤️
+            </span>
+            <h2 className="font-display-wonk font-display text-display-md text-ink">All clear.</h2>
             <p className="text-body text-ink-muted">Nothing else needs your call.</p>
-            <Button className="mt-2 h-11 w-full" onClick={() => router.replace('/dashboard')}>
+            <Button
+              variant="solid"
+              className="mt-3 w-full"
+              onClick={() => router.replace('/dashboard')}
+            >
               Back to dashboard
             </Button>
           </div>
         ) : (
-          <div className="flex h-full flex-col p-5">
+          <div className="flex h-full flex-col p-6">
             <div className="flex items-center justify-between">
-              <span className="text-label uppercase text-accent">Needs your input</span>
-              <span className="text-caption text-ink-subtle">
+              <Pill tone="accent" uppercase>
+                Needs your input
+              </Pill>
+              <span className="text-body-sm tabular text-ink-muted">
                 {index + 1}/{queue.length}
               </span>
             </div>
-            <p className="mt-1 truncate text-caption text-ink-subtle">{current!.draft.title}</p>
-            <h2 className="mt-1 font-display text-heading-xl text-ink">{current!.question}</h2>
+            <p className="mt-3 truncate text-body-sm text-ink-muted">{current!.draft.title}</p>
+            <h2 className="mt-1 font-display text-heading-serif text-ink">{current!.question}</h2>
 
             {typing ? (
-              <div className="mt-3 flex flex-col gap-2">
+              <div className="mt-4 flex flex-col gap-2.5">
                 <Input
                   value={custom}
                   onChange={(e) => setCustom(e.target.value)}
@@ -113,39 +126,46 @@ function Walker({ initial }: { initial: Clarification[] }) {
                   }}
                   autoFocus
                   placeholder="Type your answer…"
-                  className="h-11"
                 />
-                <Button className="h-11 w-full" disabled={!custom.trim()} onClick={submitCustom}>
+                <Button
+                  variant="accent"
+                  className="w-full"
+                  disabled={!custom.trim()}
+                  onClick={submitCustom}
+                >
                   Save
                 </Button>
               </div>
             ) : (
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 {current!.options.map((o, i) => (
-                  <button
-                    key={i}
-                    onClick={() => pickOption(i)}
-                    className="rounded-pill border border-border bg-surface px-4 py-2 text-body-sm text-ink transition-colors hover:border-accent hover:bg-surface-sunken"
-                  >
-                    {o.label}
-                  </button>
+                  <ChoiceChip key={i} label={o.label} onClick={() => pickOption(i)} />
                 ))}
               </div>
             )}
 
-            <div className="mt-auto flex items-center justify-between pt-3">
+            <div className="mt-auto flex items-center justify-between pt-4">
               {current!.kind !== 'detail' ? (
-                <button onClick={() => setShowCustom((s) => !s)} className="text-caption text-accent">
+                <button
+                  onClick={() => setShowCustom((s) => !s)}
+                  className="rounded-pill px-2 py-1 text-body-sm font-bold text-accent hover:bg-accent-soft"
+                >
                   {showCustom ? 'Pick an option' : 'Type your own'}
                 </button>
               ) : (
                 <span />
               )}
-              <div className="flex gap-4">
-                <button onClick={advance} className="text-caption text-ink-subtle hover:text-ink">
+              <div className="flex gap-1">
+                <button
+                  onClick={advance}
+                  className="rounded-pill px-2 py-1 text-body-sm text-ink-muted hover:text-ink"
+                >
                   Skip
                 </button>
-                <button onClick={dropIt} className="text-caption text-ink-subtle hover:text-danger">
+                <button
+                  onClick={dropIt}
+                  className="rounded-pill px-2 py-1 text-body-sm text-ink-muted hover:text-danger"
+                >
                   Drop
                 </button>
               </div>

@@ -1,336 +1,409 @@
-import Image from 'next/image'
-import {
-  Menu,
-  Bell,
-  ChevronRight,
-  FileText,
-  ShieldCheck,
-  ArrowUpRight,
-  LayoutGrid,
-  ListChecks,
-  User,
-} from 'lucide-react'
+'use client'
 
-import pandaImg from '@/assets/panda/hero-image.png'
-import { Plus } from '@/components/icons/Plus'
+import { useState } from 'react'
+import { Clock, Home, Sparkles, Sun } from 'lucide-react'
+import { useTheme } from 'next-themes'
+
 import { DomainIcon, type Domain } from '@/components/icons/DomainIcon'
-import {
-  SketchCameraGlyph,
-  SketchUploadGlyph,
-  SketchScanGlyph,
-  SketchCheckGlyph,
-  SketchEmptyTrayGlyph,
-} from '@/components/icons/sketch/flowGlyphs'
-import { SketchDomainIcon } from '@/components/icons/sketch/domainGlyphs'
-import { ScanningDocumentGlyph } from '@/components/icons/sketch/ScanningDocumentGlyph'
 import { Button } from '@/components/ui/button'
-import { MorphDemo } from '@/components/showcase/MorphDemo'
-import { ChatbotPopup } from '@/components/showcase/ChatbotPopup'
-import { VoiceRecordPopup } from '@/components/showcase/VoiceRecordPopup'
-import { MorphMenuDemo } from '@/components/showcase/MorphMenuDemo'
-import { MorphToastDemo } from '@/components/showcase/MorphToastDemo'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { CompletionRing, SelectionCheck, Toggle } from '@/components/ui/CompletionRing'
+import { EmojiChip, type CatColor } from '@/components/ui/EmojiChip'
+import { GradientHero } from '@/components/ui/GradientHero'
+import { Input } from '@/components/ui/input'
+import { Pill, type PillTone } from '@/components/ui/Pill'
+import { SectionHeaderChip, type ChipTone } from '@/components/ui/SectionHeaderChip'
+import { SegmentedControl } from '@/components/ui/SegmentedControl'
+import { MorphSheet, ChipToggle, SheetSection } from '@/components/ui/Sheet'
+import { StatStrip, StatTile } from '@/components/ui/StatTile'
+import { TabBar } from '@/components/ui/TabBar'
+import { TaskRow } from '@/components/ui/TaskRow'
 
-// Design-system styleguide — the "lavender + panda" identity made visible.
-// Static preview; no backend. Lives at /styleguide; / is the app gate.
+// Live design-system reference. Everything here imports the REAL primitives —
+// a styleguide that keeps local copies of the components stops telling you the
+// truth the first time one of them changes.
+//
+// This is also the light/dark QA harness: flip the theme at the top and every
+// surface below should still feel deliberate, not merely legible.
+
+const DOMAINS: Domain[] = ['health', 'home', 'car', 'finance', 'family', 'pets']
+
+const CATS: CatColor[] = [
+  'lilac',
+  'periwinkle',
+  'sky',
+  'sage',
+  'yellow',
+  'peach',
+  'blush',
+  'pink',
+]
+
+const CHIP_TONES: ChipTone[] = [
+  'anytime',
+  'morning',
+  'afternoon',
+  'evening',
+  'high',
+  'medium',
+  'low',
+]
+
+const PILL_TONES: PillTone[] = [
+  'accent',
+  'field',
+  'surface',
+  'high',
+  'medium',
+  'low',
+  'success',
+  'danger',
+]
+
 export default function StyleguidePage() {
+  const { resolvedTheme, setTheme } = useTheme()
+  const [done, setDone] = useState(false)
+  const [on, setOn] = useState(true)
+  const [seg, setSeg] = useState<'list' | 'board'>('list')
+  const [chipOpen, setChipOpen] = useState(true)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [trigger, setTrigger] = useState<DOMRect | null>(null)
+
   return (
-    <main className="min-h-dvh pb-28">
-      <AppBar />
-      <Hero />
+    <main className="min-h-dvh pb-36">
+      <header className="pt-safe sticky top-0 z-20 flex items-center justify-between bg-canvas/95 px-5 pb-3 backdrop-blur-xl">
+        <span className="font-display text-heading-serif text-ink">Styleguide</span>
+        <Button
+          variant="secondary"
+          size="pill"
+          onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+        >
+          <Sun />
+          {resolvedTheme === 'dark' ? 'Light' : 'Dark'}
+        </Button>
+      </header>
 
-      <div className="mx-auto flex max-w-md flex-col gap-12 px-6 py-12">
-        <Section eyebrow="Components" title="Buttons">
-          <div className="flex flex-wrap items-center gap-3">
-            <Button>Create matter</Button>
-            <Button variant="secondary">Attach document</Button>
-            <Button variant="outline">Secondary</Button>
-            <Button variant="ghost">Skip</Button>
-            <Button variant="destructive">Delete</Button>
-            <Button variant="link">Open document</Button>
+      <div className="flex flex-col gap-9 px-5 pt-4">
+        <Section title="Type" hint="Fraunces for headline moments, Nunito for everything else">
+          <div className="flex flex-col gap-2">
+            <p className="font-display text-display-hero text-ink">Good evening.</p>
+            <p className="font-display text-display-md text-ink">Display · 32</p>
+            <p className="font-display text-heading-serif text-ink">Heading serif · 26</p>
+            <p className="font-display-wonk font-display text-heading-serif text-ink">
+              Wonk cut · affirmations
+            </p>
+            <p className="text-heading-md text-ink">Heading · Nunito 20/700</p>
+            <p className="text-heading-sm text-ink">Row title · Nunito 18/700</p>
+            <p className="text-body text-ink">Body · Nunito 16/500</p>
+            <p className="text-body-sm text-ink-muted">Meta · Nunito 14/500</p>
+            <p className="text-label uppercase text-ink-muted">Label · 13/700 · tracked</p>
+            <p className="font-display text-countdown tabular text-ink">12:04</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button size="sm">Small</Button>
-            <Button>Default</Button>
-            <Button size="lg">Large</Button>
-            <Button disabled>Disabled</Button>
-            <span className="grid size-12 place-items-center rounded-full bg-accent text-accent-ink shadow-elevated">
-              <Plus size={22} className="text-accent-ink" />
-            </span>
-          </div>
         </Section>
 
-        <Section eyebrow="Motion" title="Dynamic Island morph">
-          <p className="text-caption text-ink-subtle">
-            The one core animation — ported verbatim from Wiscord. Tap the pill below, or the
-            floating purple buttons (assistant, bottom-right · voice, bottom-left).
-          </p>
-          <MorphDemo />
-        </Section>
-
-        <Section eyebrow="Motion" title="Dropdown">
-          <p className="text-caption text-ink-subtle">
-            The menu drops out of the trigger with the same spring + content fade.
-          </p>
-          <MorphMenuDemo />
-        </Section>
-
-        <Section eyebrow="Motion" title="Toast">
-          <p className="text-caption text-ink-subtle">
-            A pill grows into the notification — same morph, via <code>lib/toast.ts</code>. Page
-            transitions use it too (navigate to <code>/health</code> and back).
-          </p>
-          <MorphToastDemo />
-        </Section>
-
-        <Section eyebrow="Material" title="Surfaces & depth">
+        <Section title="Surfaces & ink">
           <div className="grid grid-cols-2 gap-3">
-            <Swatch label="canvas" className="bg-canvas border border-border" />
-            <Swatch label="surface" className="bg-surface border border-border" />
-            <Swatch label="surface-sunken" className="bg-surface-sunken" />
-            <Swatch label="border-strong" className="bg-surface border-2 border-border-strong" />
+            <Swatch name="canvas" className="bg-canvas" />
+            <Swatch name="surface" className="bg-surface" />
+            <Swatch name="surface-sunken" className="bg-surface-sunken" />
+            <Swatch name="surface-field" className="bg-surface-field" />
+            <Swatch name="accent" className="bg-accent" />
+            <Swatch name="accent-soft" className="bg-accent-soft" />
+            <Swatch name="solid" className="bg-solid" />
+            <Swatch name="border-strong" className="bg-border-strong" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border border-border bg-surface p-4 shadow-card">
-              <p className="text-body-sm text-ink-muted">shadow-card</p>
-              <p className="text-caption text-ink-subtle">a whisper on lavender</p>
+          <div className="mt-3 flex flex-col gap-1">
+            <p className="text-body text-ink">ink — primary</p>
+            <p className="text-body text-ink-muted">ink-muted — meta</p>
+            <p className="text-body text-ink-subtle">ink-subtle — disabled</p>
+          </div>
+        </Section>
+
+        <Section title="Category pastels" hint="Theme-invariant — identical in light and dark">
+          <div className="flex flex-wrap gap-3">
+            {CATS.map((c) => (
+              <div key={c} className="flex flex-col items-center gap-1">
+                <EmojiChip emoji="🌿" category={c} />
+                <span className="text-micro text-ink-muted">{c}</span>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        <Section title="Domain chips" hint="Emoji by default, lucide glyph where emoji would shout">
+          <div className="flex flex-wrap gap-3">
+            {DOMAINS.map((d) => (
+              <DomainIcon key={d} domain={d} />
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-3">
+            {DOMAINS.map((d) => (
+              <DomainIcon key={d} domain={d} variant="glyph" />
+            ))}
+          </div>
+        </Section>
+
+        <Section title="Buttons" hint="solid = the CTA · accent = active / confirm">
+          <div className="flex flex-col gap-3">
+            <Button variant="solid" className="w-full">
+              Begin
+            </Button>
+            <Button variant="accent" className="w-full">
+              Confirm
+            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" size="pill">
+                Secondary
+              </Button>
+              <Button variant="outline" size="pill">
+                Outline
+              </Button>
+              <Button variant="ghost" size="pill">
+                Ghost
+              </Button>
+              <Button variant="destructive" size="pill">
+                Delete
+              </Button>
+              <Button variant="link" size="pill">
+                Link
+              </Button>
             </div>
-            <div className="rounded-lg border border-border bg-surface p-4 shadow-elevated">
-              <p className="text-body-sm text-ink-muted">shadow-elevated</p>
-              <p className="text-caption text-ink-subtle">sheets & modals</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="accent" size="fab">
+                <Sparkles />
+              </Button>
+              <Button variant="solid" size="icon">
+                <Home />
+              </Button>
+              <Button variant="secondary" size="icon-sm">
+                <Clock />
+              </Button>
+              <Button variant="solid" size="lg">
+                Large
+              </Button>
+              <Button variant="solid" size="sm">
+                Small
+              </Button>
             </div>
           </div>
         </Section>
 
-        <Section eyebrow="Pattern" title="Matters">
-          <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-card">
-            <MatterRow domain="car" title="Car Insurance Renewal" due="Due today · 10:00 AM" overdue />
-            <Divider />
-            <MatterRow domain="finance" title="Credit Card Payment" due="Due today · 6:00 PM" />
-            <Divider />
-            <MatterRow
-              domain="home"
-              title="Home Insurance Renewal"
-              due="Due in 8 days · May 20"
-              icon={<ShieldCheck size={18} className="text-ink-subtle" />}
+        <Section title="Rows">
+          <div className="flex flex-col gap-3">
+            <TaskRow
+              leading={<DomainIcon domain="pets" />}
+              title="Pay overdue veterinary bill"
+              meta={
+                <span className="flex items-center gap-1.5">
+                  <Pill tone="high" className="px-2 py-0 text-micro">
+                    Urgent
+                  </Pill>
+                  17 days overdue
+                </span>
+              }
+              trailing={
+                <CompletionRing checked={done} onChange={setDone} label="Pay veterinary bill" />
+              }
+            />
+            <TaskRow
+              leading={<DomainIcon domain="finance" />}
+              title="Renew home insurance"
+              meta="Friday · 30m"
+              trailing={<SelectionCheck checked />}
+            />
+            <TaskRow
+              leading={<EmojiChip emoji="🧾" category="sky" square />}
+              title="Electricity bill — March"
+              meta="2 pages · 340 KB"
+              muted
+              trailing={<Toggle checked={on} onChange={setOn} label="Track this bill" />}
             />
           </div>
         </Section>
 
-        <Section eyebrow="Trust" title="Citation">
-          <p className="text-body text-ink">
-            Renewal date extracted from the policy.{' '}
-            <span className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-0.5 align-middle text-caption text-ink-muted shadow-card">
-              <FileText size={12} className="text-accent" />
-              policy.pdf · p.2
-              <ArrowUpRight size={11} className="text-ink-subtle" />
-            </span>
-          </p>
-          <p className="text-caption text-ink-subtle">
-            Required wherever the system surfaces an extracted value.
-          </p>
-        </Section>
-
-        <Section eyebrow="Type" title="Typography">
-          <div className="flex flex-col gap-3 border-l-2 border-border-strong pl-4">
-            <p className="font-wordmark text-wordmark text-ink">Autopilot</p>
-            <p className="font-display text-display-hero text-ink">Good morning, Alex.</p>
-            <p className="font-display text-display-md text-ink">Order, restored.</p>
-            <p className="font-display text-heading-xl text-ink">Section title</p>
-            <p className="text-heading-sm text-ink">Row title — Inter SemiBold</p>
-            <p className="text-body text-ink-muted">
-              Body — Inter. The system states facts, reports status, executes requests.
-            </p>
-            <p className="text-label uppercase text-ink-subtle">Due today</p>
+        <Section title="Section headers">
+          <div className="flex flex-wrap gap-2">
+            {CHIP_TONES.map((t) => (
+              <SectionHeaderChip key={t} label={t} tone={t} count={3} />
+            ))}
+          </div>
+          <div className="mt-3">
+            <SectionHeaderChip
+              label="Morning"
+              tone="morning"
+              count={3}
+              open={chipOpen}
+              onToggle={() => setChipOpen((v) => !v)}
+            />
           </div>
         </Section>
 
-        <Section eyebrow="Tokens" title="Color">
+        <Section title="Pills">
+          <div className="flex flex-wrap gap-2">
+            {PILL_TONES.map((t) => (
+              <Pill key={t} tone={t}>
+                {t}
+              </Pill>
+            ))}
+          </div>
+        </Section>
+
+        <Section title="Stats">
+          <StatStrip
+            stats={[
+              { value: 10, label: 'All', tone: 'ink' },
+              { value: 3, label: 'Due soon', tone: 'accent' },
+              { value: 24, label: 'Resolved', tone: 'muted' },
+            ]}
+          />
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <StatTile value={12} label="Scanned" emoji="📄" />
+            <StatTile value="4h" label="Saved" emoji="⏳" tone="muted" />
+          </div>
+        </Section>
+
+        <Section title="Controls">
+          <div className="flex flex-col gap-3">
+            <SegmentedControl
+              label="Layout"
+              value={seg}
+              onChange={setSeg}
+              segments={[
+                { value: 'list', label: 'List' },
+                { value: 'board', label: 'Board' },
+              ]}
+            />
+            <Input placeholder="Describe what you're looking for" />
+            <div className="flex items-center gap-3">
+              <div className="h-2 flex-1 overflow-hidden rounded-pill bg-surface-sunken">
+                <div className="h-full w-2/3 rounded-pill bg-accent" />
+              </div>
+              <span className="text-body-sm tabular text-ink-muted">4/6</span>
+            </div>
+            <div className="flex gap-2">
+              <ChipToggle selected onClick={() => {}}>
+                Selected
+              </ChipToggle>
+              <ChipToggle selected={false} onClick={() => {}}>
+                Unselected
+              </ChipToggle>
+            </div>
+          </div>
+        </Section>
+
+        <Section title="Card">
+          <Card>
+            <CardHeader>
+              <CardTitle>You closed the day.</CardTitle>
+              <CardDescription>Six matters settled, nothing left waiting on you.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="solid" className="w-full">
+                See tomorrow
+              </Button>
+            </CardContent>
+          </Card>
+        </Section>
+
+        <Section title="Gradient surfaces" hint="Hero, onboarding, celebration, AI preview only">
+          <GradientHero
+            className="rounded-2xl py-10"
+            variant="celebrate"
+            glyph={<EmojiChip emoji="🌤️" category="peach" size={64} tilt />}
+            title="All clear."
+            subtitle="Nothing else needs your call."
+          />
+          <div className="bg-ai-gradient mt-3 rounded-2xl p-5">
+            <p className="font-display text-heading-serif text-ink">AI preview surface</p>
+            <p className="text-body-sm text-ink-muted">Diagonal coral wash, used sparingly.</p>
+          </div>
+        </Section>
+
+        <Section title="Sheet">
+          <Button
+            variant="secondary"
+            onClick={(e) => {
+              setTrigger(e.currentTarget.getBoundingClientRect())
+              setSheetOpen(true)
+            }}
+          >
+            Open bottom sheet
+          </Button>
+        </Section>
+
+        <Section title="Elevation">
           <div className="grid grid-cols-3 gap-3">
-            <Swatch label="canvas" className="bg-canvas border border-border" small />
-            <Swatch label="surface" className="bg-surface border border-border" small />
-            <Swatch label="ink" className="bg-ink" small />
-            <Swatch label="accent" className="bg-accent" small />
-            <Swatch label="accent-soft" className="bg-accent-soft" small />
-            <Swatch label="gold" className="bg-gold" small />
-            <Swatch label="danger" className="bg-danger" small />
-            <Swatch label="warning" className="bg-warning" small />
-            <Swatch label="ink-muted" className="bg-ink-muted" small />
-          </div>
-          <div className="flex flex-wrap gap-2 pt-1">
-            {(['health', 'home', 'car', 'finance', 'family', 'pets'] as Domain[]).map((d) => (
-              <DomainIcon key={d} domain={d} size={32} />
-            ))}
-          </div>
-        </Section>
-
-        <Section eyebrow="TEMP QA" title="Sketch icons (documents flow)">
-          <div className="flex flex-wrap items-center gap-4">
-            <SketchCameraGlyph size={32} />
-            <SketchUploadGlyph size={32} />
-            <SketchScanGlyph size={32} />
-            <SketchCheckGlyph size={32} />
-            <SketchEmptyTrayGlyph size={64} />
-            <ScanningDocumentGlyph size={40} />
-          </div>
-          <div className="flex flex-wrap gap-3 pt-1">
-            {(['health', 'home', 'car', 'finance', 'family', 'pets'] as Domain[]).map((d) => (
-              <SketchDomainIcon key={d} domain={d} size={32} />
-            ))}
+            <div className="rounded-2xl bg-surface p-4 shadow-card">
+              <p className="text-body-sm text-ink-muted">card</p>
+            </div>
+            <div className="rounded-2xl bg-surface p-4 shadow-elevated">
+              <p className="text-body-sm text-ink-muted">elevated</p>
+            </div>
+            <div className="rounded-2xl bg-surface p-4 shadow-halo">
+              <p className="text-body-sm text-ink-muted">halo</p>
+            </div>
           </div>
         </Section>
       </div>
 
-      <TabBarPreview />
-      <ChatbotPopup />
-      <VoiceRecordPopup />
+      <MorphSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        trigger={trigger}
+        title="Arrange matters"
+        eyebrow="Sheet"
+        height={340}
+        footer={
+          <Button variant="solid" className="w-full" onClick={() => setSheetOpen(false)}>
+            Apply
+          </Button>
+        }
+      >
+        <SheetSection label="Group by">
+          <div className="flex flex-wrap gap-2">
+            <ChipToggle selected onClick={() => {}}>
+              Time
+            </ChipToggle>
+            <ChipToggle selected={false} onClick={() => {}}>
+              Domain
+            </ChipToggle>
+            <ChipToggle selected={false} onClick={() => {}}>
+              Priority
+            </ChipToggle>
+          </div>
+        </SheetSection>
+      </MorphSheet>
+
+      <TabBar active="dashboard" />
     </main>
   )
 }
 
-/* ---------------- sections ---------------- */
-
-function AppBar() {
-  return (
-    <header className="flex items-center justify-between px-6 pt-6">
-      <Menu size={22} className="text-ink-muted" />
-      <div className="flex flex-col items-center gap-1">
-        <Plus size={16} />
-        <span className="text-label uppercase text-ink-subtle">Life Admin</span>
-        <span className="font-wordmark text-wordmark leading-none text-ink">Autopilot</span>
-      </div>
-      <span className="relative">
-        <Bell size={22} className="text-ink-muted" />
-        <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-accent" />
-      </span>
-    </header>
-  )
-}
-
-function Hero() {
-  return (
-    <section className="flex flex-col items-center px-6 pt-6 text-center">
-      <div className="flex w-full justify-center bg-transparent pt-2">
-        <Image
-          src={pandaImg}
-          alt="Our panda companion, ready to help"
-          priority
-          className="h-64 w-auto object-contain"
-          style={{ scale: '1.5', position: 'relative', top: '-7px' }}
-        />
-      </div>
-      <h1 className="mt-4 font-display text-display-hero text-ink">Good morning, Alex.</h1>
-      <p className="mt-1 text-body text-ink-muted">
-        <span className="text-accent">5 matters</span> require attention.
-      </p>
-
-      <div className="mt-3 grid w-full grid-cols-3 gap-3 pt-1">
-        <Stat n="8" label="All matters" />
-        <Stat n="5" label="Due soon" />
-        <Stat n="3" label="Resolved" muted />
-      </div>
-    </section>
-  )
-}
-
-function Stat({ n, label, muted }: { n: string; label: string; muted?: boolean }) {
-  return (
-    <div className="flex flex-col items-center rounded-lg">
-      <span
-        className={`font-display text-display-md tabular ${muted ? 'text-ink-muted' : 'text-accent'}`}
-      >
-        {n}
-      </span>
-      <span className="text-caption text-ink-muted">{label}</span>
-    </div>
-  )
-}
-
-function MatterRow({
-  domain,
-  title,
-  due,
-  overdue,
-  icon,
-}: {
-  domain: Domain
-  title: string
-  due: string
-  overdue?: boolean
-  icon?: React.ReactNode
-}) {
-  return (
-    <div className="flex items-center gap-3 px-4 py-3">
-      <DomainIcon domain={domain} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-heading-sm text-ink">{title}</span>
-        <span className="text-caption tabular text-accent">{due}</span>
-      </div>
-      {overdue ? (
-        <span className="rounded-pill bg-accent-soft px-2 py-0.5 text-micro uppercase text-accent">
-          Overdue
-        </span>
-      ) : (
-        (icon ?? <ChevronRight size={18} className="text-ink-subtle" />)
-      )}
-    </div>
-  )
-}
-
 function Section({
-  eyebrow,
   title,
+  hint,
   children,
 }: {
-  eyebrow: string
   title: string
+  hint?: string
   children: React.ReactNode
 }) {
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex items-baseline gap-3">
-        <span className="text-label uppercase text-accent">{eyebrow}</span>
-        <span className="h-px flex-1 bg-border" />
-        <h2 className="font-display text-heading-xl text-ink">{title}</h2>
+    <section className="flex flex-col gap-3">
+      <div className="flex flex-col gap-0.5">
+        <h2 className="text-label uppercase text-ink-muted">{title}</h2>
+        {hint ? <p className="text-body-sm text-ink-subtle">{hint}</p> : null}
       </div>
       {children}
     </section>
   )
 }
 
-function Swatch({ label, className, small }: { label: string; className: string; small?: boolean }) {
+function Swatch({ name, className }: { name: string; className: string }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className={`${small ? 'h-12' : 'h-16'} rounded-md ${className}`} />
-      <span className="text-micro text-ink-muted">{label}</span>
+    <div className="flex items-center gap-2.5">
+      <span className={`size-11 shrink-0 rounded-xl shadow-card ${className}`} />
+      <span className="min-w-0 truncate text-body-sm text-ink-muted">{name}</span>
     </div>
-  )
-}
-
-function Divider() {
-  return <div className="mx-4 h-px bg-border" />
-}
-
-function TabBarPreview() {
-  return (
-    <nav className="fixed inset-x-0 bottom-4 z-10 mx-auto flex max-w-sm items-center justify-around rounded-pill border border-border bg-surface/90 px-2 py-2 shadow-elevated backdrop-blur">
-      <Tab icon={<LayoutGrid size={22} />} label="Dashboard" active />
-      <Tab icon={<ListChecks size={22} />} label="Matters" />
-      <span className="grid size-12 -translate-y-3 place-items-center rounded-full bg-accent text-accent-ink shadow-elevated">
-        <Plus size={22} className="text-accent-ink" />
-      </span>
-      <Tab icon={<FileText size={22} />} label="Documents" />
-      <Tab icon={<User size={22} />} label="Profile" />
-    </nav>
-  )
-}
-
-function Tab({ icon, label, active }: { icon: React.ReactNode; label: string; active?: boolean }) {
-  return (
-    <span
-      className={`flex w-14 flex-col items-center gap-0.5 ${active ? 'text-accent' : 'text-ink-subtle'}`}
-    >
-      {icon}
-      <span className="text-micro">{label}</span>
-    </span>
   )
 }

@@ -24,7 +24,7 @@ import {
   type TaskPriority,
   type UpdateTaskBody,
 } from '@/queries/tasks'
-import { ChipToggle, Sheet, SheetSection } from './Sheet'
+import { ChipToggle, Sheet, SheetSection } from '@/components/ui/Sheet'
 
 // The single matter editor. Same field set and chip vocabulary as the document
 // scan review (components/scan/TaskOverview), so editing a matter feels the
@@ -340,7 +340,7 @@ function Editor({
       </SheetSection>
 
       {task.rescheduleCount >= 3 ? (
-        <p className="rounded-md bg-accent-soft px-3 py-2 text-caption text-ink-muted">
+        <p className="rounded-xl bg-accent-soft px-3.5 py-2.5 text-body-sm text-ink-muted">
           You&apos;ve moved this {task.rescheduleCount} times. Still worth keeping?
         </p>
       ) : null}

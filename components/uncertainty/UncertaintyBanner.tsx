@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { HelpCircle, ChevronRight } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 
+import { EmojiChip } from '@/components/ui/EmojiChip'
 import { useClarifications } from '@/queries/clarifications'
 
 // Dashboard surface for the AI's held items. Appears only when there are open
@@ -15,14 +16,16 @@ export function UncertaintyBanner() {
   return (
     <Link
       href="/uncertainties"
-      className="mx-auto flex max-w-md items-center gap-3 rounded-lg border border-accent/30 bg-accent-soft px-4 py-3 shadow-card"
+      className="mx-auto flex max-w-md items-center gap-3.5 rounded-2xl bg-accent-soft px-4 py-3.5"
     >
-      <HelpCircle size={20} className="shrink-0 text-accent" />
+      <EmojiChip emoji="💭" category="blush" size={40} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="text-body-sm font-medium text-ink">
+        <span className="text-heading-sm text-ink">
           {count} {count === 1 ? 'matter needs' : 'matters need'} your input
         </span>
-        <span className="text-caption text-ink-muted">Pick an answer or type your own — fast.</span>
+        <span className="truncate text-body-sm text-ink-muted">
+          Pick an answer or type your own.
+        </span>
       </div>
       <ChevronRight size={18} className="shrink-0 text-accent" />
     </Link>

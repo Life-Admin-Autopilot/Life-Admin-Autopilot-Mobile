@@ -146,7 +146,7 @@ export function ScanReviewCard({ doc, onReviewed }: ScanReviewCardProps) {
           content height, so a single short row doesn't leave a huge empty
           stretched card underneath it. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <ul className="flex flex-col divide-y divide-border rounded-lg border border-border bg-surface shadow-card">
+        <ul className="flex flex-col gap-2">
           {pending.map((c) => {
             const isDiscarded = discarded.has(c.key)
             const isExpanded = expanded === c.key
@@ -270,7 +270,7 @@ export function ScanReviewCard({ doc, onReviewed }: ScanReviewCardProps) {
         </ul>
       </div>
 
-      <Button variant="default" className="h-11 w-full shrink-0" disabled={review.isPending} onClick={submit}>
+      <Button variant="solid" className="w-full shrink-0" disabled={review.isPending} onClick={submit}>
         {review.isPending ? 'Saving…' : allDiscarded ? 'Discard all' : 'Confirm'}
       </Button>
     </div>

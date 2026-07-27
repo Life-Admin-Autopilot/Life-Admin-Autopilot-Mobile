@@ -10,10 +10,12 @@
     "typecheck": "tsc --noEmit",
     "build:native:dev": "dotenv -e .env.native-dev.local -- next build",
     "build:native:prod": "next build",
-    "cap:sync:dev": "npm run build:native:dev && npx cap sync",
-    "cap:sync:prod": "npm run build:native:prod && npx cap sync",
-    "ios:dev": "cross-env CAP_LIVE_RELOAD_URL=http://localhost:3000 npx cap run ios",
+    "cap:sync:dev": "npm run build:native:dev && npx cap sync && ./scripts/patch-ios-plist.sh --local-http",
+    "cap:sync:prod": "npm run build:native:prod && npx cap sync && ./scripts/patch-ios-plist.sh",
+    "lan:ip": "./scripts/lan-ip.sh",
+    "ios:dev": "./scripts/patch-ios-plist.sh --local-http && cross-env CAP_LIVE_RELOAD_URL=http://$(./scripts/lan-ip.sh):3000 npx cap run ios",
     "android:dev": "cross-env CAP_LIVE_RELOAD_URL=http://192.168.1.4:3000 npx cap run android",
+    "ios:device": "npm run cap:sync:dev && npx cap open ios",
     "ios:open": "npm run cap:sync:prod && npx cap open ios",
     "android:open": "npm run cap:sync:prod && npx cap open android",
     "cap:doctor": "npx cap doctor"
@@ -44,6 +46,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.4.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
@@ -53,6 +56,7 @@
     "dotenv-cli": "^11.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "sharp": "^0.35.3",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

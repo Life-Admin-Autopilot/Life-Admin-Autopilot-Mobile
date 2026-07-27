@@ -8,7 +8,8 @@ import { cn } from '@/lib/cn'
 import { MORPH_BACKDROP_FADE, MORPH_CONTENT_VARIANTS, MORPH_SPRING } from '@/lib/motion'
 import { useMorphColors } from '@/lib/motion-colors'
 
-// The Matters sheets — filter, arrange, matter detail, delete confirm.
+// The app's bottom-sheet primitive — Matters' filter/arrange/detail/delete
+// confirms, and the Documents delete confirm.
 //
 // Same Dynamic Island morph as the document capture flow: the surface grows out
 // of the control that opened it (its DOMRect) into a bottom sheet, and collapses
@@ -28,9 +29,9 @@ import { useMorphColors } from '@/lib/motion-colors'
 //      `fixed inset-0` probe reports the real box, on both mobile and desktop.
 
 const SHEET_MARGIN = 16
-const SHEET_RADIUS = 26
+const SHEET_RADIUS = 30
 const SHEET_MAX_WIDTH = 440
-const TRIGGER_RADIUS = 16
+const TRIGGER_RADIUS = 20
 
 export interface Viewport {
   width: number
@@ -44,6 +45,7 @@ export function MorphSheet({
   onClose,
   title,
   eyebrow,
+  eyebrowTone = 'accent',
   trigger,
   height = 420,
   children,
@@ -53,6 +55,10 @@ export function MorphSheet({
   onClose: () => void
   title: string
   eyebrow?: string
+  /** Tone for the eyebrow. `danger` for irreversible actions — an eyebrow that
+   *  says "this cannot be undone" in the same accent colour used by the sheet
+   *  that says "this CAN be undone" is telling the user nothing. */
+  eyebrowTone?: 'accent' | 'danger'
   /** Rect of the control that opened this, in viewport coordinates. */
   trigger?: DOMRect | null
   height?: number
@@ -163,6 +169,7 @@ export function MorphSheet({
             reduced={Boolean(reduced)}
             title={title}
             eyebrow={eyebrow}
+            eyebrowTone={eyebrowTone}
             onClose={onClose}
             footer={footer}
           >
@@ -198,6 +205,7 @@ function Surface({
   reduced,
   title,
   eyebrow,
+  eyebrowTone = 'accent',
   onClose,
   footer,
   children,
@@ -208,6 +216,7 @@ function Surface({
   reduced: boolean
   title: string
   eyebrow?: string
+  eyebrowTone?: 'accent' | 'danger'
   onClose: () => void
   footer?: React.ReactNode
   children: React.ReactNode
@@ -241,7 +250,7 @@ function Surface({
         exit={{ ...origin, opacity: 0 }}
         transition={reduced ? { duration: 0 } : MORPH_SPRING}
         className={cn(
-          'fixed z-50 overflow-hidden border border-border shadow-elevated',
+          'fixed z-50 overflow-hidden shadow-elevated',
           !isPresent && 'pointer-events-none',
         )}
       >
@@ -250,18 +259,33 @@ function Surface({
           initial={reduced ? false : 'initial'}
           animate="animate"
           exit="exit"
-          className="flex h-full w-full flex-col p-5"
+          className="flex h-full w-full flex-col px-6 pb-6 pt-3"
         >
-          <div className="flex shrink-0 items-start justify-between gap-2 pb-2">
+          {/* Grab handle — the affordance that says "this is a sheet". */}
+          <div
+            aria-hidden
+            className="mx-auto mb-3 h-1.5 w-9 shrink-0 rounded-full bg-border-strong"
+          />
+
+          <div className="flex shrink-0 items-start justify-between gap-2 pb-3">
             <div className="min-w-0">
-              {eyebrow ? <span className="text-label uppercase text-accent">{eyebrow}</span> : null}
-              <h2 className="font-display text-heading-md text-ink">{title}</h2>
+              {eyebrow ? (
+                <span
+                  className={cn(
+                    'text-label uppercase',
+                    eyebrowTone === 'danger' ? 'text-danger' : 'text-accent',
+                  )}
+                >
+                  {eyebrow}
+                </span>
+              ) : null}
+              <h2 className="font-display text-heading-serif text-ink">{title}</h2>
             </div>
             <button
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="-mr-1 shrink-0 rounded-full p-1.5 text-ink-subtle transition-colors hover:bg-surface-sunken hover:text-ink"
+              className="grid size-11 shrink-0 place-items-center rounded-full bg-surface-sunken text-ink-muted transition-colors hover:text-ink"
             >
               <X size={18} />
             </button>
@@ -269,7 +293,7 @@ function Surface({
 
           <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">{children}</div>
 
-          {footer ? <div className="shrink-0 border-t border-border pt-3">{footer}</div> : null}
+          {footer ? <div className="shrink-0 pt-4">{footer}</div> : null}
         </motion.div>
       </motion.div>
     </>
@@ -297,10 +321,10 @@ export function ChipToggle({
       onClick={onClick}
       aria-pressed={selected}
       className={cn(
-        'rounded-pill border px-2.5 py-1 text-caption transition-colors',
+        'rounded-pill px-3.5 py-2 text-body-sm font-bold transition-colors active:scale-[0.98]',
         selected
-          ? 'border-accent bg-accent/10 text-ink'
-          : 'border-border bg-surface text-ink-muted hover:bg-surface-sunken',
+          ? 'bg-accent text-accent-ink'
+          : 'bg-surface-field text-ink-muted hover:text-ink',
       )}
     >
       {children}
@@ -316,8 +340,8 @@ export function SheetSection({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-2 py-2.5">
-      <span className="text-label uppercase text-ink-subtle">{label}</span>
+    <div className="flex flex-col gap-2.5 py-3">
+      <span className="text-label uppercase text-ink-muted">{label}</span>
       {children}
     </div>
   )

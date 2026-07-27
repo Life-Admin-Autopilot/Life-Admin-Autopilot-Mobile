@@ -1,74 +1,212 @@
 'use client'
 
-import { useRef, useState } from 'react'
+// Documents — every scan the user has taken, newest first.
+//
+// One flat, edge-to-edge list. It used to split into "Waiting" and "Filed"
+// sections inside bordered cards; the section headers cost a full row each and
+// the card borders chopped the list into boxes, so a screen that is fundamentally
+// a scan history read like a settings page. Unresolved scans now announce
+// themselves with a dot on their own row, which says the same thing without
+// cutting the list in two or reordering anything under the user.
+//
+// The top of the screen is the app's standard chrome (AppHeader) over a sticky
+// control row, the same two-part arrangement /matters uses — see
+// DocumentsHeader for why the scan action lives in the row rather than the
+// header.
+
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
 
-import { AppHeader } from '@/components/layout/AppHeader'
-import { Button } from '@/components/ui/button'
+import { DeleteDocumentsConfirm } from '@/components/scan/DeleteDocumentsConfirm'
 import { DocumentCaptureFlow, type DocumentCaptureTrigger } from '@/components/scan/DocumentCaptureFlow'
-import { DocumentSections } from '@/components/scan/DocumentSections'
+import { DocumentRow } from '@/components/scan/DocumentRow'
+import { DocumentSelectionBar } from '@/components/scan/DocumentSelectionBar'
+import { DocumentsHeader } from '@/components/scan/DocumentsHeader'
 import { SketchEmptyTrayGlyph } from '@/components/icons/sketch/flowGlyphs'
-import { useScannedDocuments, type ScannedDocument } from '@/queries/documentScans'
+import { useMorphColors } from '@/lib/motion-colors'
+import { useClaimTabBarSlot } from '@/lib/tabBarStore'
+import { toast } from '@/lib/toast'
+import {
+  useDeleteScannedDocuments,
+  useScannedDocuments,
+  type ScannedDocument,
+} from '@/queries/documentScans'
 
 export default function DocumentsPage() {
-  const { data, isLoading } = useScannedDocuments()
-  const docs = data?.scannedDocuments ?? []
-  const ctaRef = useRef<HTMLButtonElement>(null)
+  // Origin colour for the capture morph, read live off the CTA's own token so
+  // the shell reads as that button expanding rather than a new surface popping
+  // in. It used to be a hardcoded plum literal left over from a previous
+  // theme — the capture flow grew out of a purple rectangle no other pixel on
+  // the screen matched.
+  const { solid } = useMorphColors()
+  const { data, isLoading, isError } = useScannedDocuments()
+  const docs = useMemo(() => data?.scannedDocuments ?? [], [data])
+
   const [trigger, setTrigger] = useState<DocumentCaptureTrigger | null>(null)
-  // Every open is its own identity. See the `key` note on the flow below.
+  // Every open is its own identity. See the `key` note on the flow below. A ref
+  // rather than state: it is never rendered, and bumping it must not schedule a
+  // render of its own on top of the one setTrigger already causes.
   const openCount = useRef(0)
 
-  const openCapture = () => {
-    const rect = ctaRef.current?.getBoundingClientRect()
-    if (!rect) return
-    // Origin color matches the purple CTA it grows from, so the shell reads
-    // as that button expanding rather than a new surface popping in.
-    setTrigger({ id: ++openCount.current, rect, mode: 'capture', originColor: 'rgb(142 122 224)' })
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmRect, setConfirmRect] = useState<DOMRect | null>(null)
+
+  const deleteDocs = useDeleteScannedDocuments()
+
+  const openCapture = useCallback(
+    (rect: DOMRect) => {
+      setTrigger({ id: ++openCount.current, rect, mode: 'capture', originColor: solid })
+    },
+    [solid],
+  )
+
+  const openDocument = useCallback((doc: ScannedDocument, rect: DOMRect) => {
+    setTrigger({ id: ++openCount.current, rect, mode: 'open', documentId: doc.id })
+  }, [])
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const exitSelect = useCallback(() => {
+    setSelectMode(false)
+    setSelected(new Set())
+  }, [])
+
+  // Resolved from the live list, not captured at selection time: a background
+  // poll can change a document between selecting it and confirming, and the
+  // confirm sheet's warnings must describe what is actually about to be
+  // deleted. Ids that vanished from the list drop out here on their own.
+  const selectedDocs = useMemo(
+    () => docs.filter((d) => selected.has(d.id)),
+    [docs, selected],
+  )
+  const allSelected = selected.size > 0 && selected.size === docs.length
+
+  const runDelete = () => {
+    const ids = selectedDocs.map((d) => d.id)
+    setConfirmOpen(false)
+    deleteDocs.mutate(ids, {
+      onSuccess: ({ deleted, failed }) => {
+        exitSelect()
+        // Reported honestly rather than as a flat success — a partial failure
+        // that claims "Deleted 5" leaves the user trusting a list that still
+        // has two of them in it.
+        if (failed > 0) {
+          toast.error(
+            deleted > 0
+              ? `Deleted ${deleted}. ${failed} could not be deleted.`
+              : 'Could not delete those. Try again.',
+          )
+          return
+        }
+        toast.info(deleted === 1 ? 'Document deleted.' : `${deleted} documents deleted.`)
+      },
+      onError: () => toast.error('Could not delete those. Try again.'),
+    })
   }
 
-  const openDocument = (doc: ScannedDocument, rect: DOMRect) => {
-    setTrigger({ id: ++openCount.current, rect, mode: 'open', documentId: doc.id })
-  }
+  // The action bar lands in the tab bar's exact slot, so the tab bar slides out
+  // for the duration. Two bottom-anchored bars stacked on each other is how you
+  // get someone tapping Documents when they meant Delete.
+  useClaimTabBarSlot(selectMode)
 
   return (
     <main className="min-h-dvh pb-28">
-      <AppHeader />
+      <DocumentsHeader
+        selectMode={selectMode}
+        count={selected.size}
+        allSelected={allSelected}
+        onCancelSelect={exitSelect}
+        onSelectAll={() =>
+          setSelected(allSelected ? new Set() : new Set(docs.map((d) => d.id)))
+        }
+        onScan={openCapture}
+      />
 
-      <div className="mx-auto mt-6 flex max-w-md flex-col gap-4 px-6">
-        {isLoading ? (
-          <div className="flex flex-col gap-2.5" aria-hidden>
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="flex animate-pulse flex-col gap-1.5 rounded-lg border border-border bg-surface px-4 py-3.5"
-              >
-                <div className="h-4 w-1/2 rounded-sm bg-surface-sunken" />
-                <div className="h-3 w-1/3 rounded-sm bg-surface-sunken" />
-              </div>
-            ))}
+      {isLoading ? (
+        <ul aria-hidden className="flex flex-col gap-3 px-5 pt-1">
+          {[0, 1, 2, 3].map((i) => (
+            <li
+              key={i}
+              className="flex animate-pulse items-center gap-3.5 rounded-2xl bg-surface px-4 py-3 shadow-card"
+            >
+              <span className="size-12 shrink-0 rounded-tile bg-surface-sunken" />
+              <span className="flex min-w-0 flex-1 flex-col gap-2">
+                <span className="h-4 w-1/2 rounded-pill bg-surface-sunken" />
+                <span className="h-3.5 w-1/3 rounded-pill bg-surface-sunken" />
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : isError ? (
+        <EmptyState
+          title="Couldn't load your documents."
+          body="Check your connection and try again."
+        />
+      ) : docs.length === 0 ? (
+        <div className="mt-8 flex flex-col items-center gap-4 px-6 text-center">
+          <SketchEmptyTrayGlyph size={104} />
+          <div>
+            <h2 className="font-display text-heading-serif text-ink">Nothing scanned yet</h2>
+            {/* No CTA of its own — the scan button is already sitting a
+                centimetre above this, and two identical buttons that close
+                together read as one of them being broken. */}
+            <p className="mt-1.5 max-w-[34ch] text-body text-ink-muted">
+              Scan a bill, letter, or form and Mo will pull out anything actionable.
+            </p>
           </div>
-        ) : docs.length === 0 ? (
-          <div className="mt-10 flex flex-col items-center gap-4 text-center">
-            <SketchEmptyTrayGlyph size={104} />
-            <div>
-              <h2 className="font-display text-heading-xl text-ink">Nothing scanned yet</h2>
-              <p className="mt-1 text-body-sm text-ink-muted">
-                Scan a bill, letter, or form and Mo will pull out anything actionable.
-              </p>
-            </div>
-            <Button ref={ctaRef} className="h-11 w-full max-w-[240px]" onClick={openCapture}>
-              Scan a document
-            </Button>
-          </div>
-        ) : (
-          <>
-            <Button ref={ctaRef} className="h-11 w-full" onClick={openCapture}>
-              Scan another document
-            </Button>
-            <DocumentSections docs={docs} onOpen={openDocument} />
-          </>
-        )}
-      </div>
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-3 px-5 pt-1">
+          {docs.map((doc) => (
+            <RowWithRect
+              key={doc.id}
+              doc={doc}
+              selectable={selectMode}
+              selected={selected.has(doc.id)}
+              onOpen={openDocument}
+              onToggleSelect={() => toggleSelect(doc.id)}
+              // Holding a row enters selection with that row already picked —
+              // entering an empty selection would make the user hold, then go
+              // back and tap the very row they were already touching.
+              onLongPress={() => {
+                setSelectMode(true)
+                setSelected(new Set([doc.id]))
+              }}
+            />
+          ))}
+        </ul>
+      )}
+
+      <DeleteDocumentsConfirm
+        open={confirmOpen}
+        docs={selectedDocs}
+        trigger={confirmRect}
+        pending={deleteDocs.isPending}
+        onConfirm={runDelete}
+        onClose={() => setConfirmOpen(false)}
+      />
+
+      <AnimatePresence>
+        {selectMode ? (
+          <DocumentSelectionBar
+            count={selected.size}
+            busy={deleteDocs.isPending}
+            onDelete={(rect) => {
+              setConfirmRect(rect)
+              setConfirmOpen(true)
+            }}
+          />
+        ) : null}
+      </AnimatePresence>
 
       {/* AnimatePresence so the flow gets a real EXIT (collapse + fade back
           into the trigger) instead of being yanked from the DOM the instant
@@ -88,5 +226,48 @@ export default function DocumentsPage() {
         ) : null}
       </AnimatePresence>
     </main>
+  )
+}
+
+// Captures its own row's rect on tap so DocumentCaptureFlow can grow the morph
+// shell from wherever this particular row sits in the list, exactly like
+// OnboardingIsland captures its island's rect for IslandHandoff.
+function RowWithRect({
+  doc,
+  selectable,
+  selected,
+  onOpen,
+  onToggleSelect,
+  onLongPress,
+}: {
+  doc: ScannedDocument
+  selectable: boolean
+  selected: boolean
+  onOpen: (doc: ScannedDocument, rect: DOMRect) => void
+  onToggleSelect: () => void
+  onLongPress: () => void
+}) {
+  const [node, setNode] = useState<HTMLLIElement | null>(null)
+  return (
+    <li ref={setNode}>
+      <DocumentRow
+        doc={doc}
+        selectable={selectable}
+        selected={selected}
+        onOpen={() => node && onOpen(doc, node.getBoundingClientRect())}
+        onToggleSelect={onToggleSelect}
+        onLongPress={onLongPress}
+      />
+    </li>
+  )
+}
+
+function EmptyState({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+      <SketchEmptyTrayGlyph />
+      <p className="mt-2 font-display text-heading-serif text-ink">{title}</p>
+      <p className="max-w-[32ch] text-body text-ink-muted">{body}</p>
+    </div>
   )
 }

@@ -8,6 +8,7 @@ import { type Domain } from '@/components/icons/DomainIcon'
 import { ChoiceChip, DomainChip } from '@/components/onboarding/QuestionChips'
 import { IslandHandoff } from '@/components/onboarding/IslandHandoff'
 import { Button } from '@/components/ui/button'
+import { Pill } from '@/components/ui/Pill'
 import { Input } from '@/components/ui/input'
 import { MorphSurface, type MorphShape } from '@/components/ui/MorphSurface'
 import { api } from '@/lib/api/client'
@@ -25,7 +26,7 @@ const DOMAINS: { key: Domain; label: string }[] = [
 ]
 
 const SHAPES: Record<string, MorphShape> = Object.fromEntries(
-  ONBOARDING_STEPS.map((s) => [s.id, { width: ISLAND_WIDTH, height: s.height, radius: 26 }]),
+  ONBOARDING_STEPS.map((s) => [s.id, { width: ISLAND_WIDTH, height: s.height, radius: 30 }]),
 )
 
 // One morphing island across the whole onboarding — each step morphs (size +
@@ -101,7 +102,7 @@ export function OnboardingIsland() {
   const canBack = stepIndex > 0 && step.kind !== 'done'
 
   return (
-    <main className="grid min-h-dvh place-items-center px-6">
+    <main className="bg-hero-gradient grid min-h-dvh place-items-center px-6">
       <div className="flex flex-col items-center gap-5">
         <MorphSurface ref={islandRef} state={step.id} shapes={SHAPES}>
           {step.kind === 'name' ? (
@@ -115,9 +116,9 @@ export function OnboardingIsland() {
                 }}
                 autoFocus
                 placeholder="Your name"
-                className="mt-3 h-11"
+                className="mt-4"
               />
-              <Button className="mt-auto h-11 w-full" disabled={!name.trim()} onClick={goNext}>
+              <Button variant="solid" className="mt-auto w-full" disabled={!name.trim()} onClick={goNext}>
                 Continue
               </Button>
             </Pane>
@@ -150,7 +151,8 @@ export function OnboardingIsland() {
                 ))}
               </div>
               <Button
-                className="mt-auto h-11 w-full"
+                variant="solid"
+                className="mt-auto w-full"
                 disabled={domains.length === 0}
                 onClick={goNext}
               >
@@ -159,11 +161,12 @@ export function OnboardingIsland() {
             </Pane>
           ) : (
             <Pane center>
-              <h2 className="font-display text-display-md text-ink">{step.question}</h2>
+              <h2 className="font-display-wonk font-display text-display-md text-ink">{step.question}</h2>
               <p className="text-body text-ink-muted">I&apos;ll keep your file in order, {firstName}.</p>
-              {error ? <p className="text-caption text-danger">{error}</p> : null}
+              {error ? <p className="text-body-sm text-danger">{error}</p> : null}
               <Button
-                className="mt-2 h-11 w-full"
+                variant="solid"
+                className="mt-3 w-full"
                 disabled={submitting}
                 onClick={handleEnter}
               >
@@ -186,7 +189,7 @@ export function OnboardingIsland() {
 function Pane({ children, center }: { children: React.ReactNode; center?: boolean }) {
   return (
     <div
-      className={`flex h-full flex-col p-5 ${center ? 'items-center justify-center gap-2 text-center' : ''}`}
+      className={`flex h-full flex-col p-6 ${center ? 'items-center justify-center gap-2 text-center' : ''}`}
     >
       {children}
     </div>
@@ -204,16 +207,18 @@ function StepHeader({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex h-5 items-center gap-2">
+      <div className="flex items-center gap-2">
         {canBack ? (
           <button onClick={onBack} aria-label="Back" className="text-ink-subtle hover:text-ink">
             <ArrowLeft size={18} />
           </button>
         ) : null}
-        <span className="text-label uppercase text-accent">Onboarding</span>
+        <Pill tone="accent" uppercase>
+          Onboarding
+        </Pill>
       </div>
-      <h2 className="font-display text-heading-xl text-ink">{step.question}</h2>
-      {step.hint ? <p className="text-caption text-ink-subtle">{step.hint}</p> : null}
+      <h2 className="mt-2 font-display text-heading-serif text-ink">{step.question}</h2>
+      {step.hint ? <p className="text-body-sm text-ink-muted">{step.hint}</p> : null}
     </div>
   )
 }
@@ -224,8 +229,8 @@ function ProgressDots({ total, index }: { total: number; index: number }) {
       {Array.from({ length: total }).map((_, i) => (
         <span
           key={i}
-          className={`size-1.5 rounded-full ${
-            i === index ? 'bg-accent' : i < index ? 'bg-accent/40' : 'bg-border-strong'
+          className={`h-1.5 rounded-pill transition-all ${
+            i === index ? 'w-5 bg-accent' : i < index ? 'w-1.5 bg-accent/40' : 'w-1.5 bg-border-strong'
           }`}
         />
       ))}

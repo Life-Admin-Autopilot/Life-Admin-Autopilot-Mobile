@@ -5,75 +5,21 @@ import { Check, Clock, Trash2 } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
 
-// Selection mode, split the way iOS Mail / Files split it — and for the reasons
-// they split it:
+// Matters' half of selection mode: the bottom action bar. The header half is
+// the shared SelectionToolbar in components/ui — /documents wears the same one.
 //
-//   SelectionToolbar   sits in the sticky header IN PLACE OF the filter row.
-//                      Cancel on the left, the live count in the middle, select
-//                      -all on the right. It occupies the same single row the
-//                      controls did, so entering selection doesn't shift the
-//                      list under the user's finger.
+// This takes the tab bar's exact footprint at the bottom of the device, and
+// every action carries a WORD, not just a glyph.
 //
-//   SelectionActionBar takes the tab bar's exact footprint at the bottom of the
-//                      device. Every action carries a WORD, not just a glyph.
-//
-// What this replaces was one floating pill holding all of it: "All", a count,
-// and four unlabelled icons crammed together. Two problems, both real. The bar
-// was `absolute` inside a scrolling page, so it came to rest over the middle of
-// the list instead of the bottom of the device (overlays here are ALWAYS
-// `fixed` — PhoneFrame's transform is what breaks `absolute`). And a bare row of
-// icons next to a destructive one asks the user to guess: an unlabelled trash
-// beside an unlabelled clock is how people delete things they meant to snooze.
-//
-// The count still never scrolls away — that was the right call, and the sticky
-// header keeps it true.
+// What it replaces was one floating pill holding all of it: "All", a count, and
+// four unlabelled icons crammed together. Two problems, both real. The bar was
+// `absolute` inside a scrolling page, so it came to rest over the middle of the
+// list instead of the bottom of the device (overlays here are ALWAYS `fixed` —
+// PhoneFrame's transform is what breaks `absolute`). And a bare row of icons
+// next to a destructive one asks the user to guess: an unlabelled trash beside
+// an unlabelled clock is how people delete things they meant to snooze.
 
-export function SelectionToolbar({
-  count,
-  allSelected,
-  onSelectAll,
-  onCancel,
-}: {
-  count: number
-  allSelected: boolean
-  onSelectAll: () => void
-  onCancel: () => void
-}) {
-  return (
-    <div className="flex h-7 items-center justify-between gap-2">
-      <button
-        type="button"
-        onClick={onCancel}
-        className="shrink-0 rounded-pill px-1 text-caption text-accent"
-      >
-        Cancel
-      </button>
-
-      {/* Reads as a sentence, not a badge: "nothing selected" tells a user who
-          just entered the mode what to do next, where "0 selected" reads like
-          something failed. */}
-      <span
-        aria-live="polite"
-        className={cn(
-          'min-w-0 truncate text-caption tabular',
-          count > 0 ? 'font-medium text-ink' : 'text-ink-subtle',
-        )}
-      >
-        {count === 0 ? 'Select matters' : count === 1 ? '1 selected' : `${count} selected`}
-      </span>
-
-      <button
-        type="button"
-        onClick={onSelectAll}
-        className="shrink-0 rounded-pill px-1 text-caption text-accent"
-      >
-        {allSelected ? 'Deselect All' : 'Select All'}
-      </button>
-    </div>
-  )
-}
-
-// Deliberately the same geometry as TabBar (`fixed inset-x-0 bottom-4`, centred
+// Deliberately the same geometry as TabBar (`fixed inset-x-0 bottom-safe`, centred
 // `max-w-sm` pill) so it reads as the tab bar becoming the action bar rather
 // than a second bar landing on top of one. The tab bar itself slides away
 // underneath — see lib/tabBarStore.ts.
@@ -99,7 +45,7 @@ export function SelectionActionBar({
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: 96, opacity: 0 }}
       transition={{ type: 'spring', stiffness: 300, damping: 32 }}
-      className="fixed inset-x-0 bottom-4 z-40 mx-auto flex max-w-sm items-center justify-around rounded-pill border border-border bg-surface/95 px-2 py-2 shadow-elevated backdrop-blur"
+      className="bottom-safe fixed inset-x-0 z-40 mx-auto flex max-w-sm items-center justify-around rounded-pill bg-surface/95 px-2 py-2 shadow-elevated backdrop-blur-xl"
     >
       <Action label="Complete" onClick={onComplete} disabled={disabled}>
         <Check size={20} />
@@ -134,12 +80,12 @@ function Action({
       disabled={disabled}
       aria-label={label}
       className={cn(
-        'flex w-20 flex-col items-center gap-0.5 rounded-pill py-1 transition-colors disabled:opacity-30',
-        danger ? 'text-danger' : 'text-ink-muted',
+        'flex w-20 flex-col items-center gap-0.5 rounded-pill py-1.5 transition-colors active:scale-95 disabled:opacity-30',
+        danger ? 'text-danger' : 'text-ink',
       )}
     >
       {children}
-      <span className="text-micro">{label}</span>
+      <span className="text-tab">{label}</span>
     </button>
   )
 }

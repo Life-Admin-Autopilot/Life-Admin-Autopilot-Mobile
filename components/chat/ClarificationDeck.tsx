@@ -1,5 +1,5 @@
 // One consolidated card for ALL the held questions in a turn — instead of a
-// stack of separate alerts. The panda asks each held item in sequence inside a
+// stack of separate alerts. The assistant asks each held item in sequence inside a
 // single surface (with a "1 of N" counter and Back/Next). Once every question
 // is answered the deck submits ONE combined reply, so the agent files all the
 // held matters in a single turn.
@@ -113,7 +113,7 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
   // All answered (or submitted) → a quiet confirmation row.
   if (!current || submitted) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2">
+      <div className="flex items-center gap-2 rounded-xl bg-surface-field px-3 py-2">
         <span className="text-caption font-medium text-ink">
           {total === 1 ? 'Noted.' : `Filing ${total} matters…`}
         </span>
@@ -130,7 +130,7 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
       layout
       transition={MORPH_SPRING}
       style={{ transformOrigin: 'top left' }}
-      className="flex w-full flex-col gap-3 overflow-hidden rounded-lg border border-border bg-surface p-3.5 shadow-card"
+      className="flex w-full flex-col gap-3 overflow-hidden rounded-2xl bg-surface p-4 shadow-card"
     >
       {/* Progress — only with more than one question. */}
       {total > 1 ? (
@@ -204,7 +204,7 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
               autoFocus={!hasOptions}
               disabled={disabled}
               dir="auto"
-              className="h-9 min-w-0 rounded-md bg-surface-sunken px-3 text-body-sm text-ink outline-none placeholder:text-ink-subtle"
+              className="h-10 min-w-0 rounded-xl bg-surface-field px-3.5 text-body-sm text-ink outline-none placeholder:text-ink-muted"
             />
           ) : !storedAnswer ? (
             <button

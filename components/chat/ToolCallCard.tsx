@@ -1,7 +1,7 @@
 // Renders one tool call below an assistant message.
 //
 // Since the agent now acts directly on every per-item mutation, a tool call is
-// almost always a passive RECEIPT of what the panda did — rendered as a quiet
+// almost always a passive RECEIPT of what the assistant did — rendered as a quiet
 // ledger row (purple tick · verb · matter · date), not a card. The single
 // exception is the bulk `deleteAllTasks` wipe, which still pauses for a
 // Confirm / Decline card because it is irreversible.
@@ -93,7 +93,7 @@ export function ToolCallCard({ call, onConfirm, onDecline, pendingAction = null 
     const isDeclining = pendingAction === 'decline'
     const isBusy = isConfirming || isDeclining
     return (
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-3.5 shadow-card">
+      <div className="flex flex-col gap-3 rounded-2xl bg-surface p-4 shadow-card">
         <div className="flex items-start gap-2">
           <span className="mt-0.5 inline-block h-4 w-1 shrink-0 rounded-pill bg-accent" aria-hidden />
           <div>

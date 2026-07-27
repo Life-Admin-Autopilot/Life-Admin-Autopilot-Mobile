@@ -1,11 +1,11 @@
 // Which routes wear the persistent app chrome — the bottom tab bar and the
-// panda chat FAB. Both are mounted once in Providers (siblings of the route
+// chat FAB. Both are mounted once in Providers (siblings of the route
 // slot) so they survive navigation, which means each has to decide for itself
 // where it belongs.
 //
 // Signed-out and pre-app screens (/welcome, /sign-in, /sign-up, the root
 // splash gate, /onboarding, /styleguide, /health) are deliberately excluded:
-// they run their own morphing island and a floating "Ask the panda" medallion
+// they run their own morphing island and a floating "Ask <app name>" medallion
 // would both collide with it and offer the assistant to someone who has no
 // session behind it.
 

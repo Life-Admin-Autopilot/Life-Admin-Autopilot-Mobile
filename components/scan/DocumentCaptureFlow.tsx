@@ -321,7 +321,7 @@ function ChooseButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center gap-3 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:bg-surface-sunken disabled:opacity-50"
+      className="flex items-center gap-3.5 rounded-2xl bg-surface p-4 text-left shadow-card transition-colors hover:bg-surface-sunken disabled:opacity-50"
     >
       <span className="text-accent">{icon}</span>
       <span className="text-heading-sm text-ink">{label}</span>
@@ -375,7 +375,7 @@ function SuccessPhase({ result, onDone }: { result: ReviewScanResult; onDone: ()
           {count === 0 ? 'Nothing was kept from this scan.' : 'Mo will remind you when it counts.'}
         </p>
       </div>
-      <Button variant="default" className="h-11 w-full max-w-xs" onClick={onDone}>
+      <Button variant="solid" className="w-full max-w-xs" onClick={onDone}>
         Done
       </Button>
     </div>

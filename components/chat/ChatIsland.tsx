@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Mic, RotateCcw, SendHorizontal, Square, X } from 'lucide-react'
 
-import chatbotImg from '@/assets/panda/chatbot.png'
+import chatbotImg from '@/assets/ghost/logo.png'
 import { ChatMessage } from '@/components/chat/ChatMessage'
 import { MorphSurface, type MorphShape } from '@/components/ui/MorphSurface'
 import { isAppChatRoute } from '@/lib/appRoutes'
@@ -17,9 +17,10 @@ import { useVoiceRecorder } from '@/lib/ai/useVoiceRecorder'
 import { transcribeAudio } from '@/lib/ai/transcribe'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
+import { env } from '@/lib/env'
 
-// The chatbot — the bridge to our panda assistant. A purple medallion FAB
-// (with an explicit "Ask the panda" label so the affordance is unmistakable)
+// The chatbot — the bridge to the assistant. A mascot medallion FAB (with an
+// explicit "Ask <app name>" label so the affordance is unmistakable)
 // morphs (Dynamic Island engine) into a chat panel wired to the live AI
 // backend: streamed replies, task tools with destructive confirmation, voice.
 // Mounted once in Providers, as a sibling of the route slot, so it decides for
@@ -69,9 +70,9 @@ function ChatIslandSurface() {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="rounded-pill border border-border bg-surface px-3.5 py-2 text-label uppercase tracking-wide text-ink shadow-elevated transition-colors hover:bg-surface-sunken"
+            className="rounded-pill bg-surface px-3.5 py-2 text-label uppercase text-ink shadow-elevated transition-colors hover:bg-surface-sunken"
           >
-            Ask the panda
+            Ask {env.appName}
           </button>
         ) : null}
       <MorphSurface
@@ -79,12 +80,21 @@ function ChatIslandSurface() {
         shapes={shapes}
         onClick={open ? undefined : () => setOpen(true)}
         role={open ? 'dialog' : 'button'}
-        aria-label={open ? 'The panda assistant' : 'Ask the panda'}
+        aria-label={open ? `${env.appName} assistant` : `Ask ${env.appName}`}
         className={`shadow-2xl ${open ? '' : 'cursor-pointer ring-2 ring-accent/40'}`}
       >
         {state === 'fab' ? (
           <div className="relative grid h-full w-full place-items-center">
-            <Image src={chatbotImg} alt="" fill sizes="50px" className="object-cover" priority />
+            {/* object-contain, not cover: the mascot is a tall silhouette on a
+                transparent field, and cover crops its head off inside the FAB. */}
+            <Image
+              src={chatbotImg}
+              alt=""
+              fill
+              sizes="50px"
+              className="scale-95 object-contain"
+              priority
+            />
           </div>
         ) : (
           <ChatPanel onClose={() => setOpen(false)} />
@@ -155,7 +165,7 @@ function ChatPanel({ onClose }: { onClose: () => void }) {
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
-        <span className="font-display text-heading-md text-ink">The panda</span>
+        <span className="font-display text-heading-serif text-ink">{env.appName}</span>
         <div className="flex items-center gap-1">
           <button
             onClick={() => void clear()}
@@ -213,7 +223,7 @@ function ChatPanel({ onClose }: { onClose: () => void }) {
         ) : null}
 
         {status === 'error' && error ? (
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface-sunken px-3 py-2">
+          <div className="flex items-center justify-between gap-2 rounded-xl bg-surface-sunken px-3 py-2">
             <span className="text-caption text-ink-muted">{error}</span>
             {failedQuestion ? (
               <button
@@ -258,7 +268,7 @@ function ChatPanel({ onClose }: { onClose: () => void }) {
               aria-label="Message the assistant"
               placeholder="Speak or type…"
               disabled={isBusy}
-              className="h-9 flex-1 rounded-md bg-surface-sunken px-3 text-body-sm text-ink outline-none placeholder:text-ink-subtle disabled:opacity-60"
+              className="h-10 flex-1 rounded-xl bg-surface-field px-3.5 text-body-sm text-ink outline-none placeholder:text-ink-muted disabled:opacity-60"
             />
             {input.trim().length > 0 ? (
               <button

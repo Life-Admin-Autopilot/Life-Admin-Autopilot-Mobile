@@ -60,13 +60,20 @@ export async function processScannedDocument(doc: ScannedDocumentDoc): Promise<v
       await doc.save()
 
       const bytes = await getDocumentScanStorage().get(doc.storageKey)
-      const { candidates, documentSummary } = await extractDocumentCandidates({
+      const extraction = await extractDocumentCandidates({
         bytes,
         mimeType: doc.mimeType,
         timezone: doc.timezone,
       })
-      doc.candidates = candidates.map((c, i) => draftToCandidate(doc.id, i, c))
-      doc.documentSummary = documentSummary
+      doc.candidates = extraction.candidates.map((c, i) => draftToCandidate(doc.id, i, c))
+      doc.documentSummary = extraction.documentSummary
+      // Row copy for the /documents list. Set even when the extraction found no
+      // candidates — a scan with nothing actionable still has to name itself in
+      // the list, and 'other' with no title is what the row falls back on.
+      doc.documentType = extraction.documentType
+      doc.documentTitle = extraction.documentTitle
+      doc.documentSubtitle = extraction.documentSubtitle
+      doc.issuer = extraction.issuer
     }
 
     doc.status = 'ready_for_review'

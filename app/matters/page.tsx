@@ -12,9 +12,12 @@ import { MatterListRow } from '@/components/matters/MatterListRow'
 import { MattersSearchBar } from '@/components/matters/MattersSearchBar'
 import { SearchResults } from '@/components/matters/SearchResults'
 import { SummarySheet } from '@/components/matters/SummarySheet'
-import { SelectionActionBar, SelectionToolbar } from '@/components/matters/SelectionBar'
+import { SelectionActionBar } from '@/components/matters/SelectionBar'
 import { SortSheet, type GroupMode } from '@/components/matters/SortSheet'
 import { AppHeader } from '@/components/layout/AppHeader'
+import { EmojiChip } from '@/components/ui/EmojiChip'
+import { SectionHeaderChip, type ChipTone } from '@/components/ui/SectionHeaderChip'
+import { SelectionToolbar } from '@/components/ui/SelectionToolbar'
 import { cn } from '@/lib/cn'
 import { useClaimTabBarSlot } from '@/lib/tabBarStore'
 import { toast } from '@/lib/toast'
@@ -53,6 +56,23 @@ import {
 // The buckets that constitute "needs attention". Everything else lives below
 // the fold until asked for.
 const ATTENTION = new Set(['overdue', 'today', 'tomorrow'])
+
+// Group headers are tinted by what the grouping MEANS, so a half-scrolled list
+// still tells you where you are. Time buckets walk the day's palette; priority
+// buckets borrow the priority tints. Anything else stays neutral.
+const GROUP_TONE: Record<string, ChipTone> = {
+  overdue: 'high',
+  today: 'morning',
+  tomorrow: 'afternoon',
+  thisWeek: 'evening',
+  urgent: 'high',
+  high: 'medium',
+  low: 'low',
+}
+
+function bucketTone(key: string): ChipTone {
+  return GROUP_TONE[key] ?? 'anytime'
+}
 
 // Hide completed matters by default — a done list is a log, not a workspace.
 const DEFAULT_FILTERS: TaskFilters = { status: ['open', 'snoozed'] }
@@ -222,10 +242,10 @@ export default function MattersPage() {
   useClaimTabBarSlot(selectMode)
 
   return (
-    <main className="min-h-dvh pb-28">
-      <AppHeader />
+    <main className="min-h-dvh pb-32">
+      <AppHeader title="Matters" />
 
-      <div className="sticky top-0 z-20 flex flex-col gap-2 bg-canvas/95 px-4 py-4 backdrop-blur">
+      <div className="sticky top-0 z-20 flex flex-col gap-2.5 bg-canvas/95 px-5 py-4 backdrop-blur-xl">
         <MattersSearchBar
           value={search}
           onValueChange={setSearch}
@@ -241,6 +261,7 @@ export default function MattersPage() {
             narrow the list and keep selecting, the way Mail does. */}
         {selectMode ? (
           <SelectionToolbar
+            subject="matters"
             count={selectedCount}
             allSelected={allSelected}
             onSelectAll={() =>
@@ -249,9 +270,13 @@ export default function MattersPage() {
             onCancel={exitSelect}
           />
         ) : (
-          <div className="flex h-7 items-center gap-1.5">
+          /* The pill row scrolls rather than shrinking: four labelled pills do
+             not fit a 390px screen, and unlabelled icons would make "Arrange"
+             and "Filter" indistinguishable from each other. */
+          <div className="flex items-center gap-2">
+            <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
             <Control
-              icon={<ListFilter size={14} />}
+              icon={<ListFilter size={15} />}
               label="Filter"
               active={filtered}
               onClick={(rect) => {
@@ -260,7 +285,7 @@ export default function MattersPage() {
               }}
             />
             <Control
-              icon={<ArrowUpDown size={14} />}
+              icon={<ArrowUpDown size={15} />}
               label="Arrange"
               onClick={(rect) => {
                 setTriggerRect(rect)
@@ -268,7 +293,7 @@ export default function MattersPage() {
               }}
             />
             <Control
-              icon={<CalendarRange size={14} />}
+              icon={<CalendarRange size={15} />}
               label="Summary"
               onClick={(rect) => {
                 setTriggerRect(rect)
@@ -276,10 +301,11 @@ export default function MattersPage() {
               }}
             />
             <Control
-              icon={<CheckSquare size={14} />}
+              icon={<CheckSquare size={15} />}
               label="Select"
               onClick={() => setSelectMode(true)}
             />
+            </div>
             {filtered ? (
               <button
                 type="button"
@@ -287,7 +313,7 @@ export default function MattersPage() {
                   setFilters(DEFAULT_FILTERS)
                   setSearch('')
                 }}
-                className="ml-auto shrink-0 text-caption text-accent"
+                className="shrink-0 rounded-pill px-2 py-1 text-body-sm font-bold text-accent hover:bg-accent-soft"
               >
                 Clear
               </button>
@@ -296,7 +322,7 @@ export default function MattersPage() {
         )}
       </div>
 
-      <div className="flex flex-col gap-4 px-4 pt-2">
+      <div className="flex flex-col gap-6 px-5 pt-2">
         {/* Slipped matters get one calm, bounded prompt — never a red count
             badge. "3 slipped" is actionable; "62 overdue" is just shame, and
             shame is what makes people stop opening the app. Hidden while an
@@ -306,13 +332,14 @@ export default function MattersPage() {
           <button
             type="button"
             onClick={() => setFilters({ ...DEFAULT_FILTERS, overdue: true })}
-            className="flex items-center justify-between gap-2 rounded-lg border border-accent/30 bg-accent-soft px-4 py-3 text-left"
+            className="flex items-center gap-3.5 rounded-2xl bg-accent-soft px-4 py-3.5 text-left"
           >
-            <span className="text-body-sm text-ink">
-              <span className="tabular font-medium">{counts.data?.slipping}</span>{' '}
+            <EmojiChip emoji="🌾" category="peach" size={40} />
+            <span className="min-w-0 flex-1 text-body text-ink">
+              <span className="font-bold tabular">{counts.data?.slipping}</span>{' '}
               {counts.data?.slipping === 1 ? 'matter has' : 'matters have'} slipped. Sort them out.
             </span>
-            <ArrowRight size={16} className="shrink-0 text-accent" />
+            <ArrowRight size={17} className="shrink-0 text-accent" />
           </button>
         ) : null}
 
@@ -332,13 +359,16 @@ export default function MattersPage() {
             onClear={clearSearch}
           />
         ) : list.isPending ? (
-          <ul className="overflow-hidden rounded-lg border border-border bg-surface shadow-card">
+          <ul className="flex flex-col gap-3">
             {[0, 1, 2].map((i) => (
-              <li key={i} className="flex items-center gap-3 border-b border-border px-4 py-3 last:border-b-0">
-                <div className="size-9 animate-pulse rounded-md bg-surface-sunken" />
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <div className="h-3.5 w-2/3 animate-pulse rounded bg-surface-sunken" />
-                  <div className="h-3 w-1/3 animate-pulse rounded bg-surface-sunken" />
+              <li
+                key={i}
+                className="flex items-center gap-3.5 rounded-2xl bg-surface px-4 py-3.5 shadow-card"
+              >
+                <div className="size-11 animate-pulse rounded-full bg-surface-sunken" />
+                <div className="flex flex-1 flex-col gap-2">
+                  <div className="h-4 w-2/3 animate-pulse rounded-pill bg-surface-sunken" />
+                  <div className="h-3 w-1/3 animate-pulse rounded-pill bg-surface-sunken" />
                 </div>
               </li>
             ))}
@@ -366,12 +396,14 @@ export default function MattersPage() {
         ) : (
           <>
             {visibleGroups.map((g) => (
-              <section key={g.key} className="flex flex-col gap-2">
-                <div className="flex items-baseline justify-between px-1">
-                  <span className="text-label uppercase text-accent">{g.label}</span>
-                  <span className="text-caption tabular text-ink-subtle">{g.tasks.length}</span>
-                </div>
-                <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface shadow-card">
+              <section key={g.key} className="flex flex-col gap-3">
+                <SectionHeaderChip
+                  label={g.label}
+                  tone={bucketTone(g.key)}
+                  count={g.tasks.length}
+                  className="self-start"
+                />
+                <ul className="flex flex-col gap-3">
                   {g.tasks.map((task) => (
                     <li key={task.id}>
                       <MatterListRow
@@ -513,10 +545,8 @@ function Control({
       onClick={(e) => onClick(e.currentTarget.getBoundingClientRect())}
       aria-pressed={active}
       className={cn(
-        'flex shrink-0 items-center gap-1 rounded-pill border px-2.5 py-1 text-caption transition-colors',
-        active
-          ? 'border-accent bg-accent/10 text-ink'
-          : 'border-border bg-surface text-ink-muted hover:bg-surface-sunken',
+        'flex h-10 shrink-0 items-center gap-1.5 rounded-pill px-3.5 text-body-sm font-bold transition-colors active:scale-[0.98]',
+        active ? 'bg-accent text-accent-ink' : 'bg-surface-field text-ink hover:brightness-[0.97]',
       )}
     >
       {icon}
@@ -527,10 +557,10 @@ function Control({
 
 function EmptyState({ title, body }: { title: string; body: string }) {
   return (
-    <div className="flex flex-col items-center gap-2 px-6 py-14 text-center">
+    <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
       <SketchEmptyTrayGlyph />
-      <p className="text-body font-medium text-ink">{title}</p>
-      <p className="text-caption text-ink-subtle">{body}</p>
+      <p className="mt-2 font-display text-heading-serif text-ink">{title}</p>
+      <p className="max-w-[32ch] text-body text-ink-muted">{body}</p>
     </div>
   )
 }

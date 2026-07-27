@@ -70,7 +70,7 @@ export function MorphPanel({
           }}
           style={style}
           className={cn(
-            'overflow-hidden border border-border bg-surface text-ink shadow-elevated',
+            'overflow-hidden bg-surface text-ink shadow-elevated',
             className,
           )}
         >

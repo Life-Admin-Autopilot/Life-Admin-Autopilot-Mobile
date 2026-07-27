@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { formatDue, formatRange } from '@/lib/taskFormat'
 import type { BulkPreview, TaskFilters } from '@/queries/tasks'
-import { Sheet } from './Sheet'
+import { Sheet } from '@/components/ui/Sheet'
 
 // The confirm gate for a bulk delete.
 //

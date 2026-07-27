@@ -1,28 +1,40 @@
-import type { Metadata } from 'next'
-import { Comfortaa, Inter } from 'next/font/google'
+import type { Metadata, Viewport } from 'next'
+import { Fraunces, Nunito } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
+import { env } from '@/lib/env'
 
-// Lavender + panda type system (docs/tokens.md):
-//   Comfortaa — wordmark + display: rounded, friendly, hand-drawn feel
-//   Inter     — body, rows, labels, data (tabular numerals)
-// Exposed as CSS variables, mapped to --font-wordmark/display/sans in globals.
-const comfortaa = Comfortaa({
+// Soft-planner type system (docs/tokens.md):
+//   Fraunces — display: high-contrast editorial serif for hero/day/affirmation
+//   Nunito   — body, rows, labels, data: rounded, friendly, tall x-height
+// Exposed under neutral variable names and re-mapped to --font-display /
+// --font-sans in globals.css. The indirection matters: naming the next/font
+// variable --font-display directly would make the @theme mapping
+// `--font-display: var(--font-display)` reference itself.
+const fraunces = Fraunces({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-comfortaa',
+  axes: ['SOFT', 'WONK', 'opsz'],
+  variable: '--font-fraunces',
   display: 'swap',
 })
 
-const inter = Inter({
+const nunito = Nunito({
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-nunito',
   display: 'swap',
 })
 
 export const metadata: Metadata = {
-  title: 'Life Admin Autopilot',
+  title: env.appName,
   description: 'Speak once. Order follows.',
+}
+
+// viewport-fit=cover exposes env(safe-area-inset-*) inside the Capacitor shell,
+// which the floating tab bar and action bars offset against.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({
@@ -31,7 +43,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${comfortaa.variable} ${inter.variable} h-full`}
+      className={`${fraunces.variable} ${nunito.variable} h-full`}
       suppressHydrationWarning
     >
       <body className="min-h-dvh bg-canvas">

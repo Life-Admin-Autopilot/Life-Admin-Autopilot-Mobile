@@ -43,7 +43,7 @@ export function MorphMenuDemo() {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex h-11 items-center gap-2 rounded-md border border-border bg-surface px-4 text-body-sm text-ink shadow-card"
+        className="flex h-11 items-center gap-2 rounded-pill bg-surface px-4 text-body-sm text-ink shadow-card"
       >
         Sort <span className="text-ink-muted">· {selected}</span>
         <ChevronDown

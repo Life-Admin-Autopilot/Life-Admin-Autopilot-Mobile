@@ -3,10 +3,10 @@
 @import "shadcn/tailwind.css";
 
 /*
- * Mo V2 design tokens — "lavender + panda" identity.
+ * Steward design tokens — "soft planner" identity.
  * See docs/tokens.md (values), docs/aesthetic.md (vibe), AGENTS.md (rules).
  * Tailwind v4 is CSS-first: tokens in `@theme` generate the semantic utilities
- * (bg-canvas, text-ink-muted, text-display-hero, shadow-card, text-accent).
+ * (bg-canvas, text-ink-muted, text-display-hero, shadow-card, bg-cat-sage).
  * Colors are rgb(R G B) so `/alpha` modifiers work.
  *
  * Dark mode: class-based (`.dark` on <html>, toggled by next-themes). The
@@ -15,12 +15,16 @@
  * etc. are used — no per-component dark: variants needed for token colors.
  *
  * shadcn primitives consume their own vars (--primary, --card, …); we map those
- * onto Mo tokens in :root/.dark so Button/Card/Input inherit purple-on-lavender.
+ * onto Steward tokens in :root/.dark so Button/Card/Input inherit the palette.
+ *
+ * Two accents, deliberately distinct:
+ *   `accent`  — coral. ACTIVE / progress / selected / FAB. Never the default CTA.
+ *   `solid`   — near-black pill. THE primary CTA. Inverts to near-white in dark.
  */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  /* shadcn semantic colors → Mo CSS vars (defined in :root) */
+  /* shadcn semantic colors → Steward CSS vars (defined in :root) */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -41,198 +45,342 @@
   --color-ring: var(--ring);
 
   /* Type families (loaded via next/font in layout.tsx) */
-  --font-wordmark: var(--font-comfortaa), ui-rounded, ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-comfortaa), ui-rounded, ui-sans-serif, system-ui, sans-serif;
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+  --font-serif: var(--font-fraunces), ui-serif, Georgia, serif;
+  --font-sans: var(--font-nunito), ui-rounded, ui-sans-serif, system-ui, sans-serif;
+  --font-wordmark: var(--font-nunito), ui-rounded, ui-sans-serif, sans-serif;
 
-  /* Radius — architectural, composed */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
-  --radius-2xl: 22px;
+  /* Radius — nothing sharp: everything is a pill or a large round */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-3xl: 30px;
+  --radius-tile: 14px;
   --radius-pill: 9999px;
 }
 
 @theme {
-  /* ---- Surfaces — lavender ---- */
-  --color-canvas: rgb(245 242 251);
-  --color-canvas-veined: rgb(238 233 249);
+  /* ---- Surfaces — near-white, faintly lilac ---- */
+  --color-canvas: rgb(249 248 252);
+  --color-canvas-veined: rgb(244 242 249);
   --color-surface: rgb(255 255 255);
-  --color-surface-sunken: rgb(237 231 249);
-  --color-border-strong: rgb(210 199 235);
+  --color-surface-sunken: rgb(242 241 246);
+  --color-surface-field: rgb(234 231 225); /* warm taupe — inputs, value pills */
+  --color-border-strong: rgb(220 218 226);
 
-  /* ---- Ink — plum-charcoal ---- */
-  --color-ink: rgb(45 42 61);
-  --color-ink-muted: rgb(107 100 130);
-  --color-ink-subtle: rgb(150 143 173);
-  --color-ink-nav: rgb(130 122 158);
+  /* ---- Ink — warm near-black ---- */
+  --color-ink: rgb(26 24 26);
+  --color-ink-muted: rgb(138 138 142);
+  --color-ink-subtle: rgb(184 183 191);
+  --color-ink-nav: rgb(155 155 160);
 
-  /* ---- Accent — soft purple (the panda's ribbon) ---- */
-  --color-accent-pressed: rgb(111 90 194);
-  --color-accent-soft: rgb(232 225 250);
+  /* ---- Accent — coral. Active / progress / selected / FAB ---- */
+  --color-accent-pressed: rgb(224 84 68);
+  --color-accent-soft: rgb(255 233 228);
   --color-accent-ink: rgb(255 255 255);
+
+  /* ---- Solid — the near-black primary CTA pill ---- */
+  --color-solid: rgb(28 26 23);
+  --color-solid-ink: rgb(255 255 255);
 
   /* ---- Gold — premium tier only (sparing) ---- */
   --color-gold: rgb(176 137 47);
   --color-gold-soft: rgb(239 230 210);
 
-  /* ---- Status — soft but legible ---- */
-  --color-danger: rgb(194 58 58);
-  --color-danger-soft: rgb(250 230 230);
-  --color-warning: rgb(178 122 40);
-  --color-warning-soft: rgb(250 238 217);
+  /* ---- Status ---- */
+  --color-success: rgb(52 199 89);
+  --color-success-soft: rgb(223 244 230);
+  --color-danger: rgb(229 72 77);
+  --color-danger-soft: rgb(250 228 229);
+  --color-warning: rgb(217 138 43);
+  --color-warning-soft: rgb(251 238 221);
 
-  /* ---- Domains — pastel tints on lavender ---- */
-  --color-domain-health: rgb(226 241 231);
+  /* ---- Priority (pill fg on soft bg) ---- */
+  --color-priority-high: rgb(192 64 91);
+  --color-priority-high-soft: rgb(246 228 231);
+  --color-priority-med: rgb(217 138 43);
+  --color-priority-med-soft: rgb(251 238 221);
+  --color-priority-low: rgb(126 134 216);
+  --color-priority-low-soft: rgb(230 231 247);
+
+  /* ---- Time-of-day bucket tints (section headers) ---- */
+  --color-bucket-anytime: rgb(241 241 240);
+  --color-bucket-morning: rgb(251 231 228);
+  --color-bucket-afternoon: rgb(231 233 250);
+  --color-bucket-evening: rgb(237 228 247);
+
+  /*
+   * ---- Category pastels — the emoji-chip backgrounds ----
+   * Deliberately theme-INVARIANT: a colored circle carrying a full-color 3D
+   * emoji reads correctly on a near-black card, and darkening it would break
+   * the one place in the app where color means "which part of your life".
+   */
+  --color-cat-lilac: rgb(201 190 243);
+  --color-cat-lilac-ink: rgb(92 56 140);
+  --color-cat-periwinkle: rgb(199 210 245);
+  --color-cat-periwinkle-ink: rgb(62 68 120);
+  --color-cat-sky: rgb(203 217 240);
+  --color-cat-sky-ink: rgb(42 74 122);
+  --color-cat-sage: rgb(183 199 180);
+  --color-cat-sage-ink: rgb(42 92 66);
+  --color-cat-yellow: rgb(251 231 160);
+  --color-cat-yellow-ink: rgb(120 96 40);
+  --color-cat-peach: rgb(245 223 200);
+  --color-cat-peach-ink: rgb(120 82 48);
+  --color-cat-blush: rgb(251 227 230);
+  --color-cat-blush-ink: rgb(122 48 76);
+  --color-cat-pink: rgb(244 198 214);
+  --color-cat-pink-ink: rgb(122 48 76);
+
+  /* ---- Domains — the six Steward life-admin domains, on the pastel set ---- */
+  --color-domain-health: rgb(183 199 180); /* sage */
   --color-domain-health-ink: rgb(42 92 66);
-  --color-domain-home: rgb(246 231 219);
+  --color-domain-home: rgb(245 223 200); /* peach */
   --color-domain-home-ink: rgb(120 82 48);
-  --color-domain-car: rgb(226 229 238);
-  --color-domain-car-ink: rgb(62 68 92);
-  --color-domain-finance: rgb(221 232 247);
+  --color-domain-car: rgb(199 210 245); /* periwinkle */
+  --color-domain-car-ink: rgb(62 68 120);
+  --color-domain-finance: rgb(203 217 240); /* sky */
   --color-domain-finance-ink: rgb(42 74 122);
-  --color-domain-family: rgb(248 224 232);
+  --color-domain-family: rgb(251 227 230); /* blush */
   --color-domain-family-ink: rgb(122 48 76);
-  --color-domain-pets: rgb(234 224 248);
+  --color-domain-pets: rgb(201 190 243); /* lilac */
   --color-domain-pets-ink: rgb(92 56 140);
 
-  /* ---- Type scale (size / line-height / weight / tracking) ---- */
+  /*
+   * ---- Type scale (size / line-height / weight / tracking) ----
+   * Serif (Fraunces) for the emotional/editorial moments, Nunito for
+   * everything functional. Hierarchy comes from scale contrast and the
+   * serif/sans pairing — not from color.
+   */
   --text-wordmark: 20px;
   --text-wordmark--line-height: 24px;
-  --text-wordmark--font-weight: 600;
-  --text-wordmark--letter-spacing: 0.18em;
-  --text-display-hero: 40px;
-  --text-display-hero--line-height: 46px;
-  --text-display-hero--font-weight: 600;
+  --text-wordmark--font-weight: 800;
+  --text-wordmark--letter-spacing: -0.01em;
+
+  /* Fraunces */
+  --text-display-hero: 44px;
+  --text-display-hero--line-height: 48px;
+  --text-display-hero--font-weight: 500;
+  --text-display-hero--letter-spacing: -0.01em;
   --text-display-md: 32px;
   --text-display-md--line-height: 38px;
-  --text-display-md--font-weight: 600;
+  --text-display-md--font-weight: 500;
+  --text-display-md--letter-spacing: -0.01em;
+  --text-heading-serif: 26px;
+  --text-heading-serif--line-height: 32px;
+  --text-heading-serif--font-weight: 500;
+  --text-countdown: 60px;
+  --text-countdown--line-height: 64px;
+  --text-countdown--font-weight: 400;
+
+  /* Nunito */
   --text-heading-xl: 24px;
   --text-heading-xl--line-height: 30px;
-  --text-heading-xl--font-weight: 600;
+  --text-heading-xl--font-weight: 700;
+  --text-heading-xl--letter-spacing: -0.005em;
   --text-heading-md: 20px;
   --text-heading-md--line-height: 28px;
-  --text-heading-md--font-weight: 600;
-  --text-heading-sm: 17px;
+  --text-heading-md--font-weight: 700;
+  --text-heading-sm: 18px;
   --text-heading-sm--line-height: 24px;
-  --text-heading-sm--font-weight: 600;
-  --text-body: 15px;
-  --text-body--line-height: 22px;
+  --text-heading-sm--font-weight: 700;
+  --text-body: 16px;
+  --text-body--line-height: 24px;
+  --text-body--font-weight: 500;
   --text-body-sm: 14px;
   --text-body-sm--line-height: 20px;
+  --text-body-sm--font-weight: 500;
+  --text-label: 13px;
+  --text-label--line-height: 16px;
+  --text-label--font-weight: 700;
+  --text-label--letter-spacing: 0.08em;
   --text-caption: 13px;
   --text-caption--line-height: 18px;
-  --text-label: 12px;
-  --text-label--line-height: 16px;
-  --text-label--font-weight: 600;
-  --text-label--letter-spacing: 0.12em;
+  --text-caption--font-weight: 400;
+  --text-tab: 12px;
+  --text-tab--line-height: 14px;
+  --text-tab--font-weight: 600;
   --text-micro: 11px;
   --text-micro--line-height: 14px;
-  --text-micro--font-weight: 500;
+  --text-micro--font-weight: 600;
 
   /* ---- Motion ---- */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out-quad: cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* ---- Shadows — soft, low, cool-plum tint ---- */
-  --shadow-card: 0 1px 2px rgb(45 42 61 / 0.04), 0 4px 12px rgb(45 42 61 / 0.05);
-  --shadow-elevated: 0 8px 28px rgb(45 42 61 / 0.08), 0 2px 6px rgb(45 42 61 / 0.04);
+  /*
+   * The mascot's gaze (components/ui/GhostLogo.tsx). Translation is a
+   * percentage of the PUPIL's own box, so travel scales with the art at any
+   * render size and always leaves white showing at the extremes.
+   *
+   * Real eyes do not sweep — they SACCADE: a near-instant jump, then a long
+   * fixation. So each move happens across a 2–3% sliver of the timeline
+   * (~200ms) and every position is then held for a second or more. An evenly
+   * interpolated left-right sweep is what made this read as a doll.
+   *
+   * The gaze keeps returning to DOWN, because that is where the tasks are —
+   * the mascot sits above the content and looks at it, glancing away only
+   * occasionally.
+   */
+  --animate-ghost-look: ghost-look 11s var(--ease-out-expo) infinite;
+
+  @keyframes ghost-look {
+    /* rest: looking down at the list */
+    0%,
+    16% {
+      transform: translate(0, 14%);
+    }
+    /* glance down-left */
+    19%,
+    30% {
+      transform: translate(-38%, 10%);
+    }
+    /* back down */
+    33%,
+    46% {
+      transform: translate(-2%, 16%);
+    }
+    /* off to the right, a little higher */
+    48%,
+    58% {
+      transform: translate(36%, 2%);
+    }
+    /* down again */
+    61%,
+    72% {
+      transform: translate(4%, 15%);
+    }
+    /* a brief look up — thinking */
+    74%,
+    80% {
+      transform: translate(-10%, -12%);
+    }
+    /* settle back down and hold */
+    83%,
+    100% {
+      transform: translate(0, 14%);
+    }
+  }
+
+  /* ---- Shadows — whisper-soft and diffuse, never a hard edge ---- */
+  --shadow-card: 0 2px 8px rgb(20 20 40 / 0.04), 0 1px 3px rgb(20 20 40 / 0.03);
+  --shadow-elevated: 0 8px 28px rgb(20 20 40 / 0.08), 0 2px 6px rgb(20 20 40 / 0.05);
+  --shadow-halo: 0 6px 20px rgb(0 0 0 / 0.08);
 }
 
 /*
- * shadcn semantic vars mapped onto the lavender/panda palette. Purple is the
- * single brand accent, so --primary and --accent both resolve to it.
+ * shadcn semantic vars mapped onto the soft-planner palette. Coral is the
+ * single working accent, so --primary and --accent both resolve to it. The
+ * near-black CTA is `--color-solid` (bg-solid), NOT --primary.
  */
 :root {
-  --background: rgb(245 242 251); /* canvas */
-  --foreground: rgb(45 42 61); /* ink */
+  --background: rgb(249 248 252); /* canvas */
+  --foreground: rgb(26 24 26); /* ink */
   --card: rgb(255 255 255); /* surface */
-  --card-foreground: rgb(45 42 61);
+  --card-foreground: rgb(26 24 26);
   --popover: rgb(255 255 255);
-  --popover-foreground: rgb(45 42 61);
-  --primary: rgb(142 122 224); /* purple */
+  --popover-foreground: rgb(26 24 26);
+  --primary: rgb(250 106 90); /* coral */
   --primary-foreground: rgb(255 255 255);
-  --secondary: rgb(255 255 255); /* white (secondary = white + purple) */
-  --secondary-foreground: rgb(142 122 224);
-  --muted: rgb(237 231 249); /* surface-sunken */
-  --muted-foreground: rgb(107 100 130); /* ink-muted */
-  --accent: rgb(142 122 224); /* purple — bg-accent CTA */
+  --secondary: rgb(234 231 225); /* surface-field — warm taupe */
+  --secondary-foreground: rgb(26 24 26);
+  --muted: rgb(242 241 246); /* surface-sunken */
+  --muted-foreground: rgb(138 138 142); /* ink-muted */
+  --accent: rgb(250 106 90); /* coral — bg-accent */
   --accent-foreground: rgb(255 255 255);
-  --destructive: rgb(194 58 58); /* danger */
-  --border: rgb(228 221 242); /* lavender hairline */
-  --input: rgb(228 221 242);
-  --ring: rgb(142 122 224); /* purple focus ring */
-  --radius: 10px; /* md — button radius */
+  --destructive: rgb(229 72 77); /* danger */
+  --border: rgb(236 236 236); /* hairline */
+  --input: rgb(236 236 236);
+  --ring: rgb(250 106 90); /* coral focus ring */
+  --radius: 16px;
 }
 
 /*
- * Dark palette — deep plum-charcoal surfaces, brightened purple accent for
- * contrast, domain tints darkened with lightened ink. Mirrors the :root
- * token set 1:1 so every bg-canvas / text-ink / bg-domain-* utility just
- * works once `.dark` is on <html>.
+ * Dark palette — near-true-black. Depth comes from surface-lightness stepping
+ * (canvas 3 → surface 20 → field 34), not from shadow. The category pastels
+ * are intentionally absent here: they stay identical in both themes.
  */
 .dark {
-  --color-canvas: rgb(23 21 31);
-  --color-canvas-veined: rgb(29 26 40);
-  --color-surface: rgb(36 33 48);
-  --color-surface-sunken: rgb(30 27 41);
-  --color-border-strong: rgb(66 60 86);
+  --color-canvas: rgb(3 3 3);
+  --color-canvas-veined: rgb(12 12 14);
+  --color-surface: rgb(20 20 22);
+  --color-surface-sunken: rgb(24 24 26);
+  --color-surface-field: rgb(34 34 36);
+  --color-border-strong: rgb(52 52 56);
 
-  --color-ink: rgb(237 234 245);
-  --color-ink-muted: rgb(176 168 196);
-  --color-ink-subtle: rgb(138 130 160);
-  --color-ink-nav: rgb(150 142 172);
+  --color-ink: rgb(245 245 247);
+  --color-ink-muted: rgb(154 154 160);
+  --color-ink-subtle: rgb(120 120 126);
+  --color-ink-nav: rgb(150 150 156);
 
-  --color-accent-pressed: rgb(138 118 205);
-  --color-accent-soft: rgb(54 46 84);
+  --color-accent-pressed: rgb(240 118 104);
+  --color-accent-soft: rgb(71 42 38);
   --color-accent-ink: rgb(255 255 255);
+
+  /* The CTA pill inverts: near-white fill, near-black label. */
+  --color-solid: rgb(245 245 247);
+  --color-solid-ink: rgb(20 20 22);
 
   --color-gold: rgb(212 168 92);
   --color-gold-soft: rgb(64 54 34);
 
-  --color-danger: rgb(224 100 100);
-  --color-danger-soft: rgb(58 30 30);
-  --color-warning: rgb(214 158 74);
+  --color-success: rgb(64 208 112);
+  --color-success-soft: rgb(24 46 32);
+  --color-danger: rgb(240 110 114);
+  --color-danger-soft: rgb(58 30 32);
+  --color-warning: rgb(224 158 74);
   --color-warning-soft: rgb(58 46 22);
 
-  --color-domain-health: rgb(30 46 38);
-  --color-domain-health-ink: rgb(150 214 178);
-  --color-domain-home: rgb(48 38 28);
-  --color-domain-home-ink: rgb(224 176 130);
-  --color-domain-car: rgb(38 40 52);
-  --color-domain-car-ink: rgb(168 176 204);
-  --color-domain-finance: rgb(28 38 54);
-  --color-domain-finance-ink: rgb(140 176 224);
-  --color-domain-family: rgb(50 30 38);
-  --color-domain-family-ink: rgb(224 140 168);
-  --color-domain-pets: rgb(42 32 56);
-  --color-domain-pets-ink: rgb(180 150 224);
+  --color-priority-high: rgb(240 138 160);
+  --color-priority-high-soft: rgb(58 37 48);
+  --color-priority-med: rgb(224 158 74);
+  --color-priority-med-soft: rgb(58 51 32);
+  --color-priority-low: rgb(160 168 240);
+  --color-priority-low-soft: rgb(38 38 58);
 
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 12px rgb(0 0 0 / 0.35);
-  --shadow-elevated: 0 8px 28px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3);
+  --color-bucket-anytime: rgb(30 30 32);
+  --color-bucket-morning: rgb(58 38 40);
+  --color-bucket-afternoon: rgb(40 42 64);
+  --color-bucket-evening: rgb(42 39 64);
 
-  --background: rgb(23 21 31);
-  --foreground: rgb(237 234 245);
-  --card: rgb(36 33 48);
-  --card-foreground: rgb(237 234 245);
-  --popover: rgb(36 33 48);
-  --popover-foreground: rgb(237 234 245);
-  --primary: rgb(168 150 235);
+  --shadow-card: 0 2px 8px rgb(0 0 0 / 0.4);
+  --shadow-elevated: 0 10px 34px rgb(0 0 0 / 0.5);
+  --shadow-halo: 0 6px 20px rgb(0 0 0 / 0.55);
+
+  --background: rgb(3 3 3);
+  --foreground: rgb(245 245 247);
+  --card: rgb(20 20 22);
+  --card-foreground: rgb(245 245 247);
+  --popover: rgb(20 20 22);
+  --popover-foreground: rgb(245 245 247);
+  --primary: rgb(255 138 122); /* brightened coral */
   --primary-foreground: rgb(255 255 255);
-  --secondary: rgb(36 33 48);
-  --secondary-foreground: rgb(168 150 235);
-  --muted: rgb(30 27 41);
-  --muted-foreground: rgb(176 168 196);
-  --accent: rgb(168 150 235);
+  --secondary: rgb(34 34 36);
+  --secondary-foreground: rgb(245 245 247);
+  --muted: rgb(24 24 26);
+  --muted-foreground: rgb(154 154 160);
+  --accent: rgb(255 138 122);
   --accent-foreground: rgb(255 255 255);
-  --destructive: rgb(224 100 100);
-  --border: rgb(52 47 68);
-  --input: rgb(52 47 68);
-  --ring: rgb(168 150 235);
+  --destructive: rgb(240 110 114);
+  --border: rgb(36 36 38);
+  --input: rgb(36 36 38);
+  --ring: rgb(255 138 122);
 }
 
 @layer base {
+  /*
+   * Safe-area insets for the Capacitor native shell. viewport-fit=cover is set
+   * in layout.tsx; floating chrome offsets against --safe-bottom so it clears
+   * the iOS home indicator.
+   */
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+  }
   * {
     @apply border-border outline-ring/50;
   }
@@ -245,5 +393,119 @@
   /* Tabular numerals on time / money / date / count fields */
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  /*
+   * Fraunces is only itself once its axes are set. Left at the defaults it
+   * renders the `opsz` 14 TEXT cut — dense, low-contrast, clunky at hero
+   * sizes. `font-optical-sizing: auto` lets the browser track opsz to the
+   * computed font-size (delicate high-contrast at 44px, sturdy at 16px);
+   * SOFT rounds the terminals so the serif reads warm rather than austere.
+   * Only SOFT/WONK go in font-variation-settings — naming `opsz` there would
+   * disable the automatic optical sizing we just asked for.
+   */
+  .font-display,
+  .font-serif {
+    font-optical-sizing: auto;
+    font-variation-settings: "SOFT" 40, "WONK" 0;
+  }
+  /* Opt-in playfulness: the wonky single-story cut, for affirmations. */
+  .font-display-wonk {
+    font-optical-sizing: auto;
+    font-variation-settings: "SOFT" 60, "WONK" 1;
+  }
+
+  /*
+   * Gradients — reserved for the emotional surfaces (hero, onboarding,
+   * celebration, AI preview). Cards, rows and chips stay flat.
+   */
+  /*
+   * The colour is a wash at the TOP, not a field the whole screen sits in.
+   * It resolves to canvas by ~38%, so the lower 60%+ is clean white and every
+   * headline, CTA and secondary link below the fold reads on flat ground.
+   * A gradient that stays saturated behind the content stops being atmosphere
+   * and starts being a background you have to fight for contrast against.
+   */
+  .bg-hero-gradient {
+    background-image: linear-gradient(
+      180deg,
+      rgb(255 138 122) 0%,
+      rgb(255 172 159) 12%,
+      rgb(255 206 197) 22%,
+      rgb(255 234 229) 31%,
+      var(--color-canvas) 38%,
+      var(--color-canvas) 100%
+    );
+  }
+  .bg-celebrate-gradient {
+    background-image: linear-gradient(
+      180deg,
+      var(--color-surface) 0%,
+      var(--color-surface) 46%,
+      rgb(255 236 231) 72%,
+      rgb(255 205 194) 100%
+    );
+  }
+  .bg-ai-gradient {
+    background-image: linear-gradient(135deg, rgb(255 177 162) 0%, rgb(255 237 232) 100%);
+  }
+
+  /*
+   * Dark mode gets its own stops rather than inheriting the light ones. The
+   * light wash ends pale, and `text-ink` is near-WHITE in dark — leaving these
+   * alone puts white type on a near-white band at exactly the height the
+   * headline and secondary CTA sit. Deep ember fading to the near-black canvas
+   * keeps the same emotional read with the contrast the right way up.
+   */
+  :where(.dark) .bg-hero-gradient {
+    background-image: linear-gradient(
+      180deg,
+      rgb(128 48 39) 0%,
+      rgb(92 35 29) 13%,
+      rgb(54 23 20) 24%,
+      rgb(22 13 12) 32%,
+      var(--color-canvas) 38%,
+      var(--color-canvas) 100%
+    );
+  }
+  :where(.dark) .bg-celebrate-gradient {
+    background-image: linear-gradient(
+      180deg,
+      var(--color-surface) 0%,
+      var(--color-surface) 46%,
+      rgb(52 25 22) 72%,
+      rgb(96 40 32) 100%
+    );
+  }
+  :where(.dark) .bg-ai-gradient {
+    background-image: linear-gradient(135deg, rgb(104 44 36) 0%, rgb(42 24 22) 100%);
+  }
+  /* Horizontal pill carousels: scrollable, but a scrollbar under a row of
+     pills reads as a broken layout rather than an affordance. */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Floating chrome that must clear the iOS home indicator. */
+  .pb-safe {
+    padding-bottom: max(1rem, var(--safe-bottom));
+  }
+  .bottom-safe {
+    bottom: max(1rem, var(--safe-bottom));
+  }
+  .pt-safe {
+    padding-top: max(0.5rem, var(--safe-top));
+  }
+  /* Pairs with .pt-safe for absolutely-positioned layers that must span a
+     safe-area-padded header's CONTENT box. `inset-0` would include the notch
+     inset itself, which sits the layer half an inset lower than the controls it
+     is meant to be level with. */
+  .top-safe {
+    top: max(0.5rem, var(--safe-top));
   }
 }

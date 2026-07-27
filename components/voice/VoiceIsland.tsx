@@ -15,13 +15,14 @@ import { translateBackendError } from '@/lib/translateBackendError'
 import { MORPH_BACKDROP_FADE, MORPH_SPRING } from '@/lib/motion'
 import { isAppChatRoute } from '@/lib/appRoutes'
 import type { AiSource } from '@/lib/ai/types'
+import { env } from '@/lib/env'
 
 type Phase = 'recording' | 'review' | 'transcribing' | 'thinking' | 'done' | 'error'
 
-// Voice capture — the bridge to the panda by voice. Opened from the TabBar mic, it
+// Voice capture — the bridge to the assistant by voice. Opened from the TabBar mic, it
 // rises from the bar into an ~80% surface with a live, voice-reactive meter. The
 // user can cancel, stop, then save: saving transcribes the audio and streams it
-// to the panda, who records the matters and replies.
+// to the assistant, which records the matters and replies.
 export function VoiceIsland() {
   const open = useVoiceCapture((s) => s.open)
   const close = useVoiceCapture((s) => s.close)
@@ -73,7 +74,7 @@ export function VoiceIsland() {
   // Surface a denied mic instead of a dead recording state.
   useEffect(() => {
     if (open && recorder.phase === 'denied') {
-      setError('Microphone access is blocked. Enable it to speak to the panda.')
+      setError(`Microphone access is blocked. Enable it to speak to ${env.appName}.`)
       setPhase('error')
     }
   }, [open, recorder.phase])
@@ -114,7 +115,7 @@ export function VoiceIsland() {
       setPhase('done')
     } catch (err) {
       if (controller.signal.aborted) return
-      setError(translateBackendError(err, 'The panda could not be reached.'))
+      setError(translateBackendError(err, `${env.appName} could not be reached.`))
       setPhase('error')
     }
   }
@@ -155,13 +156,13 @@ export function VoiceIsland() {
         <motion.div
           key="voice-panel"
           role="dialog"
-          aria-label="Speak to the panda"
+          aria-label={`Speak to ${env.appName}`}
           initial={{ width: 56, height: 56, opacity: 0.4 }}
           animate={{ width: panelW, height: panelH, opacity: 1 }}
           exit={{ width: 56, height: 56, opacity: 0 }}
           transition={MORPH_SPRING}
           style={{ transformOrigin: 'bottom center' }}
-          className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 overflow-hidden rounded-[28px] border border-border bg-surface shadow-elevated"
+          className="bottom-safe fixed left-1/2 z-50 -translate-x-1/2 overflow-hidden rounded-3xl bg-surface shadow-elevated"
         >
           <div className="flex h-full w-full flex-col items-center justify-between p-6 text-center">
               <Header phase={phase} />
@@ -184,7 +185,7 @@ export function VoiceIsland() {
                     {reply ? (
                       <AssistantText text={reply} sources={sources} streaming={phase === 'thinking'} />
                     ) : (
-                      <p className="text-body text-ink-muted">The panda is recording your matters…</p>
+                      <p className="text-body text-ink-muted">{env.appName} is recording your matters…</p>
                     )}
                   </div>
                 ) : (
@@ -215,7 +216,7 @@ function Header({ phase }: { phase: Phase }) {
         : phase === 'transcribing'
           ? 'Transcribing'
           : phase === 'thinking'
-            ? 'The panda responds'
+            ? `${env.appName} responds`
             : phase === 'done'
               ? 'Order follows'
               : 'Something went wrong'
@@ -311,7 +312,7 @@ function CircleButton({
       className={`grid size-14 place-items-center rounded-full shadow-elevated transition-colors ${
         variant === 'accent'
           ? 'bg-accent text-accent-ink hover:bg-accent-pressed'
-          : 'border border-border bg-surface text-ink-muted hover:bg-surface-sunken hover:text-ink'
+          : 'bg-surface-field text-ink-muted hover:text-ink'
       }`}
     >
       {children}

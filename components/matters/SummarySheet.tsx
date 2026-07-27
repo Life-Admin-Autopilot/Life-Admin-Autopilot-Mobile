@@ -7,7 +7,7 @@ import { cn } from '@/lib/cn'
 import { formatRange } from '@/lib/taskFormat'
 import { SUMMARY_RANGES, useSummarize, type TaskSummary } from '@/queries/mattersAi'
 import type { TaskFilters } from '@/queries/tasks'
-import { ChipToggle, Sheet, SheetSection } from './Sheet'
+import { ChipToggle, Sheet, SheetSection } from '@/components/ui/Sheet'
 
 // "Summarize my next month" — a structured report, not a paragraph.
 //
