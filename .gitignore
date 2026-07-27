@@ -14,7 +14,7 @@ dist/
 /android/
 
 # Backend — lives outside this repo
-/server
+# /server
 
 # Env / secrets — NEVER commit real values
 .env
