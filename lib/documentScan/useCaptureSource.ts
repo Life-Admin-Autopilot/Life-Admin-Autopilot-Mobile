@@ -13,9 +13,16 @@
 
 import { useState } from 'react'
 
+import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
 import { useUploadScan, ApiError } from '@/lib/documentScan/uploadScan'
 import type { ScanSource } from '@/lib/documentScan/uploadScan'
+import {
+  cameraDeniedMessage,
+  ensureCameraAccess,
+  isCameraUnavailable,
+  isCancellation,
+} from '@/lib/documentScan/cameraAccess'
 import type { ScannedDocument } from '@/queries/documentScans'
 
 function base64ToBytes(base64: string): Uint8Array {
@@ -67,11 +74,38 @@ export function useCaptureSource(
       const { Capacitor } = await import('@capacitor/core')
       if (Capacitor.isNativePlatform()) {
         const { Camera, CameraResultType, CameraSource } = await import('@capacitor/camera')
-        const photo = await Camera.getPhoto({
-          resultType: CameraResultType.Base64,
-          source: CameraSource.Camera,
-          quality: 80,
-        })
+
+        // Resolve access first. getPhoto() prompts on its own the first time,
+        // but after a denial it rejects with an opaque error — which is what
+        // made a blocked camera surface as "Could not process that scan."
+        const access = await ensureCameraAccess(Camera)
+        if (access === 'denied') {
+          setError(cameraDeniedMessage(env.appName))
+          setBusy(false)
+          return
+        }
+
+        let photo
+        try {
+          photo = await Camera.getPhoto({
+            resultType: CameraResultType.Base64,
+            source: CameraSource.Camera,
+            quality: 80,
+          })
+        } catch (err) {
+          // Backing out of the camera sheet is not an error worth showing.
+          if (isCancellation(err)) {
+            setBusy(false)
+            return
+          }
+          if (isCameraUnavailable(err)) {
+            logger.warn('captureSource:camera-unavailable', err)
+            setError('No camera available on this device. Choose a file instead.')
+            setBusy(false)
+            return
+          }
+          throw err
+        }
         if (!photo.base64String) throw new Error('No photo data returned.')
         const bytes = base64ToBytes(photo.base64String)
         const mimeType = photo.format === 'png' ? 'image/png' : 'image/jpeg'

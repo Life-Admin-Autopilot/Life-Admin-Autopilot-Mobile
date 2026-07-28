@@ -3,7 +3,11 @@ import { Types } from 'mongoose'
 import { z } from 'zod'
 import { asyncHandler, BadRequest, NotFound, Unauthorized } from '../lib/errors'
 import { buildStorageKey, getVoiceNoteStorage } from '../lib/voiceNoteStorage'
-import { enqueueTranscription } from '../lib/voiceNoteTranscriber'
+import {
+  draftToClarifyItem,
+  enqueueTranscription,
+  persistClarifications,
+} from '../lib/voiceNoteTranscriber'
 import { requireAuth } from '../middleware/auth'
 import { aiVoiceLimiter } from '../middleware/rateLimit'
 import {
@@ -178,7 +182,7 @@ meVoiceNotesRouter.post(
     // back to the timezone captured with the note.
     const tz = parsedBody.data.timezone ?? note.timezone
     const drafts = await extractItems({ transcript: note.transcript, timezone: tz })
-    const { autoSave, review } = gateAndKey(note.id, drafts)
+    const { autoSave, review, clarify } = gateAndKey(note.id, drafts)
 
     const created = await persistTasksFromItems({
       userId: note.userId,
@@ -187,6 +191,12 @@ meVoiceNotesRouter.post(
     })
     note.extractedTasks = autoSave.map((i) => toExtractedTask(i, created))
     note.reviewItems = review.map(toReviewItem)
+    note.clarifyItems = clarify.map(draftToClarifyItem)
+    // This route used to drop the clarify lane on the floor — it destructured
+    // only {autoSave, review}, so a manual re-extract silently lost every
+    // answerable question the worker path would have held. Idempotent via the
+    // note-scoped key, so re-running never duplicates a question.
+    await persistClarifications(note)
     note.status = review.length > 0 ? 'needs_review' : 'ready'
     await note.save()
 
@@ -248,6 +258,10 @@ meVoiceNotesRouter.post(
         confidence: 'high', // user-confirmed
         reviewReason: 'clear',
         reasons: [],
+        // Carried, not re-derived — the estimate came from the extraction pass
+        // that heard the transcript. The user retunes it afterwards via
+        // PATCH /me/tasks/:id, which stamps source 'user'.
+        estimate: held.estimate,
         dueAt: accept.dueAt ?? held.dueAt,
         notes: accept.notes ?? held.notes,
       })
@@ -289,6 +303,7 @@ function toExtractedTask(
     priority: item.priority,
     confidence: item.confidence,
     reviewReason: item.reviewReason,
+    estimate: item.estimate,
     dueAt: item.dueAt,
     notes: item.notes,
     taskId: match?._id,
@@ -304,6 +319,7 @@ function toReviewItem(item: ExtractedItem): ReviewItem {
     confidence: item.confidence,
     reviewReason: item.reviewReason,
     reasons: item.reasons,
+    estimate: item.estimate,
     dueRaw: item.dueRaw,
     dueAt: item.dueAt,
     notes: item.notes,

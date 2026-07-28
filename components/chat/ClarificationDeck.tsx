@@ -10,6 +10,14 @@
 // the same physics as the island shell (see lib/motion.ts).
 //
 // A single held item degrades to a plain one-question card (no counter / Back).
+//
+// Answering resolves the PERSISTED Clarification through /me/clarifications/:id/
+// resolve — the same endpoint /uncertainties uses. Before this, the deck only
+// re-sent the answers as a fresh chat message and hoped the model re-derived a
+// createTask from prose: the row stayed `open` forever while the UI said
+// "Noted.", so every chat-answered question silently accumulated. The row id
+// rides along on the tool RESULT (toolRunner returns `clarificationId`), which
+// is persisted on the conversation, so it survives a reload.
 
 import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -19,38 +27,59 @@ import { DomainIcon, type Domain } from '@/components/icons/DomainIcon'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
 import { MORPH_CONTENT_VARIANTS, MORPH_SPRING } from '@/lib/motion'
+import { useResolveClarification } from '@/queries/clarifications'
 import type { AiToolCall } from '@/lib/ai/types'
 
 interface ClarificationDeckProps {
   /** Every holdForClarification call from one assistant turn. */
   calls: AiToolCall[]
-  /** Submit the combined answers as a single new turn. */
+  /**
+   * Fallback for holds with no persisted id (a failed tool call, or history
+   * written before the deck resolved server-side): submit those answers as one
+   * new turn so the item isn't lost.
+   */
   onAnswer: (text: string) => void
   disabled?: boolean
 }
 
 const DOMAINS: readonly Domain[] = ['health', 'home', 'car', 'finance', 'family', 'pets']
 
+function localTz(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone
+  } catch {
+    return undefined
+  }
+}
+
 interface ParsedHold {
   callId: string
+  /** The persisted Clarification row. Null → resolve via the chat fallback. */
+  clarificationId: string | null
   question: string
   title: string
   domain: Domain | null
-  options: string[]
+  /** Index is the position in the SERVER's options array — resolve sends it verbatim. */
+  options: { label: string; index: number }[]
 }
 
 function parseHold(call: AiToolCall): ParsedHold {
   const args = call.args
   const rawOptions = Array.isArray(args.options) ? args.options : []
   const options = rawOptions
-    .map((o) => (o && typeof o === 'object' ? (o as Record<string, unknown>).label : null))
-    .filter((l): l is string => typeof l === 'string' && l.trim().length > 0)
+    .map((o, index) => ({
+      label: o && typeof o === 'object' ? (o as Record<string, unknown>).label : null,
+      index,
+    }))
+    .filter((o): o is { label: string; index: number } => typeof o.label === 'string' && o.label.trim().length > 0)
   const domain =
     typeof args.domain === 'string' && (DOMAINS as readonly string[]).includes(args.domain)
       ? (args.domain as Domain)
       : null
+  const rawId = call.result?.clarificationId
   return {
     callId: call.callId,
+    clarificationId: typeof rawId === 'string' && rawId.length > 0 ? rawId : null,
     question: typeof args.question === 'string' ? args.question : 'One item needs your input.',
     title: typeof args.title === 'string' ? args.title : '',
     domain,
@@ -58,40 +87,64 @@ function parseHold(call: AiToolCall): ParsedHold {
   }
 }
 
+/** What the user picked. `optionIndex` null → they typed it themselves. */
+interface DeckAnswer {
+  label: string
+  optionIndex: number | null
+}
+
 export function ClarificationDeck({ calls, onAnswer, disabled = false }: ClarificationDeckProps) {
   const holds = useMemo(() => calls.map(parseHold), [calls])
   const total = holds.length
+  const resolve = useResolveClarification()
 
   const [index, setIndex] = useState(0)
-  const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [answers, setAnswers] = useState<Record<string, DeckAnswer>>({})
   const [text, setText] = useState('')
   const [typing, setTyping] = useState(false)
   const [submitted, setSubmitted] = useState(false)
 
   const current = holds[index]
   const hasOptions = (current?.options.length ?? 0) > 0
-  const storedAnswer = current ? (answers[current.callId] ?? '') : ''
+  const storedAnswer = current ? (answers[current.callId]?.label ?? '') : ''
   // Will committing the current answer resolve the LAST open question?
   const completesDeck =
     holds.filter((h) => h.callId !== current?.callId && !(h.callId in answers)).length === 0
 
-  const submit = (finalAnswers: Record<string, string>) => {
+  const submit = (finalAnswers: Record<string, DeckAnswer>) => {
     if (submitted) return
     setSubmitted(true)
+    // Rows that resolved server-side are already filed. Re-sending them as prose
+    // would make the model create a SECOND task for the same item, so only holds
+    // with no persisted id take the chat fallback.
+    const legacy = holds.filter((h) => !h.clarificationId)
+    if (legacy.length === 0) return
     // The held questions aren't replayed into the agent's context, so the reply
     // must be self-contained: pair each matter's title with its answer.
-    const lines = holds.map((h) => `${h.title || 'Item'} → ${finalAnswers[h.callId] ?? ''}`)
+    const lines = legacy.map((h) => `${h.title || 'Item'} → ${finalAnswers[h.callId]?.label ?? ''}`)
     const combined =
-      holds.length === 1 ? lines[0] ?? '' : `Answers to your held questions:\n${lines.join('\n')}`
+      legacy.length === 1 ? lines[0] ?? '' : `Answers to your held questions:\n${lines.join('\n')}`
     onAnswer(combined)
   }
 
-  const commit = (value: string) => {
+  const commit = (value: string, optionIndex: number | null = null) => {
     const v = value.trim()
     if (!v || !current || disabled || submitted) return
-    const next = { ...answers, [current.callId]: v }
+    const next = { ...answers, [current.callId]: { label: v, optionIndex } }
     setAnswers(next)
     setTyping(false)
+
+    // Close the persisted row now, one request per item — a single failed
+    // resolve can't strand the rest of the deck.
+    if (current.clarificationId) {
+      resolve.mutate({
+        id: current.clarificationId,
+        answer:
+          optionIndex !== null ? { type: 'option', index: optionIndex } : { type: 'custom', text: v },
+        timezone: localTz(),
+      })
+    }
+
     if (Object.keys(next).length === total) {
       submit(next)
       return
@@ -99,14 +152,14 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
     // Advance to the first still-open question.
     const nextIdx = holds.findIndex((h) => !(h.callId in next))
     setIndex(nextIdx)
-    setText(next[holds[nextIdx]?.callId ?? ''] ?? '')
+    setText(next[holds[nextIdx]?.callId ?? '']?.label ?? '')
   }
 
   const goBack = () => {
     if (index === 0 || disabled || submitted) return
     const i = index - 1
     setIndex(i)
-    setText(answers[holds[i]?.callId ?? ''] ?? '')
+    setText(answers[holds[i]?.callId ?? '']?.label ?? '')
     setTyping(false)
   }
 
@@ -174,12 +227,12 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
 
           {hasOptions ? (
             <div className="flex flex-wrap gap-2">
-              {current.options.map((label, i) => (
+              {current.options.map(({ label, index: optionIndex }) => (
                 <button
-                  key={`${current.callId}-${label}-${i}`}
+                  key={`${current.callId}-${label}-${optionIndex}`}
                   type="button"
                   disabled={disabled}
-                  onClick={() => commit(label)}
+                  onClick={() => commit(label, optionIndex)}
                   className={cn(
                     'rounded-pill border px-3 py-1.5 text-caption transition-colors disabled:opacity-50',
                     storedAnswer === label

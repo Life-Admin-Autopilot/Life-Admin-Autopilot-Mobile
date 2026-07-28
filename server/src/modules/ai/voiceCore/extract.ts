@@ -3,7 +3,13 @@ import { Type, type Content } from '@google/genai'
 import { env } from '../../../env'
 import { logger } from '../../../logger'
 import { DOMAINS, type Domain } from '../../../models/User'
-import { TASK_PRIORITIES, type TaskPriority } from '../../../models/Task'
+import {
+  ESTIMATE_BUCKETS,
+  ESTIMATE_BUCKET_LABELS,
+  TASK_PRIORITIES,
+  normalizeEstimate,
+  type TaskPriority,
+} from '../../../models/Task'
 import { getGeminiClient } from '../provider/geminiClient'
 import { normalizeLocalIso, STRICT_DATETIME_RE } from '../timeNormalize'
 import { withGeminiRetry } from './geminiRetry'
@@ -14,9 +20,11 @@ import {
   CONFIDENCE_BUCKETS,
   REVIEW_REASONS,
   CLARIFICATION_KINDS,
+  CLARIFICATION_COSTS,
   type ModelTask,
   type DraftItem,
   type DraftClarification,
+  type ClarificationCost,
   type ReviewReason,
   type ConfidenceBucket,
 } from './contract'
@@ -45,6 +53,15 @@ PER TASK, SET:
 - domain: the single best of health, home, car, finance, family, pets.
 - priority: low | normal | high | urgent — from urgency cues ("asap"/"urgent" =
   urgent, "important" = high, "whenever"/"no rush" = low, else normal).
+- estimateMinMinutes / estimateMaxMinutes: how long DOING this will take, as a
+  range in minutes. Both MUST be one of exactly these values: ${ESTIMATE_BUCKETS.join(', ')}.
+  Nothing between them exists — there is no "23 minutes", because nobody can know
+  that. max must be >= min; use the same value twice when the job is tight
+  ("5" and "5"). Estimate the DOING, never the waiting or the calendar distance:
+  "book a dentist appointment" is a 5–10 minute phone call, not the appointment
+  itself; "renew car insurance" is the paperwork, not the year of cover. When you
+  genuinely cannot tell, give a WIDE range rather than a confident narrow one —
+  the range is the app's way of admitting it is guessing.
 - dueRaw: the date/time phrase EXACTLY as spoken ("before the 15th", "next
   Friday", "tomorrow morning"), or null if none was mentioned.
 - dueAt: your best resolution of dueRaw to ISO 8601 with a literal T and the
@@ -81,13 +98,22 @@ Fields, when (and only when) you set a clarification:
   - clarifyQuestion: the short, warm question in the speaker's language ("The 17th or the
     19th?", "When should I remind you?"). Leave null otherwise.
   - clarifyKind: 'date' | 'detail' | 'choice'. Null otherwise.
+  - clarifyCost: COST OF BEING WRONG if we act on your best guess before the user answers.
+    'low'  — a wrong nudge time just gets rescheduled (a routine errand, "call the bank",
+             "book a haircut"). The task's reminder MAY fire on your guess.
+    'high' — a wrong date means missing something irreversible: a bill / rent / payment, a
+             flight or trip, a court or legal date, a renewal or expiry (passport, licence,
+             insurance, registration). The task is still created, but its reminder is
+             WITHHELD until the user confirms. When unsure, answer 'high'.
   - clarifyOptions: 0-4 suggested answers. For clarifyKind 'date', EACH option MUST carry a
     resolved dueAt (ISO 8601 with the speaker's offset). For 'detail', usually leave empty.
     Labels are short ("The 17th", "Tomorrow morning"). Null/empty otherwise.
 DO NOT set a clarification for casual to-dos that simply have no time ("buy bread", "tidy the
 garage") — those are normal CLEAR tasks; just emit them with no dueAt. Over-asking is a bug.
-When you set a clarification, still give your best provisional title + domain, and set dueAt
-to null (the date IS the question).
+When you set a clarification, still give your best provisional title + domain. Order
+clarifyOptions MOST-LIKELY FIRST: the task is created immediately using the first option's
+date as a provisional guess, so the user sees the item straight away instead of it waiting
+in a queue. Answering just corrects it.
 
 Return ONLY the JSON object matching the schema. No prose.
 `.trim()
@@ -99,13 +125,22 @@ const responseSchema = {
   properties: {
     tasks: {
       type: Type.ARRAY,
-      maxItems: String(MAX_EXTRACTED_ITEMS),
+      // No maxItems — see documentCore/extract.ts for the full story. A bounded
+      // array is unrolled once per allowed element when Gemini compiles the
+      // decoding constraint, and this item schema (nine enum fields plus a
+      // nested array) blows past the serving limit long before 25 copies.
+      // The cap lives in the prompt and in the slice below instead.
       items: {
         type: Type.OBJECT,
         properties: {
           title: { type: Type.STRING },
           domain: { type: Type.STRING, enum: [...DOMAINS] },
           priority: { type: Type.STRING, enum: [...TASK_PRIORITIES] },
+          // STRING because enum constraint only applies to strings in Gemini's
+          // schema — an INTEGER field would let "23" through and the whole
+          // point of the ladder is that 23 does not exist.
+          estimateMinMinutes: { type: Type.STRING, enum: ESTIMATE_BUCKET_LABELS },
+          estimateMaxMinutes: { type: Type.STRING, enum: ESTIMATE_BUCKET_LABELS },
           dueRaw: { type: Type.STRING, nullable: true },
           dueAt: { type: Type.STRING, nullable: true },
           confidence: { type: Type.STRING, enum: [...CONFIDENCE_BUCKETS] },
@@ -114,6 +149,7 @@ const responseSchema = {
           notes: { type: Type.STRING, nullable: true },
           clarifyQuestion: { type: Type.STRING, nullable: true },
           clarifyKind: { type: Type.STRING, enum: [...CLARIFICATION_KINDS], nullable: true },
+          clarifyCost: { type: Type.STRING, enum: [...CLARIFICATION_COSTS], nullable: true },
           clarifyOptions: {
             type: Type.ARRAY,
             nullable: true,
@@ -128,11 +164,23 @@ const responseSchema = {
             },
           },
         },
-        required: ['title', 'domain', 'confidence', 'reviewReason'],
+        // The estimate fields are required so the model cannot quietly skip the
+        // judgment on tasks it finds boring — Gemini drops optional fields it
+        // deems inferrable, and a missing estimate is invisible in the UI.
+        required: [
+          'title',
+          'domain',
+          'confidence',
+          'reviewReason',
+          'estimateMinMinutes',
+          'estimateMaxMinutes',
+        ],
         propertyOrdering: [
           'title',
           'domain',
           'priority',
+          'estimateMinMinutes',
+          'estimateMaxMinutes',
           'dueRaw',
           'dueAt',
           'confidence',
@@ -259,6 +307,13 @@ function hardenItem(t: ModelTask, timezone: string | undefined): DraftItem | nul
     confidence,
     reviewReason,
     reasons,
+    // Snapped and ordered here even though the response schema already
+    // constrained it — a prompt rule is not an enforcement mechanism, and the
+    // same is true of a schema the provider may relax under load.
+    estimate: normalizeEstimate(
+      { minMinutes: t.estimateMinMinutes, maxMinutes: t.estimateMaxMinutes },
+      'ai',
+    ),
     dueRaw,
     dueAt,
     notes: t.notes?.trim() || undefined,
@@ -294,7 +349,11 @@ function buildClarification(
     .filter((o): o is { label: string; dueAt: Date | undefined } => o !== null)
     .slice(0, 4)
 
-  return { question: question.slice(0, 300), kind: t.clarifyKind, options }
+  // Default 'high' when the model didn't answer: the safe failure is a task
+  // whose reminder waits for confirmation, not one that fires on a guessed
+  // court date.
+  const costOfWrong: ClarificationCost = t.clarifyCost === 'low' ? 'low' : 'high'
+  return { question: question.slice(0, 300), kind: t.clarifyKind, costOfWrong, options }
 }
 
 // NOW anchor in the speaker's timezone, with explicit offset, for the prompt.

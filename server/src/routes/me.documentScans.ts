@@ -5,7 +5,11 @@ import { asyncHandler, BadRequest, NotFound, Unauthorized } from '../lib/errors'
 import { buildStorageKey, getDocumentScanStorage } from '../lib/documentScanStorage'
 import { countPdfPages } from '../lib/pdfPageCount'
 import { enqueueDocumentScan } from '../lib/documentScanWorker'
-import { admitDocumentScan, releaseDocumentScanSlot } from '../lib/documentScanQuota'
+import {
+  admitDocumentScan,
+  readDocumentScanQuota,
+  releaseDocumentScanSlot,
+} from '../lib/documentScanQuota'
 import { requireAuth } from '../middleware/auth'
 import { documentScanLimiter } from '../middleware/rateLimit'
 import { logger } from '../logger'
@@ -15,7 +19,7 @@ import {
   ScannedDocument,
   type ExtractedTaskCandidate,
 } from '../models/ScannedDocument'
-import { DOMAINS } from '../models/User'
+import { DOMAINS, User } from '../models/User'
 import { TASK_PRIORITIES } from '../models/Task'
 import { env } from '../env'
 import { persistTasksFromCandidates } from '../modules/ai/documentCore/persist'
@@ -141,6 +145,22 @@ meDocumentScansRouter.get(
     if (!auth) throw Unauthorized()
     const docs = await ScannedDocument.find({ userId: auth.sub }).sort({ createdAt: -1 }).limit(50)
     res.status(200).json({ scannedDocuments: docs.map((d) => d.toJSON()) })
+  }),
+)
+
+// MUST stay above `/:id` — Express matches in registration order, so the
+// parameterised route would otherwise swallow "quota" as an id and 404.
+meDocumentScansRouter.get(
+  '/me/document-scans/quota',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const auth = req.auth
+    if (!auth) throw Unauthorized()
+    const user = await User.findById(auth.sub).lean()
+    if (!user) throw NotFound('user_not_found', 'Account no longer exists.')
+    const tier = user.subscription?.tier ?? 'free'
+    const quota = await readDocumentScanQuota({ userId: auth.sub, tier })
+    res.status(200).json({ tier, quota })
   }),
 )
 
@@ -278,6 +298,10 @@ meDocumentScansRouter.post(
         domain: (accept.domain as ExtractedCandidate['domain']) ?? held.domain,
         priority: (accept.priority as ExtractedCandidate['priority']) ?? held.priority,
         confidence: held.confidence,
+        // Carried, not re-derived — the estimate came from the vision pass that
+        // read the document, and nothing at accept time knows more than it did.
+        // The user retunes it afterwards via PATCH /me/tasks/:id.
+        estimate: held.estimate,
         dueAt: accept.dueAt ?? held.dueAt,
         notes: accept.notes ?? held.notes,
         sourcePage: held.sourcePage,

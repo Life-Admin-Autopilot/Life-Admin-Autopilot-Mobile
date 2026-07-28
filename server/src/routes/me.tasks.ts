@@ -8,6 +8,7 @@ import { isAiConfigured } from '../modules/ai/provider/geminiClient'
 import { admitWithinQuota, releaseUsageSlot } from '../modules/ai/quota'
 import { searchMatters } from '../modules/tasks/semanticSearch'
 import { summarizeRange } from '../modules/tasks/summarize'
+import { MAX_BACKLOG_BATCH, estimateBacklog } from '../modules/tasks/estimateBacklog'
 import { DOMAINS } from '../models/User'
 import {
   MAX_SUBTASK_TEXT,
@@ -17,6 +18,7 @@ import {
   TASK_KINDS,
   TASK_PRIORITIES,
   TASK_STATUSES,
+  normalizeEstimate,
   normalizeTag,
   notDeleted,
 } from '../models/Task'
@@ -28,6 +30,13 @@ import {
   summarizeWarnings,
   undoBulk,
 } from '../modules/tasks/bulkService'
+import { proposeCategorization } from '../modules/tasks/categorize/propose'
+import { MAX_CATEGORIZE_TARGETS } from '../modules/tasks/categorize/prompt'
+import {
+  applyProposal,
+  discardProposal,
+  getPendingProposal,
+} from '../modules/tasks/categorize/apply'
 import { computeTaskCounts } from '../modules/tasks/taskCounts'
 import {
   DEFAULT_TASK_SORT,
@@ -66,6 +75,18 @@ const TagsInput = z
     return out
   })
 
+// A hand-set time window. Snapped onto the bucket ladder like any other
+// estimate — the user picks from buckets in the UI, but the server does not
+// take that on trust — and stamped `source: 'user'`, which is what makes it
+// authoritative forever: every AI path is required to skip it from then on.
+const EstimateInput = z
+  .object({
+    minMinutes: z.number().int().min(1).max(1440),
+    maxMinutes: z.number().int().min(1).max(1440),
+  })
+  .strict()
+  .transform((v) => normalizeEstimate(v, 'user'))
+
 const CreateTaskSchema = z
   .object({
     title: z.string().trim().min(1).max(240),
@@ -75,6 +96,7 @@ const CreateTaskSchema = z
     tags: TagsInput.optional(),
     dueAt: IsoDate.optional(),
     notes: z.string().max(2000).optional(),
+    estimate: EstimateInput.optional(),
     sourceVoiceNoteId: ObjectIdString.optional(),
   })
   .strict()
@@ -88,6 +110,9 @@ const UpdateTaskSchema = z
     tags: TagsInput.optional(),
     dueAt: IsoDate.nullable().optional(),
     notes: z.string().max(2000).nullable().optional(),
+    // null clears the estimate back to "unknown" — which is a real answer, and
+    // a truer one than a number the user does not stand behind.
+    estimate: EstimateInput.nullable().optional(),
     snoozedUntil: IsoDate.nullable().optional(),
   })
   .strict()
@@ -267,6 +292,51 @@ meTasksRouter.post(
   }),
 )
 
+// Backfill estimates for matters that predate the feature. One batched model
+// call per request, capped — a client that wants the whole backlog covered
+// calls again while `remaining` is above zero, rather than the server holding a
+// request open across many rounds.
+const EstimateBacklogSchema = z
+  .object({
+    limit: z.number().int().min(1).max(MAX_BACKLOG_BATCH).optional(),
+  })
+  .strict()
+
+meTasksRouter.post(
+  '/me/tasks/estimate-backlog',
+  requireAuth,
+  taskSummaryLimiter,
+  asyncHandler(async (req, res) => {
+    const auth = req.auth
+    if (!auth) throw Unauthorized()
+
+    const parsed = EstimateBacklogSchema.safeParse(req.body ?? {})
+    if (!parsed.success) {
+      throw BadRequest('invalid_body', 'Invalid backfill request.', parsed.error.flatten())
+    }
+    if (!isAiConfigured()) {
+      throw new AppError(503, 'ai_not_configured', 'Estimates are unavailable right now.')
+    }
+
+    await admitWithinQuota({ userId: auth.sub, tier: 'free', kind: 'message' })
+
+    let result
+    try {
+      result = await estimateBacklog({ userId: auth.sub, limit: parsed.data.limit })
+    } catch (err: unknown) {
+      await releaseUsageSlot({ userId: auth.sub, kind: 'message' }).catch(() => {})
+      throw err
+    }
+    // estimateBacklog swallows model failures and reports zero rather than
+    // throwing, so refund the slot when the user got nothing for it.
+    if (result.estimated === 0) {
+      await releaseUsageSlot({ userId: auth.sub, kind: 'message' }).catch(() => {})
+    }
+
+    res.status(200).json(result)
+  }),
+)
+
 // ---- Bulk operations ----
 //
 // Every route below writes exactly one TaskBulkOp, so the whole operation
@@ -321,6 +391,104 @@ meTasksRouter.post(
     if (!auth) throw Unauthorized()
     const result = await undoBulk(auth.sub, String(req.params.token ?? ''))
     res.status(200).json(result)
+  }),
+)
+
+// ---- AI categorize ----
+//
+// Unlike every other bulk route, proposing writes NOTHING to Task. The run is
+// staged as a TaskBulkOp in `proposed`, reviewed, and only then committed —
+// because a domain is required on every matter, so this always overwrites an
+// answer that already exists rather than filling a blank.
+//
+// Applying goes through the same TaskBulkOp record, so `POST /me/tasks/undo/:token`
+// reverses a categorize run with no special casing.
+
+meTasksRouter.post(
+  '/me/tasks/categorize',
+  requireAuth,
+  taskSummaryLimiter,
+  asyncHandler(async (req, res) => {
+    const auth = req.auth
+    if (!auth) throw Unauthorized()
+
+    const parsed = BulkTargetSchema.safeParse(req.body ?? {})
+    if (!parsed.success) {
+      throw BadRequest('invalid_body', 'Invalid categorize request.', parsed.error.flatten())
+    }
+    if (!isAiConfigured()) {
+      throw new AppError(503, 'ai_not_configured', 'Categorising is unavailable right now.')
+    }
+
+    // The unique partial index would reject the second insert anyway; answering
+    // here means the client gets a resumable state instead of a duplicate-key
+    // error it would have to decode.
+    const open = await getPendingProposal(auth.sub)
+    if (open) {
+      throw new AppError(
+        409,
+        'categorize_already_open',
+        'You already have suggestions waiting. Review those first.',
+        { opId: open.opId },
+      )
+    }
+
+    await admitWithinQuota({ userId: auth.sub, tier: 'free', kind: 'message' })
+
+    let result
+    try {
+      result = await proposeCategorization({ userId: auth.sub, target: parsed.data })
+    } catch (err: unknown) {
+      await releaseUsageSlot({ userId: auth.sub, kind: 'message' }).catch(() => {})
+      throw err
+    }
+    // Nothing proposed means the filing was already right — a fine answer, but
+    // not one worth charging for.
+    if (result.changes.length === 0) {
+      await releaseUsageSlot({ userId: auth.sub, kind: 'message' }).catch(() => {})
+    }
+
+    res.status(200).json(result)
+  }),
+)
+
+meTasksRouter.get(
+  '/me/tasks/categorize/pending',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const auth = req.auth
+    if (!auth) throw Unauthorized()
+    res.status(200).json({ proposal: await getPendingProposal(auth.sub) })
+  }),
+)
+
+const ApplyProposalSchema = z
+  .object({ taskIds: z.array(ObjectIdString).max(MAX_CATEGORIZE_TARGETS) })
+  .strict()
+
+meTasksRouter.post(
+  '/me/tasks/categorize/:id/apply',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const auth = req.auth
+    if (!auth) throw Unauthorized()
+    const parsed = ApplyProposalSchema.safeParse(req.body ?? {})
+    if (!parsed.success) {
+      throw BadRequest('invalid_body', 'Invalid apply request.', parsed.error.flatten())
+    }
+    const result = await applyProposal(auth.sub, String(req.params.id), parsed.data.taskIds)
+    res.status(200).json(result)
+  }),
+)
+
+meTasksRouter.post(
+  '/me/tasks/categorize/:id/discard',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const auth = req.auth
+    if (!auth) throw Unauthorized()
+    await discardProposal(auth.sub, String(req.params.id))
+    res.status(204).end()
   }),
 )
 
@@ -411,6 +579,7 @@ meTasksRouter.post(
       tags: parsed.data.tags ?? [],
       dueAt: parsed.data.dueAt,
       notes: parsed.data.notes,
+      estimate: parsed.data.estimate,
       sourceVoiceNoteId: parsed.data.sourceVoiceNoteId,
       status: 'open',
     })

@@ -223,6 +223,16 @@ function Surface({
 }) {
   const isPresent = useIsPresent()
 
+  // MUST be stable. React re-invokes a ref callback whose identity changed —
+  // detaching with null, reattaching with the node — so an inline arrow here
+  // reset the scroll on EVERY render, which means every keystroke in a field
+  // yanked the sheet back to the top. `useCallback` with no deps makes this
+  // fire on mount and unmount only, which is what "open at the top" means:
+  // Surface is remounted per open by AnimatePresence, so mount IS open.
+  const pinToTop = useCallback((node: HTMLDivElement | null) => {
+    if (node) node.scrollTop = 0
+  }, [])
+
   return (
     <>
       <motion.button
@@ -291,7 +301,19 @@ function Surface({
             </button>
           </div>
 
-          <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">{children}</div>
+          {/* Padded on all sides, not just the sides. A focus ring is drawn
+              OUTSIDE its element's box, so a scroll container that hugs its
+              content clips the ring off the first and last fields and makes
+              them look broken the moment they are focused.
+
+              Pinned to the top on open. Anything that focuses or scrolls during
+              the mount — an autofocused field, a browser restoring position,
+              the long timezone list reopening where it was left — otherwise
+              shows a sheet that arrives already scrolled past its own first
+              label. A sheet always starts at its beginning. */}
+          <div ref={pinToTop} className="-mx-2 min-h-0 flex-1 overflow-y-auto px-2 py-1">
+            {children}
+          </div>
 
           {footer ? <div className="shrink-0 pt-4">{footer}</div> : null}
         </motion.div>

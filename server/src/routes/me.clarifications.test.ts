@@ -26,16 +26,36 @@ afterEach(() => {
   interpretMock.mockReset()
 })
 
+// A question is always ABOUT a real task now — the task is created when the
+// question is raised, not when it's answered. The fixture mirrors that: task
+// first, carrying the first option as the provisional guess, then the question.
 async function hold(
   userId: string,
   over: Partial<Parameters<typeof Clarification.create>[0]> = {},
 ) {
+  const task = await Task.create({
+    userId: new Types.ObjectId(userId),
+    title: 'Car insurance renewal',
+    domain: 'car',
+    kind: 'list',
+    priority: 'high',
+    status: 'open',
+    dueAt: new Date('2026-06-15T09:00:00.000Z'),
+  })
   return Clarification.create({
     userId: new Types.ObjectId(userId),
+    taskId: task._id,
     status: 'open',
-    draft: { title: 'Car insurance renewal', domain: 'car', priority: 'high', tags: [] },
+    draft: {
+      title: 'Car insurance renewal',
+      domain: 'car',
+      priority: 'high',
+      tags: [],
+      dueAt: new Date('2026-06-15T09:00:00.000Z'),
+    },
     question: 'Is it the 15th or the 18th?',
     kind: 'date',
+    costOfWrong: 'high',
     options: [
       { label: 'The 15th', dueAt: new Date('2026-06-15T09:00:00.000Z') },
       { label: 'The 18th', dueAt: new Date('2026-06-18T09:00:00.000Z') },
@@ -66,7 +86,7 @@ describe('GET /me/clarifications', () => {
 })
 
 describe('POST /me/clarifications/:id/resolve — option', () => {
-  it('creates a task with the picked option date and marks it resolved', async () => {
+  it('patches the existing task with the picked date and marks it resolved', async () => {
     const a = await signUp()
     const doc = await hold(a.userId)
 
@@ -81,12 +101,33 @@ describe('POST /me/clarifications/:id/resolve — option', () => {
     expect(res.body.clarification.status).toBe('resolved')
     expect(res.body.clarification.answer).toBe('The 18th')
 
-    const created = await Task.findOne({ userId: a.userId, title: 'Car insurance renewal' })
-    expect(created?.dueAt?.toISOString()).toBe('2026-06-18T09:00:00.000Z')
+    // The SAME task moved — answering corrects the item, it doesn't mint a
+    // second one. The old flow created the task here for the first time.
+    expect(await Task.countDocuments({ userId: a.userId })).toBe(1)
+    const updated = await Task.findById(doc.taskId)
+    expect(updated?.dueAt?.toISOString()).toBe('2026-06-18T09:00:00.000Z')
+    // A confirmed date promotes the withheld task to a firing reminder.
+    expect(updated?.kind).toBe('reminder')
 
     // No longer open → gone from the banner list.
     const list = await request.get('/me/clarifications').set('Authorization', auth(a.accessToken))
     expect(list.body.clarifications).toHaveLength(0)
+  })
+
+  it('closes the question out when its task was deleted meanwhile', async () => {
+    const a = await signUp()
+    const doc = await hold(a.userId)
+    await Task.updateOne({ _id: doc.taskId }, { $set: { deletedAt: new Date() } })
+
+    const res = await request
+      .post(`/me/clarifications/${doc.id}/resolve`)
+      .set('Authorization', auth(a.accessToken))
+      .send({ answer: { type: 'option', index: 1 } })
+
+    // Moot, not resurrected — the user threw the work away.
+    expect(res.status).toBe(200)
+    expect(res.body.task).toBeNull()
+    expect(res.body.clarification.status).toBe('dropped')
   })
 
   it('rejects an out-of-range option index', async () => {
@@ -100,7 +141,7 @@ describe('POST /me/clarifications/:id/resolve — option', () => {
     expect(res.body.error.code).toBe('invalid_option')
   })
 
-  it('is idempotent — resolving twice does not create a second task', async () => {
+  it('is idempotent — resolving twice does not double-apply', async () => {
     const a = await signUp()
     const doc = await hold(a.userId)
     const body = { answer: { type: 'option', index: 0 } }
@@ -116,7 +157,7 @@ describe('POST /me/clarifications/:id/resolve — option', () => {
 })
 
 describe('POST /me/clarifications/:id/resolve — custom', () => {
-  it('runs the typed answer through Mo and creates the interpreted task', async () => {
+  it('runs the typed answer through Kitto and creates the interpreted task', async () => {
     const a = await signUp()
     const doc = await hold(a.userId)
     interpretMock.mockResolvedValueOnce({
@@ -151,7 +192,7 @@ describe('POST /me/clarifications/:id/resolve — custom', () => {
 })
 
 describe('POST /me/clarifications/:id/drop', () => {
-  it('drops a held item without creating a task', async () => {
+  it('dismisses the question and LEAVES the task alone', async () => {
     const a = await signUp()
     const doc = await hold(a.userId)
     const res = await request
@@ -159,10 +200,57 @@ describe('POST /me/clarifications/:id/drop', () => {
       .set('Authorization', auth(a.accessToken))
     expect(res.status).toBe(200)
     expect(res.body.clarification.status).toBe('dropped')
-    expect(await Task.countDocuments({ userId: a.userId })).toBe(0)
+
+    // Dropping the QUESTION must never destroy the captured item. It keeps the
+    // provisional guess and stays passive; the user can edit it any time.
+    const task = await Task.findById(doc.taskId)
+    expect(task?.title).toBe('Car insurance renewal')
+    expect(task?.dueAt?.toISOString()).toBe('2026-06-15T09:00:00.000Z')
+    expect(task?.kind).toBe('list')
 
     const list = await request.get('/me/clarifications').set('Authorization', auth(a.accessToken))
     expect(list.body.clarifications).toHaveLength(0)
+  })
+})
+
+// Skip used to be a purely local index bump in the card stack, so the server
+// never learned the user had passed and re-served the identical question next
+// session. These lock the dismissal in.
+describe('POST /me/clarifications/:id/defer', () => {
+  it('hides a skipped item from the list without resolving or dropping it', async () => {
+    const a = await signUp()
+    const doc = await hold(a.userId)
+
+    const res = await request
+      .post(`/me/clarifications/${doc.id}/defer`)
+      .set('Authorization', auth(a.accessToken))
+    expect(res.status).toBe(200)
+    // Still open — deferring is "not now", not an answer and not a discard.
+    expect(res.body.clarification.status).toBe('open')
+    // And the task it's about is untouched: skipping a question never costs
+    // the user the item behind it.
+    expect(await Task.countDocuments({ userId: a.userId })).toBe(1)
+
+    const list = await request.get('/me/clarifications').set('Authorization', auth(a.accessToken))
+    expect(list.body.clarifications).toHaveLength(0)
+  })
+
+  it('serves the item again once the deferral window has passed', async () => {
+    const a = await signUp()
+    await hold(a.userId, { deferredUntil: new Date(Date.now() - 1000) })
+
+    const list = await request.get('/me/clarifications').set('Authorization', auth(a.accessToken))
+    expect(list.body.clarifications).toHaveLength(1)
+  })
+
+  it("404s when deferring another user's clarification", async () => {
+    const a = await signUp()
+    const b = await signUp()
+    const doc = await hold(a.userId)
+    const res = await request
+      .post(`/me/clarifications/${doc.id}/defer`)
+      .set('Authorization', auth(b.accessToken))
+    expect(res.status).toBe(404)
   })
 })
 

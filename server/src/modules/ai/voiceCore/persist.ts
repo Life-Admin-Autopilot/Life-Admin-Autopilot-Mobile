@@ -33,6 +33,9 @@ export async function persistTasksFromItems(args: PersistArgs): Promise<TaskDoc[
             sourceVoiceNoteId: voiceNoteId,
             sourceTaskKey: it.key,
             confidence: it.confidence,
+            // $setOnInsert, so an estimate the user has since edited by hand is
+            // never touched by a worker retry — the row simply is not written again.
+            ...(it.estimate ? { estimate: it.estimate } : {}),
             ...(it.dueAt ? { dueAt: it.dueAt } : {}),
             ...(it.notes ? { notes: it.notes } : {}),
           },

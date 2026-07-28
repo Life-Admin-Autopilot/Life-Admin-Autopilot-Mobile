@@ -4,6 +4,15 @@ import { auth, request, signUp } from '../test/helpers'
 import { getVoiceNoteStorage } from '../lib/voiceNoteStorage'
 import { VoiceNote } from '../models/VoiceNote'
 import { Task } from '../models/Task'
+import { Clarification } from '../models/Clarification'
+import type { DraftItem } from '../modules/ai/voiceCore/contract'
+
+// Extraction seam for the manual re-extract route — the real one is a Gemini
+// round. Tests push the drafts they want the gate to sort.
+const extractMock = vi.fn(async (): Promise<DraftItem[]> => [])
+vi.mock('../modules/ai/voiceCore/extract', () => ({
+  extractItems: () => extractMock(),
+}))
 
 vi.mock('../lib/voiceNoteStorage', () => {
   const store = new Map<string, Buffer>()
@@ -189,6 +198,82 @@ describe('POST /me/voice-notes/:id/review', () => {
       .set('Authorization', auth(b.accessToken))
       .send({ accepts: [], discards: [] })
     expect(res.status).toBe(404)
+  })
+})
+
+// This route used to destructure only {autoSave, review} from the gate, so a
+// manual re-extract silently threw away every answerable question the worker
+// path would have held — the item existed nowhere the user could reach it.
+describe('POST /me/voice-notes/:id/extract-tasks — clarify lane', () => {
+  const clarifiable: DraftItem = {
+    title: 'Car insurance renewal',
+    domain: 'car',
+    priority: 'high',
+    confidence: 'low',
+    reviewReason: 'vague_date',
+    reasons: [],
+    clarification: {
+      question: 'Is it the 15th or the 18th?',
+      kind: 'date',
+      costOfWrong: 'high',
+      options: [
+        { label: 'The 15th', dueAt: new Date('2026-06-15T09:00:00.000Z') },
+        { label: 'The 18th', dueAt: new Date('2026-06-18T09:00:00.000Z') },
+      ],
+    },
+  }
+
+  async function noteWithTranscript(userId: string) {
+    return VoiceNote.create({
+      userId: new Types.ObjectId(userId),
+      storageKey: 'k',
+      durationMs: 1500,
+      byteSize: 5,
+      source: 'app',
+      status: 'ready',
+      clientCapturedAt: new Date(),
+      transcript: 'renew the car insurance on the 15th or 18th',
+      timezone: 'Africa/Cairo',
+    })
+  }
+
+  it('persists held items instead of dropping them', async () => {
+    const session = await signUp()
+    const note = await noteWithTranscript(session.userId)
+    extractMock.mockResolvedValueOnce([clarifiable])
+
+    const res = await request
+      .post(`/me/voice-notes/${note.id}/extract-tasks`)
+      .set('Authorization', auth(session.accessToken))
+      .send({})
+    expect(res.status).toBe(200)
+
+    const held = await Clarification.find({ userId: session.userId, status: 'open' })
+    expect(held).toHaveLength(1)
+    expect(held[0]?.question).toBe('Is it the 15th or the 18th?')
+
+    // The task exists NOW, carrying the first option as a provisional guess.
+    // It used to be withheld until the question was answered, which is what
+    // made a captured item invisible and unreachable.
+    const task = await Task.findById(held[0]?.taskId)
+    expect(task?.title).toBe('Car insurance renewal')
+    expect(task?.dueAt?.toISOString()).toBe('2026-06-15T09:00:00.000Z')
+    // Passive until confirmed — a guessed renewal date must not fire.
+    expect(task?.kind).toBe('list')
+  })
+
+  it('is idempotent — re-extracting does not duplicate the question', async () => {
+    const session = await signUp()
+    const note = await noteWithTranscript(session.userId)
+    extractMock.mockResolvedValueOnce([clarifiable]).mockResolvedValueOnce([clarifiable])
+
+    for (let i = 0; i < 2; i += 1) {
+      await request
+        .post(`/me/voice-notes/${note.id}/extract-tasks`)
+        .set('Authorization', auth(session.accessToken))
+        .send({})
+    }
+    expect(await Clarification.countDocuments({ userId: session.userId, status: 'open' })).toBe(1)
   })
 })
 

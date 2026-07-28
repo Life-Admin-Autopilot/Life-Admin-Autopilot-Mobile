@@ -1,6 +1,6 @@
 import type { NextConfig } from 'next'
 
-// Mo V2 ships as a static-exported client SPA so Capacitor can bundle the
+// Kitto V2 ships as a static-exported client SPA so Capacitor can bundle the
 // `out/` directory into the native iOS/Android shells. There is NO Node server
 // on-device: all dynamic behavior is client-side + the separate Express
 // backend over HTTP. See docs/ARCHITECTURE.md and AGENTS.md ("Static-export

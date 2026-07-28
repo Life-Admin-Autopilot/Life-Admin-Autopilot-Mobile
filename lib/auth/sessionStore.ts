@@ -15,9 +15,6 @@ import { create } from 'zustand'
 import { resolveApiBaseUrl } from '@/lib/api/baseUrl'
 import { logger } from '@/lib/logger'
 
-// SettingsFields (theme, textSize, mic, notifications, …) get ported with the
-// types/ layer in a later session; until then AuthUser carries the identity
-// fields the gate needs and stays permissive about the rest.
 // One captured onboarding answer — AI personalization memory (mirrors the
 // backend OnboardingAnswer).
 export interface OnboardingAnswer {
@@ -26,14 +23,47 @@ export interface OnboardingAnswer {
   answer: string
 }
 
+export type Theme = 'system' | 'light' | 'dark'
+export type SubscriptionTier = 'free' | 'pro'
+
+export interface NotificationPrefs {
+  push: boolean
+  emailDigest: boolean
+  marketing: boolean
+}
+
+export interface SubscriptionState {
+  tier: SubscriptionTier
+  renewsAt?: string
+  canceledAt?: string
+}
+
+// Mirrors the server's `User.toJSON()`. Only the fields a surface actually
+// renders are typed — the backend also stores textSize/mic/privacy, which
+// nothing on either side reads yet, so typing them here would advertise
+// settings the app cannot honour.
 export interface AuthUser {
   id: string
   email: string
+  /** Requested but unconfirmed address; the account still signs in as `email`. */
+  pendingEmail?: string
+  /**
+   * False for magic-link-only accounts. Surfaces re-confirm with a password
+   * only when there is one to give — the hash itself never reaches the client.
+   */
+  hasPassword?: boolean
   displayName?: string
   preferredDomains: string[]
   hasOnboarded: boolean
   onboardingAnswers?: OnboardingAnswer[]
   emailVerifiedAt?: string
+  /** IANA zone. Absent means "trust the device". */
+  timezone?: string
+  /** BCP 47 tag. */
+  locale?: string
+  theme?: Theme
+  notifications?: NotificationPrefs
+  subscription?: SubscriptionState
   createdAt: string
   updatedAt: string
 }

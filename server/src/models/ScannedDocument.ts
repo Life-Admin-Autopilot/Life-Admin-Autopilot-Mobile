@@ -1,6 +1,13 @@
 import mongoose, { Schema, type HydratedDocument, type Model, type Types } from 'mongoose'
 import { DOMAINS, type Domain } from './User'
-import { TASK_PRIORITIES, type TaskPriority, CONFIDENCE_BUCKETS, type ConfidenceBucket } from './Task'
+import {
+  TASK_PRIORITIES,
+  type TaskPriority,
+  CONFIDENCE_BUCKETS,
+  type ConfidenceBucket,
+  EstimateSchema,
+  type TaskEstimate,
+} from './Task'
 
 export { CONFIDENCE_BUCKETS, type ConfidenceBucket }
 
@@ -63,6 +70,10 @@ export interface ExtractedTaskCandidate {
   domain: Domain
   priority: TaskPriority
   confidence: ConfidenceBucket
+  // Carried across the review hold so the estimate the vision pass produced is
+  // the one that lands on the Task — re-deriving it at accept time would mean a
+  // second AI call for an answer we already have.
+  estimate?: TaskEstimate
   dueAt?: Date
   notes?: string
   sourcePage?: number
@@ -114,6 +125,7 @@ const ExtractedTaskCandidateSchema = new Schema<ExtractedTaskCandidate>(
     domain: { type: String, enum: DOMAINS, required: true },
     priority: { type: String, enum: TASK_PRIORITIES, default: 'normal' },
     confidence: { type: String, enum: CONFIDENCE_BUCKETS, default: 'medium' },
+    estimate: { type: EstimateSchema },
     dueAt: { type: Date },
     notes: { type: String },
     sourcePage: { type: Number },

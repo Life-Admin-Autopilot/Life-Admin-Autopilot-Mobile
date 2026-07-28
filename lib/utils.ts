@@ -2,7 +2,7 @@ import { clsx, type ClassValue } from "clsx"
 import { extendTailwindMerge } from "tailwind-merge"
 
 /**
- * Steward's type scale, shadows and radii are named tokens, not t-shirt sizes.
+ * Kitto's type scale, shadows and radii are named tokens, not t-shirt sizes.
  * Stock tailwind-merge has no way to know that, so it files `text-display-md`
  * under text-COLOUR and happily deletes it when the same `cn()` call also
  * passes `text-accent` — the size silently vanishes and the element renders at

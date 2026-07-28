@@ -207,6 +207,89 @@ describe('PATCH /me/tasks/:id', () => {
   })
 })
 
+describe('estimate — the user override', () => {
+  it('stamps source "user" on an estimate the person edits', async () => {
+    const session = await signUp()
+    const created = await request
+      .post('/me/tasks')
+      .set('Authorization', auth(session.accessToken))
+      .send(taskPayload())
+
+    const res = await request
+      .patch(`/me/tasks/${created.body.task.id}`)
+      .set('Authorization', auth(session.accessToken))
+      .send({ estimate: { minMinutes: 30, maxMinutes: 60 } })
+
+    expect(res.status).toBe(200)
+    expect(res.body.task.estimate).toEqual({
+      minMinutes: 30,
+      maxMinutes: 60,
+      source: 'user',
+    })
+  })
+
+  it('snaps a hand-set value onto the ladder rather than trusting the client', async () => {
+    const session = await signUp()
+    const created = await request
+      .post('/me/tasks')
+      .set('Authorization', auth(session.accessToken))
+      .send(taskPayload())
+
+    const res = await request
+      .patch(`/me/tasks/${created.body.task.id}`)
+      .set('Authorization', auth(session.accessToken))
+      .send({ estimate: { minMinutes: 23, maxMinutes: 47 } })
+
+    expect(res.body.task.estimate).toEqual({
+      minMinutes: 30,
+      maxMinutes: 45,
+      source: 'user',
+    })
+  })
+
+  it('accepts an estimate at create time', async () => {
+    const session = await signUp()
+    const res = await request
+      .post('/me/tasks')
+      .set('Authorization', auth(session.accessToken))
+      .send(taskPayload({ estimate: { minMinutes: 5, maxMinutes: 5 } }))
+
+    expect(res.status).toBe(201)
+    expect(res.body.task.estimate).toEqual({ minMinutes: 5, maxMinutes: 5, source: 'user' })
+  })
+
+  it('clears the estimate back to unknown when null is sent', async () => {
+    const session = await signUp()
+    const created = await request
+      .post('/me/tasks')
+      .set('Authorization', auth(session.accessToken))
+      .send(taskPayload({ estimate: { minMinutes: 15, maxMinutes: 30 } }))
+
+    const res = await request
+      .patch(`/me/tasks/${created.body.task.id}`)
+      .set('Authorization', auth(session.accessToken))
+      .send({ estimate: null })
+
+    expect(res.status).toBe(200)
+    expect(res.body.task.estimate).toBeUndefined()
+  })
+
+  it('rejects a malformed estimate rather than storing half of one', async () => {
+    const session = await signUp()
+    const created = await request
+      .post('/me/tasks')
+      .set('Authorization', auth(session.accessToken))
+      .send(taskPayload())
+
+    const res = await request
+      .patch(`/me/tasks/${created.body.task.id}`)
+      .set('Authorization', auth(session.accessToken))
+      .send({ estimate: { minMinutes: 30 } })
+
+    expect(res.status).toBe(400)
+  })
+})
+
 describe('DELETE /me/tasks/:id', () => {
   it('soft-deletes the caller\'s task and hands back an undo token', async () => {
     const session = await signUp()

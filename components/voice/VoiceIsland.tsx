@@ -9,6 +9,7 @@ import { AssistantText } from '@/components/chat/AssistantText'
 import { askStream } from '@/lib/ai/stream'
 import { transcribeAudio } from '@/lib/ai/transcribe'
 import { useVoiceRecorder } from '@/lib/ai/useVoiceRecorder'
+import { micFailureMessage } from '@/lib/ai/micFailure'
 import { useVoiceCapture } from '@/lib/voice/captureStore'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
@@ -71,13 +72,15 @@ export function VoiceIsland() {
     if (open && !isAppChatRoute(pathname)) close()
   }, [open, pathname, close])
 
-  // Surface a denied mic instead of a dead recording state.
+  // Surface an unusable mic instead of a dead recording state. The reason
+  // matters: a blocked permission and a non-secure dev origin both land here,
+  // and only one of them is fixable in Settings.
   useEffect(() => {
-    if (open && recorder.phase === 'denied') {
-      setError(`Microphone access is blocked. Enable it to speak to ${env.appName}.`)
+    if (open && recorder.phase === 'unavailable') {
+      setError(micFailureMessage(recorder.failure ?? 'unknown', env.appName))
       setPhase('error')
     }
-  }, [open, recorder.phase])
+  }, [open, recorder.phase, recorder.failure])
 
   const cancel = async () => {
     abortRef.current?.abort()
@@ -97,7 +100,7 @@ export function VoiceIsland() {
     setPhase('review')
   }
 
-  const askPanda = async (text: string) => {
+  const askKitto = async (text: string) => {
     setPhase('thinking')
     setReply('')
     const controller = new AbortController()
@@ -131,7 +134,7 @@ export function VoiceIsland() {
         return
       }
       setTranscript(text)
-      await askPanda(text)
+      await askKitto(text)
     } catch (err) {
       setError(translateBackendError(err, 'Could not transcribe that.'))
       setPhase('error')

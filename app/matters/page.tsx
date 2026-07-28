@@ -1,11 +1,13 @@
 'use client'
 
-import { AnimatePresence } from 'framer-motion'
-import { ArrowRight, ListFilter, ArrowUpDown, CalendarRange, CheckSquare } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { ArrowRight, ListFilter, ArrowUpDown, CalendarRange, CheckSquare, Plus } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { SketchEmptyTrayGlyph } from '@/components/icons/sketch/flowGlyphs'
 import { BulkDeleteConfirm } from '@/components/matters/BulkDeleteConfirm'
+import { CategorizeSheet } from '@/components/matters/CategorizeSheet'
+import { CreateMatterSheet } from '@/components/matters/CreateMatterSheet'
 import { FilterSheet } from '@/components/matters/FilterSheet'
 import { MatterDetailSheet } from '@/components/matters/MatterDetailSheet'
 import { MatterListRow } from '@/components/matters/MatterListRow'
@@ -18,15 +20,20 @@ import { AppHeader } from '@/components/layout/AppHeader'
 import { EmojiChip } from '@/components/ui/EmojiChip'
 import { SectionHeaderChip, type ChipTone } from '@/components/ui/SectionHeaderChip'
 import { SelectionToolbar } from '@/components/ui/SelectionToolbar'
+import { ApiError } from '@/lib/api/client'
 import { cn } from '@/lib/cn'
+import { LIST_ITEM_VARIANTS } from '@/lib/motion'
+import { usePendingProposal, useProposeCategorization } from '@/queries/categorize'
 import { useClaimTabBarSlot } from '@/lib/tabBarStore'
 import { toast } from '@/lib/toast'
 import type { SearchResult } from '@/queries/mattersAi'
 import {
+  bucketOf,
   groupByDomain,
   groupByPriority,
   groupByTime,
   type TaskGroup,
+  type TimeBucket,
 } from '@/lib/taskFormat'
 import {
   DOMAIN_LABEL,
@@ -46,7 +53,7 @@ import {
 // Matters — every reminder the user has, in one place.
 //
 // The governing decision: this screen is a DECISION SURFACE, not an inventory.
-// By default it shows only what needs attention (slipped / today / tomorrow)
+// By default it shows only what needs attention (overdue / today / tomorrow)
 // and folds the rest behind one tap. Showing someone their entire backlog on
 // open is the single most reliable way to make them close the app.
 //
@@ -77,6 +84,19 @@ function bucketTone(key: string): ChipTone {
 // Hide completed matters by default — a done list is a log, not a workspace.
 const DEFAULT_FILTERS: TaskFilters = { status: ['open', 'snoozed'] }
 
+// A matter ticked off during this visit, pinned at the index it occupied when
+// the ring was tapped.
+interface HeldRow {
+  task: Task
+  index: number
+  /** The bucket it was in before it was ticked — see groupByTime's `pinned`. */
+  bucket: TimeBucket
+}
+
+// Stable empty identity, so an invalidated hold set doesn't hand `tasks` a new
+// array every render.
+const NO_HELD_ROWS: HeldRow[] = []
+
 export default function MattersPage() {
   const [filters, setFilters] = useState<TaskFilters>(DEFAULT_FILTERS)
   const [sort, setSort] = useState<TaskSort>('due-asc')
@@ -87,6 +107,7 @@ export default function MattersPage() {
   const [filterOpen, setFilterOpen] = useState(false)
   const [sortOpen, setSortOpen] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
   // The open matter is held by ID, never as a copy. A copy is a snapshot taken
   // at open time, so adding a step, ticking one off, or deleting one wrote to
   // the server and the cache and left the sheet showing the old subtask list
@@ -96,6 +117,7 @@ export default function MattersPage() {
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deletePreview, setDeletePreview] = useState<BulkPreview | null>(null)
+  const [categorizeOpen, setCategorizeOpen] = useState(false)
 
   // Each sheet morphs out of whatever opened it, so we hold the rect of the
   // last-tapped control. One slot is enough — only one sheet is ever open.
@@ -129,11 +151,69 @@ export default function MattersPage() {
   const bulkPreview = useBulkPreview()
   const bulkAction = useBulkAction()
   const undoBulk = useUndoBulk()
+  const proposeCategorization = useProposeCategorization()
+  const pendingProposal = usePendingProposal()
 
-  const tasks = useMemo(
-    () => list.data?.pages.flatMap((p) => p.tasks) ?? [],
-    [list.data],
+  // Matters ticked off during this visit, held at the index they occupied when
+  // the ring was tapped.
+  //
+  // The default filter is status: ['open', 'snoozed'], so the refetch that
+  // follows the mutation drops a completed matter and the row vanishes out from
+  // under the finger that just completed it — the user gets no confirmation
+  // that the tap did what they meant. Holding it lets the row stay put and go
+  // struck-through instead. Remembering the INDEX matters: re-appending would
+  // slide the row to the end of its section, so the reward for finishing
+  // something is watching it travel across the screen.
+  // Identifies the current view. Filtering, re-sorting or re-grouping rebuilds
+  // the list from scratch, so rows held over from the previous view would
+  // resurrect matters the user did not ask to see. Comparing this key DURING
+  // RENDER invalidates them without a setState-in-effect and its cascading
+  // render. (Search is excluded on purpose: a result set renders through
+  // SearchResults, not this list, and clearing one restores the same view.)
+  const viewKey = useMemo(() => JSON.stringify({ filters, sort, group }), [filters, sort, group])
+
+  const [held, setHeld] = useState<{ key: string; rows: HeldRow[] }>({ key: viewKey, rows: [] })
+  const heldRows = held.key === viewKey ? held.rows : NO_HELD_ROWS
+
+  const holdCompleted = useCallback(
+    (task: Task, index: number) => {
+      setHeld((prev) => {
+        const rows = prev.key === viewKey ? prev.rows : []
+        if (rows.some((h) => h.task.id === task.id)) return prev
+        return {
+          key: viewKey,
+          // Bucket captured BEFORE the status flips — afterwards bucketOf()
+          // only ever answers 'done'.
+          rows: [...rows, { task: { ...task, status: 'done' }, index, bucket: bucketOf(task) }],
+        }
+      })
+    },
+    [viewKey],
   )
+
+  const releaseCompleted = useCallback(
+    (taskId: string) => {
+      setHeld((prev) => ({
+        key: viewKey,
+        rows: prev.key === viewKey ? prev.rows.filter((h) => h.task.id !== taskId) : [],
+      }))
+    },
+    [viewKey],
+  )
+
+  const tasks = useMemo(() => {
+    const live = list.data?.pages.flatMap((p) => p.tasks) ?? []
+    if (heldRows.length === 0) return live
+
+    const liveIds = new Set(live.map((t) => t.id))
+    const merged = [...live]
+    // Ascending, so each splice lands before the later ones shift the array.
+    for (const { task, index } of [...heldRows].sort((a, b) => a.index - b.index)) {
+      if (liveIds.has(task.id)) continue
+      merged.splice(Math.min(index, merged.length), 0, task)
+    }
+    return merged
+  }, [list.data, heldRows])
   const total = list.data?.pages[0]?.total ?? 0
   const filtered = hasActiveFilters({ ...filters, status: undefined })
 
@@ -148,12 +228,19 @@ export default function MattersPage() {
   // out) closes the sheet through its normal collapse.
   const detail = detailId ? visible.find((t) => t.id === detailId) ?? null : null
 
+  // Only time grouping needs the pin: domain and priority don't change when a
+  // matter is completed, so a held row keeps its section there for free.
+  const pinnedBuckets = useMemo(
+    () => new Map(heldRows.map((h) => [h.task.id, h.bucket])),
+    [heldRows],
+  )
+
   const groups: TaskGroup[] = useMemo(() => {
     if (group === 'domain') return groupByDomain(tasks, DOMAIN_LABEL)
     if (group === 'priority') return groupByPriority(tasks)
     if (group === 'flat') return [{ key: 'all', label: 'All matters', tasks }]
-    return groupByTime(tasks)
-  }, [tasks, group])
+    return groupByTime(tasks, undefined, pinnedBuckets)
+  }, [tasks, group, pinnedBuckets])
 
   // The two-tier fold applies only to the unfiltered default view — once the
   // user has asked a specific question, they get the whole answer.
@@ -174,6 +261,22 @@ export default function MattersPage() {
     io.observe(node)
     return () => io.disconnect()
   }, [folded, list])
+
+  // Completing holds the row in place; reopening releases it back to the live
+  // list, where the refetch decides whether it still belongs on screen.
+  const toggleDone = useCallback(
+    (task: Task) => {
+      const done = task.status !== 'done'
+      if (done) {
+        const at = tasks.findIndex((t) => t.id === task.id)
+        holdCompleted(task, at < 0 ? tasks.length : at)
+      } else {
+        releaseCompleted(task.id)
+      }
+      completeTask.mutate({ taskId: task.id, done })
+    },
+    [tasks, holdCompleted, releaseCompleted, completeTask],
+  )
 
   const toggleSelect = useCallback((task: Task) => {
     setSelected((prev) => {
@@ -223,6 +326,31 @@ export default function MattersPage() {
       },
       onError: () => toast.error('That did not go through. Try again.'),
     })
+  }
+
+  // Categorising is the one bulk action that writes nothing on the way out:
+  // it stages a proposal, and the sheet is where the user decides what of it
+  // actually lands. Selection mode is left as-is until they have decided —
+  // exiting here would drop the set behind the sheet reviewing it.
+  const askCategorize = (rect: DOMRect) => {
+    setTriggerRect(rect)
+    proposeCategorization.mutate(
+      { ids: [...selected] },
+      {
+        onSuccess: () => setCategorizeOpen(true),
+        onError: (err) => {
+          // A proposal is already open — send them to it rather than making
+          // them guess why nothing happened.
+          if (err instanceof ApiError && err.code === 'categorize_already_open') {
+            setCategorizeOpen(true)
+            return
+          }
+          toast.error(
+            err instanceof ApiError ? err.message : 'Could not look at those. Try again.',
+          )
+        },
+      },
+    )
   }
 
   const askDelete = (rect: DOMRect) => {
@@ -306,18 +434,29 @@ export default function MattersPage() {
               onClick={() => setSelectMode(true)}
             />
             </div>
-            {filtered ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setFilters(DEFAULT_FILTERS)
-                  setSearch('')
-                }}
-                className="shrink-0 rounded-pill px-2 py-1 text-body-sm font-bold text-accent hover:bg-accent-soft"
-              >
-                Clear
-              </button>
-            ) : null}
+
+            {/* There is deliberately no "Clear" button here. It was a third
+                way to say the same thing — the Filter pill already goes coral
+                when filters are on, and the sheet it opens owns "Clear all".
+                Sitting outside the scroll container, it also butted straight
+                up against whichever pill the row happened to clip, so the
+                control row read as broken rather than as scrollable. */}
+
+            {/* Outside the scrolling pill row, so the way to add a matter is
+                never scrolled off the screen. Near-black: this is the primary
+                action of the workspace, and the coral is spoken for by live
+                state. */}
+            <button
+              type="button"
+              aria-label="Add a matter"
+              onClick={(e) => {
+                setTriggerRect(e.currentTarget.getBoundingClientRect())
+                setCreateOpen(true)
+              }}
+              className="grid size-10 shrink-0 place-items-center rounded-full bg-solid text-solid-ink transition-transform active:scale-95"
+            >
+              <Plus size={20} strokeWidth={2.5} />
+            </button>
           </div>
         )}
       </div>
@@ -353,9 +492,7 @@ export default function MattersPage() {
               setTriggerRect(rect)
               setDetailId(t.id)
             }}
-            onToggleDone={(t) =>
-              completeTask.mutate({ taskId: t.id, done: t.status !== 'done' })
-            }
+            onToggleDone={toggleDone}
             onClear={clearSearch}
           />
         ) : list.isPending ? (
@@ -403,26 +540,39 @@ export default function MattersPage() {
                   count={g.tasks.length}
                   className="self-start"
                 />
+                {/* `layout="position"` on every row is what makes completing,
+                    deleting, re-sorting and re-grouping slide instead of jump —
+                    a row that moves animates to its new slot, and the rows
+                    below close the gap left by one that exits. AnimatePresence
+                    with initial={false} so arriving on the screen doesn't play
+                    the insert animation for the whole backlog at once. */}
                 <ul className="flex flex-col gap-3">
-                  {g.tasks.map((task) => (
-                    <li key={task.id}>
-                      <MatterListRow
-                        task={task}
-                        selectable={selectMode}
-                        selected={selected.has(task.id)}
-                        onToggleSelect={toggleSelect}
-                        // The detail sheet grows out of the row you tapped, the
-                        // same way opening a scanned document does.
-                        onOpen={(t, rect) => {
-                          setTriggerRect(rect)
-                          setDetailId(t.id)
-                        }}
-                        onToggleDone={(t) =>
-                          completeTask.mutate({ taskId: t.id, done: t.status !== 'done' })
-                        }
-                      />
-                    </li>
-                  ))}
+                  <AnimatePresence initial={false}>
+                    {g.tasks.map((task) => (
+                      <motion.li
+                        key={task.id}
+                        layout="position"
+                        variants={LIST_ITEM_VARIANTS}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                      >
+                        <MatterListRow
+                          task={task}
+                          selectable={selectMode}
+                          selected={selected.has(task.id)}
+                          onToggleSelect={toggleSelect}
+                          // The detail sheet grows out of the row you tapped,
+                          // the same way opening a scanned document does.
+                          onOpen={(t, rect) => {
+                            setTriggerRect(rect)
+                            setDetailId(t.id)
+                          }}
+                          onToggleDone={toggleDone}
+                        />
+                      </motion.li>
+                    ))}
+                  </AnimatePresence>
                 </ul>
               </section>
             ))}
@@ -483,6 +633,29 @@ export default function MattersPage() {
         onClose={() => setDetailId(null)}
         onDeleted={(token, title) => offerUndo(`Deleted “${title}”.`, token)}
       />
+      <CreateMatterSheet
+        open={createOpen}
+        trigger={triggerRect}
+        onClose={() => setCreateOpen(false)}
+      />
+      {/* Reads the proposal from the server rather than from the mutation's
+          result, so one left open survives a reload and reopens where it was. */}
+      <CategorizeSheet
+        open={categorizeOpen}
+        proposal={pendingProposal.data ?? null}
+        trigger={triggerRect}
+        onClose={() => {
+          setCategorizeOpen(false)
+          exitSelect()
+        }}
+        onApplied={(applied, undoToken) => {
+          offerUndo(
+            applied === 1 ? 'Refiled 1 matter.' : `Refiled ${applied} matters.`,
+            undoToken,
+          )
+          exitSelect()
+        }}
+      />
       <BulkDeleteConfirm
         open={Boolean(deletePreview)}
         preview={deletePreview}
@@ -502,7 +675,7 @@ export default function MattersPage() {
         {selectMode ? (
           <SelectionActionBar
             count={selectedCount}
-            busy={bulkAction.isPending || bulkPreview.isPending}
+            busy={bulkAction.isPending || bulkPreview.isPending || proposeCategorization.isPending}
             onComplete={() =>
               runBulk({ ids: [...selected], action: 'complete' }, (n) =>
                 n === 1 ? 'Completed 1 matter.' : `Completed ${n} matters.`,
@@ -518,6 +691,7 @@ export default function MattersPage() {
                 (n) => (n === 1 ? 'Snoozed 1 matter a week.' : `Snoozed ${n} matters a week.`),
               )
             }
+            onCategorize={askCategorize}
             onDelete={askDelete}
           />
         ) : null}

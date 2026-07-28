@@ -41,6 +41,7 @@ function draftToCandidate(documentId: string, index: number, item: DraftCandidat
     domain: item.domain,
     priority: item.priority,
     confidence: item.confidence,
+    estimate: item.estimate,
     dueAt: item.dueAt,
     notes: item.notes,
     sourcePage: item.sourcePage,

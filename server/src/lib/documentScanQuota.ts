@@ -15,6 +15,43 @@ function quotaFor(tier: SubscriptionTier): number {
   return tier === 'pro' ? env().DOCUMENT_SCAN_QUOTA_PRO_MONTHLY : env().DOCUMENT_SCAN_QUOTA_FREE_MONTHLY
 }
 
+export interface DocumentScanQuotaStatus {
+  kind: 'document_scan'
+  limit: number
+  used: number
+  remaining: number
+  /** Start of the next UTC month — when the bucket rolls over. */
+  resetAt: string
+}
+
+// Read-only view of the same numbers admitDocumentScan enforces, for the plan
+// card. Derived from the one source of truth rather than re-deriving the limit
+// on the client, so the meter can never disagree with the gate.
+export async function readDocumentScanQuota(args: {
+  userId: string
+  tier: SubscriptionTier
+  month?: string
+}): Promise<DocumentScanQuotaStatus> {
+  const month = args.month ?? utcMonthBucket()
+  const limit = quotaFor(args.tier)
+  const row = await DocumentScanUsageCounter.findOne({ userId: args.userId, month }).lean()
+  const used = row?.count ?? 0
+  return {
+    kind: 'document_scan',
+    limit,
+    used,
+    remaining: Math.max(0, limit - used),
+    resetAt: nextMonthStart(month),
+  }
+}
+
+// `month` is a `YYYY-MM` UTC bucket; the reset is midnight UTC on the 1st of
+// the following month.
+function nextMonthStart(month: string): string {
+  const [year, mon] = month.split('-').map((part) => Number(part))
+  return new Date(Date.UTC(year ?? 1970, (mon ?? 1), 1)).toISOString()
+}
+
 function quotaExceeded(args: { tier: SubscriptionTier; limit: number; used: number }): AppError {
   return new AppError(
     402,

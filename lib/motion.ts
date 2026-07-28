@@ -59,6 +59,37 @@ export const MORPH_BACKDROP_FADE: Variants = {
 }
 
 /**
+ * List choreography — insert, remove, and reorder on the matters list.
+ *
+ * Deliberately separate from the morph family: a row is not a shell. Rows use
+ * framer's `layout="position"`, NOT plain `layout` — plain layout animates the
+ * box, which scales a row's contents during the transition and produces exactly
+ * the squish the morph shell avoids by animating width/height directly.
+ * Position-only means a row that moves slides, and a row that changes height
+ * doesn't smear.
+ *
+ * Exit never animates height either (see the "never animate layout properties"
+ * rule): the leaving row fades and lifts, and its neighbours close the gap
+ * through their own `layout` transition once it unmounts.
+ */
+export const LIST_SPRING: Transition = {
+  type: 'spring',
+  stiffness: 380,
+  damping: 34,
+  mass: 0.7,
+}
+
+export const LIST_ITEM_VARIANTS: Variants = {
+  initial: { opacity: 0, y: -8 },
+  animate: { opacity: 1, y: 0, transition: LIST_SPRING },
+  exit: {
+    opacity: 0,
+    y: 4,
+    transition: { duration: 0.16, ease: [0.4, 0, 1, 1] },
+  },
+}
+
+/**
  * Page-transition enter — the route content "expands in" with the same spring
  * family (fade + a whisper of scale/lift, no delay). App Router does enter
  * transitions cleanly via `app/template.tsx`; exit needs a frozen-router lift

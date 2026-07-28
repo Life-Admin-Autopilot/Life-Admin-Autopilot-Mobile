@@ -1,9 +1,9 @@
-// Natural-language eval harness for Mo.
+// Natural-language eval harness for Kitto.
 //
 // Calls REAL Gemini through the same streamPersonal + system prompt +
 // prefill that production users hit. For each case we build the same
 // "=== NOW === / === MY TASKS === / ..." scaffold the contextBuilder
-// produces in real chat, then assert on the tool calls Mo emits.
+// produces in real chat, then assert on the tool calls Kitto emits.
 //
 // Run with `npm run nl-eval` from the server/ directory. Requires
 // GEMINI_API_KEY in server/.env. Costs ~$0.06 per full run.
@@ -235,7 +235,7 @@ const CASES: EvalCase[] = [
           args: { domain: 'health' },
         },
       ],
-      // Soft expectation — Mo MAY add a tag like 'kids' or 'twins'; we won't
+      // Soft expectation — Kitto MAY add a tag like 'kids' or 'twins'; we won't
       // hard-fail if it doesn't.
     },
   },
@@ -471,7 +471,7 @@ const CASES: EvalCase[] = [
     prompt: "add pay rent — don't drop the ball on this one",
     expect: {
       // Either high or urgent is acceptable — both signal "important". The
-      // matcher will FAIL this if Mo picks normal/low.
+      // matcher will FAIL this if Kitto picks normal/low.
       tools: [{ name: 'createTask', args: { domain: 'finance', priority: 'high' } }],
     },
   },
@@ -714,7 +714,7 @@ function buildContents(c: EvalCase): Content[] {
 // ─── Matcher ─────────────────────────────────────────────────────────────
 
 // Server-side defaults — if the model omits a key that the server fills in
-// to this value, count it as equivalent. Prevents penalizing Mo for not
+// to this value, count it as equivalent. Prevents penalizing Kitto for not
 // being redundant with the schema default.
 const SERVER_DEFAULTS: Record<string, unknown> = {
   priority: 'normal',

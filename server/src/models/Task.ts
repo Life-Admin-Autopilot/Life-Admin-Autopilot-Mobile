@@ -21,6 +21,84 @@ export type TaskKind = (typeof TASK_KINDS)[number]
 export const CONFIDENCE_BUCKETS = ['high', 'medium', 'low'] as const
 export type ConfidenceBucket = (typeof CONFIDENCE_BUCKETS)[number]
 
+// How long a matter takes to DO, as a bucketed range. Buckets, not integers,
+// are the whole point: a model that answers "23 minutes" is claiming a
+// precision it does not have, and the user reads that precision as a promise.
+// The ladder makes the honest claim — "about a quarter of an hour" — the only
+// claim anything can make. Every value that reaches the database is snapped
+// onto it by normalizeEstimate().
+export const ESTIMATE_BUCKETS = [5, 10, 15, 30, 45, 60, 90, 120, 180, 240] as const
+export type EstimateBucket = (typeof ESTIMATE_BUCKETS)[number]
+
+// Gemini can only constrain a field to a fixed set when that field is a STRING,
+// so every AI response schema asks for the bucket as a label and parses it back.
+export const ESTIMATE_BUCKET_LABELS: string[] = ESTIMATE_BUCKETS.map(String)
+
+// 'user' is authoritative forever — no AI pass may overwrite it. That rule is
+// enforced at each write site rather than here, because the model layer never
+// sees who is asking.
+export const ESTIMATE_SOURCES = ['ai', 'user'] as const
+export type EstimateSource = (typeof ESTIMATE_SOURCES)[number]
+
+export interface TaskEstimate {
+  /** Lower bound, minutes. Always one of ESTIMATE_BUCKETS. */
+  minMinutes: number
+  /** Upper bound, minutes. Always one of ESTIMATE_BUCKETS, >= minMinutes. */
+  maxMinutes: number
+  source: EstimateSource
+}
+
+// Snap an arbitrary minute count onto the ladder. Ties round UP: people
+// underestimate how long admin takes, so the generous side is the safer error.
+export function snapToEstimateBucket(minutes: number): EstimateBucket {
+  const [smallest] = ESTIMATE_BUCKETS
+  // The floor is handled up front rather than left to the distance comparison:
+  // NaN compares false against everything and -Infinity is equidistant from
+  // every bucket, so both would otherwise fall through to a nonsense winner.
+  if (Number.isNaN(minutes) || minutes <= smallest) return smallest
+  // Nearest bucket wins, which clamps the top for free — anything above the
+  // ladder is nearest to its ceiling. `<=` lets the larger bucket win a tie.
+  return ESTIMATE_BUCKETS.reduce<EstimateBucket>(
+    (best, bucket) => (Math.abs(bucket - minutes) <= Math.abs(best - minutes) ? bucket : best),
+    smallest,
+  )
+}
+
+// Coerce whatever a model (or a client) sent into a real number. Strings are
+// accepted because the AI response schemas constrain buckets as string labels.
+function toMinutes(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value.trim())
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+// The single hardening gate for every estimate that enters the system, from any
+// source. A model that answered 23, or answered max < min, or answered only one
+// bound, is CORRECTED rather than rejected — dropping the estimate over a
+// fixable mistake loses information the user would have found useful.
+export function normalizeEstimate(
+  input: { minMinutes?: unknown; maxMinutes?: unknown } | null | undefined,
+  source: EstimateSource,
+): TaskEstimate | undefined {
+  if (!input) return undefined
+  // One bound alone is still an estimate — a point estimate. No bound is not.
+  // Sorting the surviving bounds is what enforces maxMinutes >= minMinutes: a
+  // model that swapped them gets a usable range, not a rejection.
+  const bounds = [toMinutes(input.minMinutes), toMinutes(input.maxMinutes)].filter(
+    (v): v is number => v !== null,
+  )
+  if (bounds.length === 0) return undefined
+
+  return {
+    minMinutes: snapToEstimateBucket(Math.min(...bounds)),
+    maxMinutes: snapToEstimateBucket(Math.max(...bounds)),
+    source,
+  }
+}
+
 // Numeric weights used for sort order — higher = earlier in the list.
 // Surfaced via toJSON's `priorityRank` field so the client can sort/compare
 // without duplicating this table.
@@ -89,6 +167,10 @@ export interface TaskAttrs {
   // upserts so a worker retry / job reclaim never double-creates a task.
   sourceTaskKey?: string
   confidence?: ConfidenceBucket
+  // How long this is expected to take. Optional everywhere and absent on every
+  // task created before the feature existed — every consumer must render
+  // without it.
+  estimate?: TaskEstimate
   completedAt?: Date
   snoozedUntil?: Date
   // Scheduled reminder moments (smart lead-time + at-due). Regenerated whenever
@@ -142,6 +224,18 @@ const SubtaskSchema = new Schema<SubtaskAttrs>(
   },
 )
 
+// Exported so the staging records that hold a candidate task before it becomes
+// one — VoiceNote's extracted/review items, ScannedDocument's candidates —
+// store the estimate under exactly the same constraints the Task will.
+export const EstimateSchema = new Schema<TaskEstimate>(
+  {
+    minMinutes: { type: Number, required: true, enum: ESTIMATE_BUCKETS },
+    maxMinutes: { type: Number, required: true, enum: ESTIMATE_BUCKETS },
+    source: { type: String, enum: ESTIMATE_SOURCES, required: true },
+  },
+  { _id: false },
+)
+
 const ReminderSchema = new Schema<ReminderEntry>(
   {
     at: { type: Date, required: true },
@@ -184,6 +278,7 @@ const TaskSchema = new Schema<TaskAttrs>(
     sourceDocumentId: { type: Schema.Types.ObjectId },
     sourceTaskKey: { type: String },
     confidence: { type: String, enum: CONFIDENCE_BUCKETS },
+    estimate: { type: EstimateSchema },
     completedAt: { type: Date },
     snoozedUntil: { type: Date },
     reminders: { type: [ReminderSchema], default: [] },
@@ -204,6 +299,17 @@ const TaskSchema = new Schema<TaskAttrs>(
 TaskSchema.pre('validate', function enforceReminderHasDue(next) {
   if (this.kind === 'reminder' && !this.dueAt) {
     this.invalidate('dueAt', 'A reminder must have a dueAt.')
+  }
+  next()
+})
+
+// Backstop for the range invariant on create()/save(). It is only a backstop:
+// findOneAndUpdate/bulkWrite skip document hooks, so the real guarantee comes
+// from normalizeEstimate() at every write site.
+TaskSchema.pre('validate', function enforceEstimateOrder(next) {
+  const estimate = this.estimate
+  if (estimate && estimate.maxMinutes < estimate.minMinutes) {
+    this.invalidate('estimate.maxMinutes', 'maxMinutes must be >= minMinutes.')
   }
   next()
 })

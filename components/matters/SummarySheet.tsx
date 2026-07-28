@@ -17,7 +17,7 @@ import { ChipToggle, Sheet, SheetSection } from '@/components/ui/Sheet'
 //      names themes and writes the one question. A figure that came out of a
 //      language model is a place for a confident wrong answer to hide.
 //
-//   2. Every number is a way INTO the list. Tapping "4 slipped" filters the
+//   2. Every number is a way INTO the list. Tapping "4 overdue" filters the
 //      workspace to those four. A summary you can't drill into is just a claim.
 
 export function SummarySheet({
@@ -136,9 +136,9 @@ function Report({
         />
         <Stat
           n={counts.overdue}
-          label="Slipped"
+          label="Overdue"
           accent={counts.overdue > 0}
-          onClick={() => onDrillDown({ overdue: true }, 'Slipped')}
+          onClick={() => onDrillDown({ overdue: true }, 'Overdue')}
         />
         <Stat
           n={counts.completedInRange}

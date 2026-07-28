@@ -92,7 +92,7 @@ export function FilterSheet({
             selected={filters.overdue === true}
             onClick={() => patch({ overdue: filters.overdue ? undefined : true })}
           >
-            Slipped
+            Overdue
           </ChipToggle>
           <ChipToggle
             selected={filters.undated === true}

@@ -14,6 +14,7 @@ import { MORPH_BACKDROP_FADE, MORPH_SPRING } from '@/lib/motion'
 import { useMorphColors } from '@/lib/motion-colors'
 import { useAskAi } from '@/queries/ai'
 import { useVoiceRecorder } from '@/lib/ai/useVoiceRecorder'
+import { micFailureMessage } from '@/lib/ai/micFailure'
 import { transcribeAudio } from '@/lib/ai/transcribe'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
@@ -140,6 +141,13 @@ function ChatPanel({ onClose }: { onClose: () => void }) {
     if (!trimmed || isBusy) return
     setInput('')
     void ask(trimmed, timezone)
+  }
+
+  // Wrapped so an unusable mic reports itself — a bare start() leaves the
+  // button looking like it simply did nothing.
+  const startRecording = async () => {
+    const failure = await recorder.start()
+    if (failure) toast.error(micFailureMessage(failure, env.appName))
   }
 
   const stopAndSend = async () => {
@@ -281,7 +289,7 @@ function ChatPanel({ onClose }: { onClose: () => void }) {
               </button>
             ) : (
               <button
-                onClick={() => void recorder.start()}
+                onClick={() => void startRecording()}
                 disabled={isBusy}
                 aria-label="Start voice capture"
                 className="grid size-9 shrink-0 place-items-center rounded-md bg-accent text-accent-ink disabled:opacity-50"

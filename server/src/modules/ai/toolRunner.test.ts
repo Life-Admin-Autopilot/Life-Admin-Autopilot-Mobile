@@ -189,6 +189,107 @@ describe('runTool — non-destructive paths', () => {
   })
 })
 
+describe('time estimates through the chat agent', () => {
+  it('createTask snaps the agent’s bounds onto the bucket ladder', async () => {
+    const session = await signUp()
+    await runTool({
+      userId: session.userId,
+      name: 'createTask',
+      args: {
+        title: 'Sort the recycling',
+        domain: 'home',
+        kind: 'list',
+        // 23 is not a bucket, and the agent sending it must not cost the create.
+        estimateMinMinutes: '23',
+        estimateMaxMinutes: 47,
+      },
+    })
+    const persisted = await Task.findOne({ userId: session.userId })
+    expect(persisted?.estimate?.minMinutes).toBe(30)
+    expect(persisted?.estimate?.maxMinutes).toBe(45)
+    expect(persisted?.estimate?.source).toBe('ai')
+  })
+
+  it('createTask leaves the estimate absent when the agent gave none', async () => {
+    const session = await signUp()
+    await runTool({
+      userId: session.userId,
+      name: 'createTask',
+      args: { title: 'Buy bread', domain: 'home', kind: 'list' },
+    })
+    const persisted = await Task.findOne({ userId: session.userId })
+    expect(persisted?.estimate).toBeUndefined()
+  })
+
+  it('updateTask fills in a first estimate on a task that had none', async () => {
+    const session = await signUp()
+    const task = await Task.create({
+      userId: session.userId,
+      title: 'Deep clean the oven',
+      domain: 'home',
+      status: 'open',
+    })
+    await runTool({
+      userId: session.userId,
+      name: 'updateTask',
+      args: { taskId: task.id, estimateMinMinutes: '60', estimateMaxMinutes: '90' },
+    })
+    const persisted = await Task.findById(task.id)
+    expect(persisted?.estimate).toMatchObject({ minMinutes: 60, maxMinutes: 90, source: 'ai' })
+  })
+
+  it('a user-set estimate survives an AI pass that tries to change it', async () => {
+    // The contract's hardest rule: once the person has said how long something
+    // takes them, the agent does not get to disagree. Everything else in the
+    // same call must still apply, so this is not "reject the update".
+    const session = await signUp()
+    const task = await Task.create({
+      userId: session.userId,
+      title: 'File the tax return',
+      domain: 'finance',
+      status: 'open',
+      estimate: { minMinutes: 120, maxMinutes: 180, source: 'user' },
+    })
+
+    const out = await runTool({
+      userId: session.userId,
+      name: 'updateTask',
+      args: {
+        taskId: task.id,
+        title: 'File the 2026 tax return',
+        estimateMinMinutes: '5',
+        estimateMaxMinutes: '10',
+      },
+    })
+
+    const persisted = await Task.findById(task.id)
+    expect(persisted?.estimate).toMatchObject({
+      minMinutes: 120,
+      maxMinutes: 180,
+      source: 'user',
+    })
+    // The rest of the update still landed.
+    expect(persisted?.title).toBe('File the 2026 tax return')
+    expect((out.result.task as { title: string }).title).toBe('File the 2026 tax return')
+  })
+
+  it('an estimate-only update returns the task rather than erroring on an empty mutation', async () => {
+    const session = await signUp()
+    const task = await Task.create({
+      userId: session.userId,
+      title: 'Water the plants',
+      domain: 'home',
+      status: 'open',
+    })
+    const out = await runTool({
+      userId: session.userId,
+      name: 'updateTask',
+      args: { taskId: task.id, estimateMinMinutes: '5', estimateMaxMinutes: '5' },
+    })
+    expect((out.result.task as { estimate?: { minMinutes: number } }).estimate?.minMinutes).toBe(5)
+  })
+})
+
 describe('mutation tool paths — inline edits + the bulk-delete guard', () => {
   it('updateTask runs inline (no confirmation)', async () => {
     const session = await signUp()
@@ -545,5 +646,255 @@ describe('holdForClarification — non-destructive, persists a Clarification', (
         },
       }),
     ).rejects.toThrow()
+  })
+})
+
+const heldBase = (userId: string) => ({
+  userId: new Types.ObjectId(userId),
+  // Every question is anchored to a task now. These suites exercise the
+  // blanket domain-scoped drop, which matches on draft.domain rather than
+  // following the link, so a standalone id is enough here.
+  taskId: new Types.ObjectId(),
+  status: 'open' as const,
+  question: 'when?',
+  kind: 'date' as const,
+  costOfWrong: 'high' as const,
+  options: [],
+})
+
+// A chat-born hold carries no sourceKey, so nothing deduped it — the same fuzzy
+// item could be held again every turn, forever. Past the cap the tool stops
+// holding and creates the task outright: a guessed date the user can SEE and
+// fix beats a question that piles up where they never look.
+describe('holdForClarification — open queue cap', () => {
+  async function fillQueue(userId: string, n: number) {
+    await Promise.all(
+      Array.from({ length: n }, (_, i) =>
+        Clarification.create({
+          ...heldBase(userId),
+          draft: { title: `held ${i}`, domain: 'home', priority: 'normal', tags: [] },
+        }),
+      ),
+    )
+  }
+
+  it('asks the question AND creates the task while under the cap', async () => {
+    const session = await signUp()
+    await fillQueue(session.userId, 3)
+    const out = await runTool({
+      userId: session.userId,
+      name: 'holdForClarification',
+      args: { title: 'Renew passport', domain: 'home', question: 'When does it expire?', kind: 'date' },
+    })
+    expect(out.result.clarificationId).toBeTruthy()
+    expect(out.result.queueFull).toBeUndefined()
+    // The task is NOT withheld pending an answer — that was the whole defect.
+    expect(await Task.countDocuments({ userId: session.userId })).toBe(1)
+  })
+
+  it('withholds the REMINDER, not the task, on a high-cost guess', async () => {
+    const session = await signUp()
+    await runTool({
+      userId: session.userId,
+      name: 'holdForClarification',
+      args: {
+        title: 'Pay the rent',
+        domain: 'finance',
+        question: 'The 1st or the 5th?',
+        kind: 'date',
+        costOfWrong: 'high',
+        dueAtGuess: '2026-09-01T09:00:00+03:00',
+      },
+      timezone: 'Africa/Cairo',
+    })
+    const task = await Task.findOne({ userId: session.userId })
+    // Visible, dated, and silent until confirmed — we never fire on a guessed
+    // rent day.
+    expect(task?.kind).toBe('list')
+    expect(task?.dueAt?.toISOString()).toBe('2026-09-01T06:00:00.000Z')
+    expect(task?.reminders ?? []).toHaveLength(0)
+  })
+
+  it('lets a low-cost guess fire, because being wrong just means rescheduling', async () => {
+    const session = await signUp()
+    await runTool({
+      userId: session.userId,
+      name: 'holdForClarification',
+      args: {
+        title: 'Call the bank',
+        domain: 'finance',
+        question: 'Morning or afternoon?',
+        kind: 'date',
+        costOfWrong: 'low',
+        dueAtGuess: '2026-09-01T09:00:00+03:00',
+      },
+      timezone: 'Africa/Cairo',
+    })
+    const task = await Task.findOne({ userId: session.userId })
+    expect(task?.kind).toBe('reminder')
+  })
+
+  it('creates the task instead of a 13th question once the queue is full', async () => {
+    const session = await signUp()
+    await fillQueue(session.userId, 12)
+
+    const out = await runTool({
+      userId: session.userId,
+      name: 'holdForClarification',
+      args: {
+        title: 'Renew passport',
+        domain: 'home',
+        question: 'When does it expire?',
+        kind: 'date',
+        dueAtGuess: '2026-09-01T09:00:00+03:00',
+      },
+      timezone: 'Africa/Cairo',
+    })
+
+    expect(out.result.queueFull).toBe(true)
+    expect(out.result.clarificationId).toBeNull()
+    // The queue stayed bounded, and the item is visible as a real task.
+    expect(await Clarification.countDocuments({ userId: session.userId, status: 'open' })).toBe(12)
+    const task = await Task.findOne({ userId: session.userId })
+    expect(task?.title).toBe('Renew passport')
+    // No costOfWrong given → 'high', so the date is kept but stays silent.
+    expect(task?.kind).toBe('list')
+    expect(task?.dueAt?.toISOString()).toBe('2026-09-01T06:00:00.000Z')
+  })
+
+  it('falls back to a dateless list item when there is no guess to keep', async () => {
+    const session = await signUp()
+    await fillQueue(session.userId, 12)
+
+    await runTool({
+      userId: session.userId,
+      name: 'holdForClarification',
+      args: { title: 'Email that guy', domain: 'home', question: 'Who?', kind: 'detail' },
+    })
+    const task = await Task.findOne({ userId: session.userId })
+    expect(task?.kind).toBe('list')
+    expect(task?.dueAt).toBeFalsy()
+  })
+})
+
+// The reported bug, at its root: a question outlived the thing it was about.
+// Now that Clarification carries a real taskId, deleting the task cascades.
+describe('deleteTask — cascades to its question', () => {
+  it('drops the question when its task is deleted', async () => {
+    const session = await signUp()
+    const out = await runTool({
+      userId: session.userId,
+      name: 'holdForClarification',
+      args: { title: 'Renew passport', domain: 'home', question: 'When does it expire?', kind: 'date' },
+    })
+    const clarificationId = out.result.clarificationId as string
+    const task = await Task.findOne({ userId: session.userId })
+
+    await runTool({
+      userId: session.userId,
+      name: 'deleteTask',
+      args: { taskId: String(task?._id) },
+    })
+
+    const after = await Clarification.findById(clarificationId)
+    expect(after?.status).toBe('dropped')
+  })
+
+  it('leaves questions about OTHER tasks open', async () => {
+    const session = await signUp()
+    const keep = await runTool({
+      userId: session.userId,
+      name: 'holdForClarification',
+      args: { title: 'Renew passport', domain: 'home', question: 'When?', kind: 'date' },
+    })
+    const doomed = await runTool({
+      userId: session.userId,
+      name: 'holdForClarification',
+      args: { title: 'Book the vet', domain: 'pets', question: 'Which day?', kind: 'date' },
+    })
+
+    const doomedTask = await Task.findOne({ userId: session.userId, title: 'Book the vet' })
+    await runTool({
+      userId: session.userId,
+      name: 'deleteTask',
+      args: { taskId: String(doomedTask?._id) },
+    })
+
+    expect((await Clarification.findById(keep.result.clarificationId as string))?.status).toBe('open')
+    expect((await Clarification.findById(doomed.result.clarificationId as string))?.status).toBe(
+      'dropped',
+    )
+  })
+})
+
+// "I delete all my tasks and the Questions for you are still there." The
+// blanket wipe path, which matches on draft.domain rather than following each
+// link, so a domain-scoped clear also clears its questions.
+describe('deleteAllTasks — held questions', () => {
+
+  it('drops open clarifications alongside an unfiltered wipe', async () => {
+    const session = await signUp()
+    await Task.create({ userId: session.userId, title: 'a', domain: 'home', status: 'open' })
+    await Clarification.create({
+      ...heldBase(session.userId),
+      draft: { title: 'Car insurance', domain: 'car', priority: 'normal', tags: [] },
+    })
+
+    const out = await runConfirmedTool({
+      userId: session.userId,
+      name: 'deleteAllTasks',
+      args: {},
+    })
+    expect(out.result.droppedQuestionCount).toBe(1)
+    expect(await Clarification.countDocuments({ userId: session.userId, status: 'open' })).toBe(0)
+  })
+
+  it("leaves another user's questions alone", async () => {
+    const session = await signUp()
+    const other = await signUp()
+    await Clarification.create({
+      ...heldBase(other.userId),
+      draft: { title: 'Theirs', domain: 'home', priority: 'normal', tags: [] },
+    })
+
+    await runConfirmedTool({ userId: session.userId, name: 'deleteAllTasks', args: {} })
+    expect(await Clarification.countDocuments({ userId: other.userId, status: 'open' })).toBe(1)
+  })
+
+  it('scopes the drop to the wiped domain', async () => {
+    const session = await signUp()
+    await Clarification.create({
+      ...heldBase(session.userId),
+      draft: { title: 'Car thing', domain: 'car', priority: 'normal', tags: [] },
+    })
+    await Clarification.create({
+      ...heldBase(session.userId),
+      draft: { title: 'Home thing', domain: 'home', priority: 'normal', tags: [] },
+    })
+
+    await runConfirmedTool({
+      userId: session.userId,
+      name: 'deleteAllTasks',
+      args: { domain: 'car' },
+    })
+    const left = await Clarification.find({ userId: session.userId, status: 'open' })
+    expect(left).toHaveLength(1)
+    expect(left[0]?.draft.domain).toBe('home')
+  })
+
+  it('leaves questions untouched for a status-scoped wipe', async () => {
+    const session = await signUp()
+    await Clarification.create({
+      ...heldBase(session.userId),
+      draft: { title: 'Still open', domain: 'home', priority: 'normal', tags: [] },
+    })
+
+    const out = await runConfirmedTool({
+      userId: session.userId,
+      name: 'deleteAllTasks',
+      args: { status: 'done' },
+    })
+    expect(out.result.droppedQuestionCount).toBe(0)
+    expect(await Clarification.countDocuments({ userId: session.userId, status: 'open' })).toBe(1)
   })
 })

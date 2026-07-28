@@ -180,8 +180,14 @@ export function stripObjectIds(text: string): string | null {
 
 // Group by normalized title. Exact-ish duplicates are what actually happen when
 // the same bill gets captured by chat, by voice, and off a scanned document.
-function findDuplicates(tasks: TaskDoc[]): SummaryDuplicate[] {
-  const bins = new Map<string, TaskDoc[]>()
+//
+// Structural parameter rather than TaskDoc[] so the daily digest can share it:
+// that path reads its pool with `.lean()` (see modules/tasks/dailyDigest.ts)
+// and gets plain objects, and only these two fields are used here anyway.
+type DuplicateCandidate = { _id: unknown; title: string }
+
+export function findDuplicates(tasks: DuplicateCandidate[]): SummaryDuplicate[] {
+  const bins = new Map<string, DuplicateCandidate[]>()
   for (const t of tasks) {
     const key = t.title.trim().toLowerCase().replace(/\s+/g, ' ')
     const bin = bins.get(key)

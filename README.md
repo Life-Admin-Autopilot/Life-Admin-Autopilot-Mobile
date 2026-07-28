@@ -1,10 +1,10 @@
-# Mo V2 — Life Admin Autopilot (Next.js + Capacitor)
+# Kitto — Life Admin Autopilot (Next.js + Capacitor)
 
-> **Status: foundation built.** The Next.js app is scaffolded (Next 16 + React 19 + **Tailwind v4** + shadcn/ui), the platform seams are wired (`lib/api`, `lib/auth`, TanStack Query), and a live `/health` round-trip against the backend is verified. The product has rebranded to the **"white marble + crimson" silent-sovereign** direction (see [`docs/new-direction.md`](docs/new-direction.md) / [`docs/aesthetic.md`](docs/aesthetic.md)); the running foundation still needs reskinning to the new tokens.
+> **Status: foundation built.** The Next.js app is scaffolded (Next 16 + React 19 + **Tailwind v4** + shadcn/ui), the platform seams are wired (`lib/api`, `lib/auth`, TanStack Query), and a live `/health` round-trip against the backend is verified. The product is **Kitto**, on the **soft-planner** design system with the ghost mascot (`assets/ghost/`). Two earlier identities are retired and their docs are marked as such: the "white marble + crimson" silent sovereign (the *King*) and the lavender *panda* / *Mo* system.
 
 ## What this is
 
-Mo v1 was a React Native / Expo app. The native toolchain (Android emulator mic, adb, build scripts) caused most of the friction — not React itself. Since the owner is a Next.js/web expert, we're rebuilding on **Next.js (static export) + Capacitor**, which keeps the native capabilities that matter (native push, foreground-started background audio) while giving web-speed iteration. Full rationale in [`docs/PLATFORM-DECISION.md`](docs/PLATFORM-DECISION.md).
+Kitto v1 was a React Native / Expo app. The native toolchain (Android emulator mic, adb, build scripts) caused most of the friction — not React itself. Since the owner is a Next.js/web expert, we're rebuilding on **Next.js (static export) + Capacitor**, which keeps the native capabilities that matter (native push, foreground-started background audio) while giving web-speed iteration. Full rationale in [`docs/PLATFORM-DECISION.md`](docs/PLATFORM-DECISION.md).
 
 ## What's in here
 
@@ -16,10 +16,11 @@ Mo v1 was a React Native / Expo app. The native toolchain (Android emulator mic,
 | [`docs/PORTING-GUIDE.md`](docs/PORTING-GUIDE.md) | Which v1 code layers port as-is vs. need rebuilding. |
 | [`docs/PLATFORM-DECISION.md`](docs/PLATFORM-DECISION.md) | Why Next.js + Capacitor, with the researched iOS/PWA/Capacitor constraints. |
 | [`docs/LESSONS.md`](docs/LESSONS.md) | Hard-won lessons from v1 (why animations were removed, the trust contract, voice-recorder gotchas, etc.). |
-| [`docs/new-direction.md`](docs/new-direction.md) | **The brand brief** — the silent sovereign. Source of truth for the rebrand. |
-| [`docs/tokens.md`](docs/tokens.md) | The full design-token set (marble/crimson), as Tailwind v4 `@theme` in `app/globals.css`. |
-| `docs/*` (aesthetic.md, design.md, principles.md, overview.md, primitives.md, …) | Product + design truth. |
-| [`assets/`](assets/) | `brand/king.png` (the sovereign), `screenshots/`, logos, fonts. |
+| [`docs/new-direction.md`](docs/new-direction.md) | ⚠️ **RETIRED** — the silent-sovereign brand brief. Kept for history only. |
+| [`docs/tokens.md`](docs/tokens.md) | ⚠️ **RETIRED** — the lavender/panda token set. The live tokens are the `@theme` block in `app/globals.css`. |
+| [`docs/principles.md`](docs/principles.md) | Product voice + principles. **Current.** |
+| `docs/*` (aesthetic.md, design.md, primitives.md, …) | ⚠️ Mostly **retired** brand-era docs — each carries a banner. Read `app/globals.css` and `AGENTS.md` for the live system. |
+| [`assets/`](assets/) | `ghost/` (the mascot), `screenshots/`, logos, fonts. |
 
 ## Where the build is
 

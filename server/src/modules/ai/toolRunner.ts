@@ -11,6 +11,7 @@ import {
   TASK_KINDS,
   TASK_PRIORITIES,
   TASK_STATUSES,
+  normalizeEstimate,
   normalizeTag,
   notDeleted,
 } from '../../models/Task'
@@ -35,7 +36,10 @@ const tagArrayInput = z
     return out
   })
 import { STRICT_DATETIME_RE, normalizeLocalIso } from './timeNormalize'
+import { CLARIFICATION_COSTS } from '../../models/Clarification'
 import { createClarification } from '../clarifications/createClarification'
+import { dropOpenClarifications } from '../clarifications/dropOpenClarifications'
+import { isAtOpenClarificationCap } from '../clarifications/openClarificationCap'
 import { setRulesReminders, setSnoozeReminder } from '../reminders/planReminders'
 
 // Tool registry — six tools the agent can invoke. Args declared once as
@@ -61,6 +65,12 @@ export type ToolName = (typeof TOOL_NAMES)[number]
 
 const isoString = z.string().regex(STRICT_DATETIME_RE, 'must be ISO 8601 datetime')
 
+// Bucket labels, matching the function declaration's string enum. Accepted as a
+// number too so a model that answers 30 instead of "30" is snapped, not
+// rejected — losing a whole createTask over the JSON type of an optional hint
+// would be a worse outcome than an approximate estimate.
+const estimateBound = z.union([z.string().max(8), z.number()])
+
 export const createTaskArgs = z
   .object({
     title: z.string().trim().min(1).max(240),
@@ -73,6 +83,8 @@ export const createTaskArgs = z
     tags: tagArrayInput.optional(),
     dueAt: isoString.optional(),
     notes: z.string().max(2000).optional(),
+    estimateMinMinutes: estimateBound.optional(),
+    estimateMaxMinutes: estimateBound.optional(),
   })
   // Fill kind from the date signal when the caller didn't specify it.
   .transform((v) => ({ ...v, kind: v.kind ?? (v.dueAt ? 'reminder' : 'list') }))
@@ -89,6 +101,10 @@ export const updateTaskArgs = z.object({
   taskId: z.string().min(1),
   title: z.string().trim().min(1).max(240).optional(),
   domain: z.enum(DOMAINS).optional(),
+  // Promotes a passive 'list' item to a firing 'reminder' (or back). This is
+  // how a task whose reminder was WITHHELD on an uncertain high-stakes date
+  // starts firing once the user confirms it.
+  kind: z.enum(TASK_KINDS).optional(),
   priority: z.enum(TASK_PRIORITIES).optional(),
   // Full replace — send the desired final tag list, NOT a delta.
   tags: tagArrayInput.optional(),
@@ -96,6 +112,8 @@ export const updateTaskArgs = z.object({
   status: z.enum(TASK_STATUSES).optional(),
   // Empty string or null clears notes. Omit to leave unchanged.
   notes: z.string().max(2000).nullable().optional(),
+  estimateMinMinutes: estimateBound.optional(),
+  estimateMaxMinutes: estimateBound.optional(),
 })
 
 export const completeTaskArgs = z.object({
@@ -167,19 +185,23 @@ const clarificationOptionArgs = z.object({
 
 // Hold a genuinely-fuzzy item instead of creating it. Non-destructive: runs
 // inline and persists a Clarification the home banner + /clarify flow resolve
-// later. This is how Mo "asks" now — NOT free-text in the reply.
+// later. This is how Kitto "asks" now — NOT free-text in the reply.
 export const holdForClarificationArgs = z.object({
-  // The provisional task Mo would create once the question is answered.
+  // The task Kitto creates RIGHT NOW, question or no question.
   title: z.string().trim().min(1).max(240),
   domain: z.enum(DOMAINS),
   priority: z.enum(TASK_PRIORITIES).optional(),
   tags: tagArrayInput.optional(),
   notes: z.string().max(2000).optional(),
-  // Best-guess due date, if any — carried so a "skip for now" item still has it.
+  // Best-guess due date, if any — the task is created with it provisionally.
   dueAtGuess: isoString.optional(),
   // The specific question to ask ("Is it the 15th or the 18th?").
   question: z.string().trim().min(1).max(300),
   kind: z.enum(['date', 'detail', 'choice']),
+  // What a wrong guess costs. 'low' → the reminder may fire on the guess;
+  // 'high' → the task is created but stays passive until the user confirms.
+  // Defaults to 'high' when the model doesn't say.
+  costOfWrong: z.enum(CLARIFICATION_COSTS).optional(),
   options: z.array(clarificationOptionArgs).max(4).optional(),
 })
 
@@ -309,18 +331,53 @@ async function runHoldForClarification(
   args: HoldForClarificationArgs,
   tz: string | undefined,
 ): Promise<Record<string, unknown>> {
+  // The best guess we have for the date, in priority order: an explicit guess,
+  // else the model's most-likely option (it orders them).
+  const guess = args.dueAtGuess ?? args.options?.[0]?.dueAt
+  const dueAt = guess ? normalizeLocalIso(guess, tz) : undefined
+
+  // ALWAYS create the task, question or no question. Withholding it left the
+  // captured item invisible — not in Matters, not searchable, not deletable —
+  // until the user answered. What gets withheld now is the REMINDER, and only
+  // when a wrong date is expensive: a 'high' cost item lands as a passive list
+  // entry that won't fire until confirmed, while a 'low' cost one is free to
+  // nudge on the guess because being wrong just means rescheduling.
+  const costOfWrong = args.costOfWrong ?? 'high'
+  const created = await runCreate(
+    userId,
+    {
+      title: args.title,
+      domain: args.domain,
+      kind: dueAt && costOfWrong === 'low' ? 'reminder' : 'list',
+      priority: args.priority ?? 'normal',
+      tags: args.tags ?? [],
+      notes: args.notes,
+      ...(dueAt ? { dueAt: dueAt.toISOString() } : {}),
+    } as CreateTaskArgs,
+    tz,
+  )
+  const task = created.task as { id: string }
+
+  // Queue full → the task above is the whole answer; skip the question rather
+  // than growing a pile the user never reaches.
+  if (await isAtOpenClarificationCap(userId)) {
+    return { ok: true, clarificationId: null, queueFull: true, title: args.title, ...created }
+  }
+
   const out = await createClarification({
     userId,
+    taskId: task.id,
     draft: {
       title: args.title,
       domain: args.domain,
       priority: args.priority ?? 'normal',
       notes: args.notes,
       tags: args.tags ?? [],
-      dueAt: args.dueAtGuess ? normalizeLocalIso(args.dueAtGuess, tz) : undefined,
+      dueAt,
     },
     question: args.question,
     kind: args.kind,
+    costOfWrong,
     options: (args.options ?? []).map((o) => ({
       label: o.label,
       dueAt: o.dueAt ? normalizeLocalIso(o.dueAt, tz) : undefined,
@@ -328,7 +385,7 @@ async function runHoldForClarification(
       notes: o.notes,
     })),
   })
-  return { ok: true, clarificationId: out.clarificationId, title: out.title }
+  return { ok: true, clarificationId: out.clarificationId, taskId: task.id, title: out.title, ...created }
 }
 
 async function runCreate(
@@ -347,6 +404,10 @@ async function runCreate(
     notes: args.notes,
     dueAt,
     status: 'open',
+    estimate: normalizeEstimate(
+      { minMinutes: args.estimateMinMinutes, maxMinutes: args.estimateMaxMinutes },
+      'ai',
+    ),
   })
   // Schedule smart reminders for reminder tasks (rules floor; AI may refine).
   if (task.kind === 'reminder' && task.dueAt) await setRulesReminders(task)
@@ -365,6 +426,7 @@ async function runUpdate(
   const unset: Record<string, ''> = {}
   if (args.title !== undefined) set.title = args.title
   if (args.domain !== undefined) set.domain = args.domain
+  if (args.kind !== undefined) set.kind = args.kind
   if (args.priority !== undefined) set.priority = args.priority
   if (args.tags !== undefined) set.tags = args.tags
   if (args.dueAt !== undefined) set.dueAt = normalizeLocalIso(args.dueAt, tz)
@@ -380,17 +442,35 @@ async function runUpdate(
       unset.notes = ''
     }
   }
+  // Written as its own guarded update rather than folded into $set below: a
+  // user-set estimate is authoritative forever, and the `$ne: 'user'` filter is
+  // what enforces that. It also matches tasks with no estimate at all (a missing
+  // field is not equal to 'user'), so a first AI estimate still lands.
+  const estimate = normalizeEstimate(
+    { minMinutes: args.estimateMinMinutes, maxMinutes: args.estimateMaxMinutes },
+    'ai',
+  )
+  if (estimate) {
+    await Task.updateOne(
+      { _id: args.taskId, userId, ...notDeleted(), 'estimate.source': { $ne: 'user' } },
+      { $set: { estimate } },
+    )
+  }
+
   const mutation: Record<string, unknown> = {}
   if (Object.keys(set).length > 0) mutation.$set = set
   if (Object.keys(unset).length > 0) mutation.$unset = unset
-  const task = await Task.findOneAndUpdate(
-    { _id: args.taskId, userId, ...notDeleted() },
-    mutation,
-    { new: true },
-  )
+  const filter = { _id: args.taskId, userId, ...notDeleted() }
+  // An estimate-only update leaves nothing for the main mutation to do, and an
+  // empty update document is a driver error — read the row back instead.
+  const task =
+    Object.keys(mutation).length > 0
+      ? await Task.findOneAndUpdate(filter, mutation, { new: true })
+      : await Task.findOne(filter)
   if (!task) throw new AppError(404, 'task_not_found', 'That matter could not be found — it may already have been removed.')
-  // dueAt moved → regenerate the reminder schedule from the new deadline.
-  if (args.dueAt !== undefined && task.kind === 'reminder' && task.dueAt) {
+  // dueAt moved, or the task just became a reminder (a withheld date being
+  // confirmed) → regenerate the schedule from the deadline that now stands.
+  if ((args.dueAt !== undefined || args.kind === 'reminder') && task.kind === 'reminder' && task.dueAt) {
     await setRulesReminders(task)
   }
   return { task: task.toJSON() }
@@ -453,7 +533,7 @@ export async function countTasksForBulkDelete(
 
 // Bulk delete. An empty filter wipes every task the user owns; optional
 // domain/status filters scope it. Deleting zero tasks is a no-op success
-// (the user simply had nothing to clear), NOT a 404 — Mo reports the count.
+// (the user simply had nothing to clear), NOT a 404 — Kitto reports the count.
 async function runDeleteAll(
   userId: string,
   args: DeleteAllTasksArgs,
@@ -471,9 +551,16 @@ async function runDeleteAll(
     { action: 'delete' },
     { label: 'Cleared from chat' },
   )
+  // Held items aren't tasks yet, so the wipe above can't reach them — drop them
+  // explicitly or "clear everything" leaves questions standing on the dashboard.
+  // Skipped for a status-scoped wipe: a held item has no task status to match.
+  const { droppedCount } = args.status
+    ? { droppedCount: 0 }
+    : await dropOpenClarifications({ userId, domain: args.domain })
   return {
     deleted: true,
     deletedCount: result.affected,
+    droppedQuestionCount: droppedCount,
     undoToken: result.undoToken,
     domain: args.domain ?? null,
     status: args.status ?? null,

@@ -265,7 +265,7 @@ describe('POST /ai/tools/confirm/:callId', () => {
   })
 
   // Confirm flow WITH the AI layer mocked: after the destructive tool runs, the
-  // continuation re-enters the orchestrator (streamPersonal stubbed) so Mo can
+  // continuation re-enters the orchestrator (streamPersonal stubbed) so Kitto can
   // react. We assert the full wire sequence — tool_result → continuation
   // token(s) → done → quota — without touching the network.
   it('runs the continuation after confirming when AI is configured', async () => {

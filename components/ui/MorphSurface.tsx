@@ -8,8 +8,8 @@ import { MORPH_CONTENT_VARIANTS, MORPH_SHAPE_STYLE, MORPH_SPRING } from '@/lib/m
 
 /**
  * MorphSurface — the Dynamic Island morph engine (Wiscord), reusable across
- * Mo's expanding surfaces (chatbot popup, voice record popup, dropdowns,
- * toasts). Physics are identical to Wiscord; the skin is Mo lavender.
+ * Kitto's expanding surfaces (chatbot popup, voice record popup, dropdowns,
+ * toasts). Physics are identical to Wiscord; the skin is Kitto lavender.
  *
  * How it works (mirrors Wiscord's DynamicIsland.tsx):
  *  - The shell animates `width`/`height` directly via `animate` (NOT `layout`,

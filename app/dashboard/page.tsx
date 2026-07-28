@@ -1,15 +1,19 @@
 'use client'
 
-import Link from 'next/link'
-
 import { AppHeader } from '@/components/layout/AppHeader'
-import { HomeHero } from '@/components/dashboard/HomeHero'
-import { MatterRow } from '@/components/dashboard/MatterRow'
-import { SectionHeaderChip } from '@/components/ui/SectionHeaderChip'
-import { UncertaintyBanner } from '@/components/uncertainty/UncertaintyBanner'
+import { DashboardView } from '@/components/dashboard/DashboardView'
 import { useSessionStore, selectUser } from '@/lib/auth/sessionStore'
-import { bucketOf, formatDue } from '@/lib/taskFormat'
-import { useTaskCounts, useTasks } from '@/queries/tasks'
+import { toast } from '@/lib/toast'
+import { useDigest } from '@/queries/digest'
+import { useScannedDocuments } from '@/queries/documentScans'
+import {
+  useCompleteTask,
+  useSnoozeTask,
+  useTasks,
+  useToggleSubtask,
+  useUpdateTask,
+  type Task,
+} from '@/queries/tasks'
 
 function firstName(displayName?: string, email?: string): string {
   if (displayName && displayName.trim()) return displayName.trim().split(/\s+/)[0]
@@ -17,66 +21,87 @@ function firstName(displayName?: string, email?: string): string {
   return 'there'
 }
 
-// The home/dashboard — greets the onboarded user by name, then shows only what
-// is live right now. The full workspace is /matters; this is the glance.
-//
-// Deliberately capped at three rows. The point of this screen is reassurance,
-// and a home screen that grows without bound stops being reassuring.
-const PREVIEW_ROWS = 3
+/** Tomorrow morning, local. Where "not today" sends things. */
+function tomorrowMorning(now: Date): string {
+  const next = new Date(now)
+  next.setDate(next.getDate() + 1)
+  next.setHours(9, 0, 0, 0)
+  return next.toISOString()
+}
 
+// Data container only. The layout lives in DashboardView so the preview route
+// can render the identical tree against fixtures — see /zz-preview-dashboard.
 export default function DashboardPage() {
   const user = useSessionStore(selectUser)
   const name = firstName(user?.displayName, user?.email)
 
-  const counts = useTaskCounts()
-  // Soonest-first open matters; the hero's numbers come from the counts
-  // endpoint so they agree with /matters exactly.
   const list = useTasks({ status: ['open'] }, 'due-asc')
-  const upcoming = (list.data?.pages[0]?.tasks ?? []).slice(0, PREVIEW_ROWS)
+  const scans = useScannedDocuments()
+  const digest = useDigest()
 
-  const attention = (counts.data?.overdue ?? 0) + (counts.data?.today ?? 0)
+  const completeTask = useCompleteTask()
+  const snoozeTask = useSnoozeTask()
+  const toggleSubtask = useToggleSubtask()
+  const updateTask = useUpdateTask()
+
+  const now = new Date()
+
+  // "Not today" snoozes; it does not delete, and it does not touch the real
+  // deadline — rewriting dueAt would be a lie about when a bill is actually
+  // due. But an item that silently vanishes is indistinguishable from one the
+  // app threw away, so the move always announces itself and always offers a
+  // way back. Recovery is the whole point of the affordance.
+  const pushToTomorrow = (task: Task) => {
+    const previousStatus = task.status
+    snoozeTask.mutate(
+      { taskId: task.id, until: tomorrowMorning(now) },
+      {
+        onSuccess: () =>
+          toast.success('Moved to tomorrow.', {
+            description: 'Its due date has not changed.',
+            action: {
+              label: 'Undo',
+              onPress: () =>
+                updateTask.mutate({
+                  taskId: task.id,
+                  body: { status: previousStatus, snoozedUntil: null },
+                }),
+            },
+          }),
+        onError: () => toast.error('That did not go through. Try again.'),
+      },
+    )
+  }
+
+  // `ready_for_review` is the TERMINAL SUCCESS state of processing, not a
+  // to-do: every document that scanned cleanly keeps it forever, confirmed or
+  // not. `reviewedAt` is what the server stamps once every candidate has been
+  // resolved (me.documentScans.ts), so its absence is the real "needs you".
+  const scansAwaitingReview =
+    scans.data?.scannedDocuments.filter(
+      (doc) => doc.status === 'ready_for_review' && !doc.reviewedAt,
+    ).length ?? 0
 
   return (
     <main className="min-h-dvh pb-32">
       <AppHeader />
-      <HomeHero
+      <DashboardView
         name={name}
-        now={new Date()}
-        attention={attention}
-        stats={{
-          all: counts.data?.open ?? 0,
-          due: (counts.data?.today ?? 0) + (counts.data?.tomorrow ?? 0),
-          resolved: counts.data?.done ?? 0,
-        }}
+        now={now}
+        openTasks={list.data?.pages[0]?.tasks ?? []}
+        loaded={!list.isPending}
+        completedToday={digest.data?.counts.completedToday ?? 0}
+        needsInput={digest.data?.counts.needsInput ?? 0}
+        scansAwaitingReview={scansAwaitingReview}
+        slipping={digest.data?.counts.slipping ?? 0}
+        digest={digest.data}
+        busy={completeTask.isPending || snoozeTask.isPending || toggleSubtask.isPending}
+        onComplete={(task) => completeTask.mutate({ taskId: task.id, done: true })}
+        onCompleteSubtask={(task, subtask) =>
+          toggleSubtask.mutate({ taskId: task.id, subtaskId: subtask.id, done: true })
+        }
+        onPush={pushToTomorrow}
       />
-
-      <div className="mx-auto mt-6 max-w-md px-5">
-        <UncertaintyBanner />
-      </div>
-
-      {upcoming.length > 0 ? (
-        <div className="mx-auto mt-7 flex max-w-md flex-col gap-3 px-5">
-          <div className="flex items-center justify-between">
-            <SectionHeaderChip label="Coming up" tone="morning" count={upcoming.length} />
-            <Link
-              href="/matters"
-              className="rounded-pill px-2 py-1 text-body-sm font-bold text-accent hover:bg-accent-soft"
-            >
-              View all
-            </Link>
-          </div>
-          {upcoming.map((task) => (
-            <Link key={task.id} href="/matters" className="block">
-              <MatterRow
-                domain={task.domain}
-                title={task.title}
-                due={formatDue(task.dueAt)}
-                overdue={bucketOf(task) === 'overdue'}
-              />
-            </Link>
-          ))}
-        </div>
-      ) : null}
     </main>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Check, Clock, Trash2 } from 'lucide-react'
+import { Check, Clock, Sparkles, Trash2 } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
 
@@ -27,12 +27,15 @@ export function SelectionActionBar({
   count,
   onComplete,
   onSnooze,
+  onCategorize,
   onDelete,
   busy = false,
 }: {
   count: number
   onComplete: () => void
   onSnooze: () => void
+  /** Receives the button's rect so the review sheet morphs out of it. */
+  onCategorize: (rect: DOMRect) => void
   /** Receives the button's rect so the confirm sheet morphs out of it. */
   onDelete: (rect: DOMRect) => void
   busy?: boolean
@@ -52,6 +55,12 @@ export function SelectionActionBar({
       </Action>
       <Action label="Snooze" onClick={onSnooze} disabled={disabled}>
         <Clock size={20} />
+      </Action>
+      {/* Sits between the reversible actions and the destructive one, because
+          that is what it is: it proposes, nothing is written until reviewed,
+          and an applied run undoes like any other. */}
+      <Action label="File" onClick={onCategorize} disabled={disabled}>
+        <Sparkles size={20} />
       </Action>
       <Action label="Delete" onClick={onDelete} disabled={disabled} danger>
         <Trash2 size={20} />

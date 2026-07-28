@@ -1,6 +1,10 @@
 import { Types } from 'mongoose'
 
-import { Clarification, type ClarificationKind } from '../../models/Clarification'
+import {
+  Clarification,
+  type ClarificationCost,
+  type ClarificationKind,
+} from '../../models/Clarification'
 import type { Domain } from '../../models/User'
 import type { TaskPriority } from '../../models/Task'
 
@@ -12,6 +16,9 @@ import type { TaskPriority } from '../../models/Task'
 
 export interface UpsertVoiceClarificationInput {
   userId: Types.ObjectId | string
+  // The Task this question is about — created before the question, so the item
+  // is visible in Matters from the moment it's captured.
+  taskId: Types.ObjectId | string
   // The note-scoped item key (from makeItemKey) — the idempotency anchor.
   sourceKey: string
   draft: {
@@ -24,6 +31,7 @@ export interface UpsertVoiceClarificationInput {
   }
   question: string
   kind: ClarificationKind
+  costOfWrong: ClarificationCost
   options: { label: string; dueAt?: Date; title?: string; notes?: string }[]
 }
 
@@ -36,6 +44,7 @@ export async function upsertVoiceClarification(
     {
       $setOnInsert: {
         userId,
+        taskId: new Types.ObjectId(input.taskId),
         sourceKey: input.sourceKey,
         status: 'open',
         draft: {
@@ -48,6 +57,7 @@ export async function upsertVoiceClarification(
         },
         question: input.question,
         kind: input.kind,
+        costOfWrong: input.costOfWrong,
         options: input.options,
       },
     },

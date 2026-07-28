@@ -15,6 +15,7 @@ import { DOMAIN_LABEL, DOMAINS, formatDue, PriorityPill, SummaryNote } from '@/c
 import { OriginalDocumentPeek } from '@/components/scan/OriginalDocumentPeek'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
+import { env } from '@/lib/env'
 import {
   useReviewScannedDocument,
   type ReviewScanResult,
@@ -257,7 +258,7 @@ export function ScanReviewCard({ doc, onReviewed }: ScanReviewCardProps) {
                       <textarea
                         value={draft.notes ?? ''}
                         onChange={(e) => updateDraft(c.key, { notes: e.target.value })}
-                        placeholder="What Mo found for this item…"
+                        placeholder={`What ${env.appName} found for this item…`}
                         dir="auto"
                         className="min-h-24 rounded-md bg-surface-sunken px-3 py-2 text-body-sm text-ink outline-none placeholder:text-ink-subtle"
                       />

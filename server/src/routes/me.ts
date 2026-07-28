@@ -5,17 +5,45 @@ import { asyncHandler, BadRequest, NotFound, Unauthorized } from '../lib/errors'
 import { logger } from '../logger'
 import { verifyPassword } from '../lib/password'
 import { revokeAllUserSessions } from '../lib/sessions'
+import { getDocumentScanStorage } from '../lib/documentScanStorage'
 import { getVoiceNoteStorage } from '../lib/voiceNoteStorage'
 import { requireAuth } from '../middleware/auth'
 import { AiConversation } from '../models/AiConversation'
 import { AiUsageCounter } from '../models/AiUsageCounter'
+import { Clarification } from '../models/Clarification'
+import { DailyDigest } from '../models/DailyDigest'
+import { DocumentScanUsageCounter } from '../models/DocumentScanUsageCounter'
+import { Notification } from '../models/Notification'
 import { RefreshToken } from '../models/RefreshToken'
+import { ScannedDocument } from '../models/ScannedDocument'
 import { Task } from '../models/Task'
+import { TaskBulkOp } from '../models/TaskBulkOp'
 import { DOMAINS, MIC_QUALITIES, TEXT_SIZES, THEMES, User } from '../models/User'
 import { VerificationToken } from '../models/VerificationToken'
 import { VoiceNote } from '../models/VoiceNote'
 
 export const meRouter = Router()
+
+// Validate against the runtime's own tables rather than a hand-kept list: an
+// enum of ~600 zone names goes stale the next time a country moves its clock,
+// and a loose `z.string()` lets a typo through that then silently breaks the
+// reminder worker's day boundaries.
+function isValidTimezone(zone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone })
+    return true
+  } catch {
+    return false
+  }
+}
+
+function isValidLocale(tag: string): boolean {
+  try {
+    return Intl.getCanonicalLocales(tag).length > 0
+  } catch {
+    return false
+  }
+}
 
 const UpdateMeSchema = z.object({
   displayName: z.string().min(1).max(80).trim().optional(),
@@ -32,6 +60,18 @@ const UpdateMeSchema = z.object({
       }),
     )
     .max(20)
+    .optional(),
+  timezone: z
+    .string()
+    .min(1)
+    .max(64)
+    .refine(isValidTimezone, { message: 'Not a recognised time zone.' })
+    .optional(),
+  locale: z
+    .string()
+    .min(2)
+    .max(35)
+    .refine(isValidLocale, { message: 'Not a recognised locale.' })
     .optional(),
   theme: z.enum(THEMES).optional(),
   textSize: z.enum(TEXT_SIZES).optional(),
@@ -101,8 +141,10 @@ const DeleteMeSchema = z.object({
 // That ordering means a mid-cascade failure leaves the still-authenticated User
 // behind (re-runnable) rather than a logged-out account with orphaned data.
 async function deleteUserAndDependents(userId: string, userObjectId: Types.ObjectId): Promise<void> {
-  // Best-effort audio cleanup before the VoiceNote rows vanish — storage misses
-  // (already-gone files) must not abort the account deletion.
+  // Best-effort file cleanup before the rows that point at the blobs vanish —
+  // storage misses (already-gone files) must not abort the account deletion.
+  // Both stores are drained here rather than after the deletes, because once
+  // the row is gone the storage key is unrecoverable and the bytes leak forever.
   const notes = await VoiceNote.find({ userId: userObjectId }, { storageKey: 1 }).lean()
   if (notes.length > 0) {
     const storage = getVoiceNoteStorage()
@@ -115,12 +157,30 @@ async function deleteUserAndDependents(userId: string, userObjectId: Types.Objec
     )
   }
 
+  const scans = await ScannedDocument.find({ userId: userObjectId }, { storageKey: 1 }).lean()
+  if (scans.length > 0) {
+    const storage = getDocumentScanStorage()
+    await Promise.all(
+      scans.map((scan) =>
+        storage.remove(scan.storageKey).catch((err: unknown) => {
+          logger.warn({ err, userId, storageKey: scan.storageKey }, 'me:delete:scan-remove-failed')
+        }),
+      ),
+    )
+  }
+
   await revokeAllUserSessions(userId)
   await RefreshToken.deleteMany({ userId: userObjectId })
   await Task.deleteMany({ userId: userObjectId })
+  await TaskBulkOp.deleteMany({ userId: userObjectId })
   await VoiceNote.deleteMany({ userId: userObjectId })
+  await ScannedDocument.deleteMany({ userId: userObjectId })
   await AiConversation.deleteMany({ userId: userObjectId })
   await AiUsageCounter.deleteMany({ userId: userObjectId })
+  await DocumentScanUsageCounter.deleteMany({ userId: userObjectId })
+  await Clarification.deleteMany({ userId: userObjectId })
+  await DailyDigest.deleteMany({ userId: userObjectId })
+  await Notification.deleteMany({ userId: userObjectId })
   await VerificationToken.deleteMany({ userId: userObjectId })
 
   // Dependents are gone — now retire the account itself.

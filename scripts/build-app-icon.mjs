@@ -16,9 +16,12 @@ const ICON_SIZE = 1024
 // @capacitor/assets expects a 2732x2732 splash and crops it per device.
 const SPLASH_SIZE = 2732
 
-// --background in app/globals.css (:root). Keeping the icon on the same canvas
-// as the app makes the launch feel continuous rather than like two products.
+// --background in app/globals.css, light (:root) and dark (.dark). Keeping the
+// icon and splash on the same canvas as the app makes the launch feel
+// continuous rather than like two products — and stops the dark-mode launch
+// from flashing a near-white screen before the UI mounts.
 const CANVAS = { r: 249, g: 248, b: 252, alpha: 1 }
+const CANVAS_DARK = { r: 3, g: 3, b: 3, alpha: 1 }
 
 // iOS masks icons to a squircle, so anything near the edge gets clipped. Apple's
 // icon grid keeps key content within roughly the central 80%; 0.76 leaves the
@@ -27,7 +30,7 @@ const ICON_SUBJECT_RATIO = 0.76
 // The splash is full-bleed, so the mascot sits much smaller within it.
 const SPLASH_SUBJECT_RATIO = 0.3
 
-async function render({ canvasSize, subjectRatio, outputPath, flatten }) {
+async function render({ canvasSize, subjectRatio, outputPath, flatten, canvas: bg = CANVAS }) {
   const box = Math.round(canvasSize * subjectRatio)
 
   // `fit: 'inside'` preserves the mascot's 968:988 aspect ratio instead of
@@ -41,16 +44,14 @@ async function render({ canvasSize, subjectRatio, outputPath, flatten }) {
       width: canvasSize,
       height: canvasSize,
       channels: 4,
-      background: CANVAS,
+      background: bg,
     },
   }).composite([{ input: subject, gravity: 'centre' }])
 
   // flatten() composites against the canvas colour but sharp still emits an
   // (all-opaque) alpha channel, which iOS rejects — removeAlpha() is what
   // actually drops it to RGB. Verified via `sips -g hasAlpha`.
-  const pipeline = flatten
-    ? canvas.flatten({ background: CANVAS }).removeAlpha()
-    : canvas
+  const pipeline = flatten ? canvas.flatten({ background: bg }).removeAlpha() : canvas
 
   await pipeline.png().toFile(outputPath)
   return outputPath
@@ -78,6 +79,15 @@ const written = await Promise.all([
     subjectRatio: SPLASH_SUBJECT_RATIO,
     outputPath: `${OUT_DIR}/splash.png`,
     flatten: true,
+  }),
+  // Without this, @capacitor/assets derives the dark splash from the light one
+  // and the app launches into a near-white flash before the dark UI mounts.
+  render({
+    canvasSize: SPLASH_SIZE,
+    subjectRatio: SPLASH_SUBJECT_RATIO,
+    outputPath: `${OUT_DIR}/splash-dark.png`,
+    flatten: true,
+    canvas: CANVAS_DARK,
   }),
 ])
 

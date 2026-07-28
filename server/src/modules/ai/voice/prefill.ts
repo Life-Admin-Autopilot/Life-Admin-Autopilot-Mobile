@@ -3,7 +3,7 @@ import type { Content } from '@google/genai'
 // Few-shot turn pairs prepended to the conversation. Identical reference per
 // request so Gemini's implicit prefix cache amortizes the cost. The example
 // turns are load-bearing — they're style precedent the model reads, not a lookup
-// table. The model prose is Ketto's voice: warm, short, plain — a small nod on a
+// table. The model prose is Kitto's voice: warm, short, plain — a small nod on a
 // win, calm on anything overdue, at most one emoji and only where it lands (see
 // voice/toolRules.ts → VOICE).
 export const PREFILL: Content[] = [

@@ -130,7 +130,7 @@ export function OriginalDocumentPeek({ doc }: { doc: ScannedDocument }) {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.16 } }}
                 transition={reduced ? { duration: 0 } : { duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                className="fixed inset-4 z-[61] flex flex-col overflow-hidden rounded-xl bg-surface shadow-elevated"
+                className="inset-safe fixed z-[61] flex flex-col overflow-hidden rounded-xl bg-surface shadow-elevated"
               >
                 <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
                   <span className="text-body-sm font-medium text-ink">Original document</span>

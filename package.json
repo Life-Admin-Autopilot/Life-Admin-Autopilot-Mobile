@@ -1,5 +1,5 @@
 {
-  "name": "mo-v2",
+  "name": "kitto",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -13,10 +13,11 @@
     "cap:sync:dev": "npm run build:native:dev && npx cap sync && ./scripts/patch-ios-plist.sh --local-http",
     "cap:sync:prod": "npm run build:native:prod && npx cap sync && ./scripts/patch-ios-plist.sh",
     "lan:ip": "./scripts/lan-ip.sh",
+    "icons": "node scripts/build-app-icon.mjs && npx capacitor-assets generate --ios",
     "ios:dev": "./scripts/patch-ios-plist.sh --local-http && cross-env CAP_LIVE_RELOAD_URL=http://$(./scripts/lan-ip.sh):3000 npx cap run ios",
     "android:dev": "cross-env CAP_LIVE_RELOAD_URL=http://192.168.1.4:3000 npx cap run android",
-    "ios:device": "npm run cap:sync:dev && npx cap open ios",
-    "ios:open": "npm run cap:sync:prod && npx cap open ios",
+    "ios:device": "npm run cap:sync:dev && npm run icons && npx cap open ios",
+    "ios:open": "npm run cap:sync:prod && npm run icons && npx cap open ios",
     "android:open": "npm run cap:sync:prod && npx cap open android",
     "cap:doctor": "npx cap doctor"
   },
@@ -27,6 +28,7 @@
     "@capacitor/core": "^8.4.2",
     "@capacitor/filesystem": "^8.0.2",
     "@capacitor/ios": "^8.4.2",
+    "@capacitor/local-notifications": "^8.2.1",
     "@hookform/resolvers": "^5.4.0",
     "@tanstack/react-query": "^5.101.0",
     "class-variance-authority": "^0.7.1",

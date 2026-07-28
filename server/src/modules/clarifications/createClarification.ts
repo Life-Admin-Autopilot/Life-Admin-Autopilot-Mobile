@@ -1,7 +1,9 @@
+import { Types } from 'mongoose'
+
 import { Clarification } from '../../models/Clarification'
 import type { Domain } from '../../models/User'
 import type { TaskPriority } from '../../models/Task'
-import type { ClarificationKind } from '../../models/Clarification'
+import type { ClarificationCost, ClarificationKind } from '../../models/Clarification'
 
 // Persist one held item. Called from the `holdForClarification` tool dispatch
 // (toolRunner) with dates already normalized to Date objects, so this stays a
@@ -10,6 +12,9 @@ import type { ClarificationKind } from '../../models/Clarification'
 
 export interface CreateClarificationInput {
   userId: string
+  // The Task this question is about — created by the caller BEFORE the
+  // question, so the item is never withheld from the user.
+  taskId: Types.ObjectId | string
   draft: {
     title: string
     domain: Domain
@@ -20,6 +25,7 @@ export interface CreateClarificationInput {
   }
   question: string
   kind: ClarificationKind
+  costOfWrong: ClarificationCost
   options: { label: string; dueAt?: Date; title?: string; notes?: string }[]
 }
 
@@ -28,6 +34,7 @@ export async function createClarification(
 ): Promise<{ clarificationId: string; title: string }> {
   const doc = await Clarification.create({
     userId: input.userId,
+    taskId: new Types.ObjectId(input.taskId),
     status: 'open',
     draft: {
       title: input.draft.title,
@@ -39,6 +46,7 @@ export async function createClarification(
     },
     question: input.question,
     kind: input.kind,
+    costOfWrong: input.costOfWrong,
     options: input.options,
   })
   return { clarificationId: doc.id, title: doc.draft.title }

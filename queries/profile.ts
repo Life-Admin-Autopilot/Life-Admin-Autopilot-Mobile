@@ -5,7 +5,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api/client'
-import { useSessionStore, type AuthUser, type OnboardingAnswer } from '@/lib/auth/sessionStore'
+import {
+  useSessionStore,
+  type AuthUser,
+  type NotificationPrefs,
+  type OnboardingAnswer,
+  type Theme,
+} from '@/lib/auth/sessionStore'
 import { queryKeys } from '@/queries/keys'
 
 interface MeResponse {
@@ -17,6 +23,16 @@ export interface ProfilePatch {
   preferredDomains?: string[]
   hasOnboarded?: boolean
   onboardingAnswers?: OnboardingAnswer[]
+  theme?: Theme
+  /** IANA zone, e.g. `Africa/Cairo`. The server validates it. */
+  timezone?: string
+  /** BCP 47 tag, e.g. `en-GB`. */
+  locale?: string
+  /**
+   * Partial by design — the server flattens nested patches to dot-notation
+   * `$set` keys, so sending `{ push: false }` leaves its siblings alone.
+   */
+  notifications?: Partial<NotificationPrefs>
 }
 
 export function useProfile() {

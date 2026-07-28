@@ -6,6 +6,8 @@ import { useState } from 'react'
 import { cn } from '@/lib/cn'
 import { transcribeAudio } from '@/lib/ai/transcribe'
 import { useVoiceRecorder } from '@/lib/ai/useVoiceRecorder'
+import { micFailureMessage } from '@/lib/ai/micFailure'
+import { env } from '@/lib/env'
 import { translateBackendError } from '@/lib/translateBackendError'
 import { toast } from '@/lib/toast'
 import { useSearchMatters, type SearchResult } from '@/queries/mattersAi'
@@ -54,7 +56,10 @@ export function MattersSearchBar({
 
   const toggleMic = async () => {
     if (!recording) {
-      await recorder.start()
+      // Without this the mic button just does nothing when access is
+      // unavailable — no prompt, no error, no recording.
+      const failure = await recorder.start()
+      if (failure) toast.error(micFailureMessage(failure, env.appName))
       return
     }
     const blob = await recorder.stop()

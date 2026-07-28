@@ -1,7 +1,7 @@
-// Two-turn Mo probe — like nl-probe, but after the first model turn it feeds
+// Two-turn Kitto probe — like nl-probe, but after the first model turn it feeds
 // SYNTHETIC functionResponses back for every tool call and runs a SECOND
 // model turn, so you can see the follow-up message (e.g. the "needs your
-// call" list Mo emits after creating the clear tasks). No DB, no quota.
+// call" list Kitto emits after creating the clear tasks). No DB, no quota.
 //
 // Usage:
 //   echo "your dump" | npm run nl-probe-loop -- --stdin

@@ -89,6 +89,35 @@ export function SelectionCheck({
   )
 }
 
+/**
+ * The switch as pure appearance — a `<span>`, so it can live inside a control
+ * that is itself the switch. A settings row wants its whole 44px-tall body to
+ * be the hit target, and HTML forbids nesting a button inside a button, so the
+ * row owns `role="switch"` and renders this for the look. `Toggle` below is the
+ * same visual with its own button around it, for standalone use.
+ */
+export function SwitchVisual({ checked, className }: { checked: boolean; className?: string }) {
+  const reduced = useReducedMotion()
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'relative block h-7 w-12 shrink-0 rounded-pill p-0.5 transition-colors',
+        checked ? 'bg-accent' : 'bg-border-strong',
+        className,
+      )}
+    >
+      <motion.span
+        layout
+        initial={false}
+        animate={{ x: checked ? 20 : 0 }}
+        transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 620, damping: 34 }}
+        className="block size-6 rounded-full bg-white shadow-[0_2px_4px_rgb(0_0_0/.15)]"
+      />
+    </span>
+  )
+}
+
 // iOS-style switch. ON is coral: a setting that is on is a live state.
 export function Toggle({
   checked,
@@ -101,7 +130,6 @@ export function Toggle({
   label: string
   className?: string
 }) {
-  const reduced = useReducedMotion()
   return (
     <button
       type="button"
@@ -109,19 +137,9 @@ export function Toggle({
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className={cn(
-        'relative h-7 w-12 shrink-0 rounded-pill p-0.5 transition-colors',
-        checked ? 'bg-accent' : 'bg-border-strong',
-        className,
-      )}
+      className={cn('shrink-0 rounded-pill', className)}
     >
-      <motion.span
-        layout
-        initial={false}
-        animate={{ x: checked ? 20 : 0 }}
-        transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 620, damping: 34 }}
-        className="block size-6 rounded-full bg-white shadow-[0_2px_4px_rgb(0_0_0/.15)]"
-      />
+      <SwitchVisual checked={checked} />
     </button>
   )
 }

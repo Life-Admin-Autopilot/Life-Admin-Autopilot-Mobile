@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomInt } from 'node:crypto'
 
 export function generateRawToken(): string {
   return randomBytes(32).toString('base64url')
@@ -6,6 +6,28 @@ export function generateRawToken(): string {
 
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
+}
+
+export const CODE_LENGTH = 6
+
+/** Six digits, zero-padded, from a CSPRNG — `Math.random` is not acceptable here. */
+export function generateNumericCode(): string {
+  return String(randomInt(0, 10 ** CODE_LENGTH)).padStart(CODE_LENGTH, '0')
+}
+
+/**
+ * Hash a short code together with the account and purpose it belongs to.
+ *
+ * Two reasons this is not plain `hashToken(code)`. First, six digits is a
+ * 1-in-a-million space, so a bare hash is trivially precomputable AND would
+ * collide across users — and `VerificationToken.tokenHash` is a UNIQUE index,
+ * so one user's live code would block every other user from being issued the
+ * same digits. Second, binding the userId means a code minted for one account
+ * can never be redeemed against another, which is what makes a six-digit
+ * secret safe at all.
+ */
+export function hashCode(userId: string, purpose: string, code: string): string {
+  return hashToken(`${userId}:${purpose}:${code}`)
 }
 
 const TTL_PATTERN = /^(\d+)([smhd])$/

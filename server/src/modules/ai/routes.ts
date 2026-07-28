@@ -169,7 +169,7 @@ aiRouter.post(
 
 // POST /ai/tools/confirm/:callId — SSE stream. Confirms (or declines) a
 // destructive tool. On confirm, runs the tool, then re-enters the
-// orchestrator so Mo can react to the result and continue any remaining
+// orchestrator so Kitto can react to the result and continue any remaining
 // steps from the user's original multi-step plan. On decline, signals
 // declined and ends the stream.
 //
@@ -308,7 +308,7 @@ aiRouter.post(
         error: toolError,
       })
 
-      // Resume the conversation so Mo can react to the tool result and
+      // Resume the conversation so Kitto can react to the tool result and
       // continue any remaining steps from the user's original message.
       // Skip if AI isn't configured (defensive — destructive tools can
       // still run, the user just won't get a follow-up message).

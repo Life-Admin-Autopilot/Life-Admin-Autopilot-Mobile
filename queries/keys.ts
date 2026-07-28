@@ -18,6 +18,22 @@ export const queryKeys = {
     detail: (id: string) => ['tasks', 'detail', id] as const,
     tags: () => ['tasks', 'tags'] as const,
     trash: () => ['tasks', 'trash'] as const,
+    // The one open categorize proposal. Its own key because it survives a
+    // reload — a proposal the user walked away from is still waiting when
+    // they come back, and the sheet reopens from this rather than from state.
+    categorizePending: () => ['tasks', 'categorize', 'pending'] as const,
   },
   documentScans: ['documentScans'] as const,
+  // Nested under the scans namespace but a separate key: the quota changes on
+  // upload while the list changes on upload AND on delete, so sharing one key
+  // would refetch the whole list every time a meter ticked.
+  documentScanQuota: ['documentScans', 'quota'] as const,
+  // Account surfaces. `sessions` is the signed-in-devices list; it invalidates
+  // on password change and on revoke, both of which end sessions server-side.
+  sessions: ['sessions'] as const,
+  subscription: ['subscription'] as const,
+  invoices: ['billing', 'invoices'] as const,
+  // Keyed by IANA zone: the digest describes a local calendar day, so the same
+  // user in a different zone is a different digest, not a stale one.
+  digest: (tz: string) => ['digest', tz] as const,
 }

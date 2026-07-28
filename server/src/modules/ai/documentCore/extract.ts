@@ -3,7 +3,13 @@ import { Type, type Content } from '@google/genai'
 import { env } from '../../../env'
 import { logger } from '../../../logger'
 import { DOMAINS, type Domain } from '../../../models/User'
-import { TASK_PRIORITIES, type TaskPriority } from '../../../models/Task'
+import {
+  ESTIMATE_BUCKETS,
+  ESTIMATE_BUCKET_LABELS,
+  TASK_PRIORITIES,
+  normalizeEstimate,
+  type TaskPriority,
+} from '../../../models/Task'
 import { getGeminiClient } from '../provider/geminiClient'
 import { normalizeLocalIso, STRICT_DATETIME_RE } from '../timeNormalize'
 import { withGeminiRetry } from '../voiceCore/geminiRetry'
@@ -48,6 +54,13 @@ PER CANDIDATE, SET:
 - domain: the single best of health, home, car, finance, family, pets.
 - priority: low | normal | high | urgent — from due-date proximity and stated urgency/penalty
   language ("final notice", "overdue" = urgent; a routine renewal months out = low).
+- estimateMinMinutes / estimateMaxMinutes: how long DOING this will take, as a range in minutes.
+  Both MUST be one of exactly these values: ${ESTIMATE_BUCKETS.join(', ')}. Nothing between them
+  exists — there is no "23 minutes", because nobody can know that. max must be >= min; use the
+  same value twice when the job is tight ("5" and "5"). Estimate the DOING, never the waiting or
+  the amount of money involved: paying a $2,400 bill online takes the same ten minutes as paying
+  a $24 one, and "attend the appointment on the 14th" is the travel-and-visit, not the two weeks
+  until it. When you genuinely cannot tell, give a WIDE range rather than a confident narrow one.
 - dueAt: your best resolution of any stated due/deadline date to ISO 8601 with a literal T and
   an explicit UTC offset (e.g. "2026-06-15T09:00:00+00:00"). null if no date is stated or you
   cannot resolve it confidently — do not guess a date that is not actually on the page.
@@ -103,7 +116,13 @@ const responseSchema = {
     issuer: { type: Type.STRING, nullable: true },
     candidates: {
       type: Type.ARRAY,
-      maxItems: String(MAX_EXTRACTED_CANDIDATES),
+      // No maxItems on purpose. Gemini compiles responseSchema into a decoding
+      // constraint and unrolls a bounded array once per allowed element, so
+      // `maxItems` multiplies the item's state count by that bound — with this
+      // many enum-constrained fields, 15 copies overflows the serving limit and
+      // every scan 400s with "too many states for serving". The cap is enforced
+      // where it actually matters anyway: the prompt asks for it and the parse
+      // below slices to MAX_EXTRACTED_CANDIDATES.
       items: {
         type: Type.OBJECT,
         properties: {
@@ -111,16 +130,25 @@ const responseSchema = {
           domain: { type: Type.STRING, enum: [...DOMAINS] },
           priority: { type: Type.STRING, enum: [...TASK_PRIORITIES] },
           confidence: { type: Type.STRING, enum: [...CONFIDENCE_BUCKETS] },
+          // STRING because Gemini's enum constraint only applies to strings —
+          // an INTEGER field would let "23" through, and the whole point of the
+          // ladder is that 23 does not exist.
+          estimateMinMinutes: { type: Type.STRING, enum: ESTIMATE_BUCKET_LABELS },
+          estimateMaxMinutes: { type: Type.STRING, enum: ESTIMATE_BUCKET_LABELS },
           dueAt: { type: Type.STRING, nullable: true },
           notes: { type: Type.STRING, nullable: true },
           sourcePage: { type: Type.INTEGER, nullable: true },
         },
-        required: ['title', 'domain', 'confidence'],
+        // Estimates are required so the model cannot quietly skip the judgment
+        // — Gemini drops optional fields it deems inferrable.
+        required: ['title', 'domain', 'confidence', 'estimateMinMinutes', 'estimateMaxMinutes'],
         propertyOrdering: [
           'title',
           'domain',
           'priority',
           'confidence',
+          'estimateMinMinutes',
+          'estimateMaxMinutes',
           'dueAt',
           'notes',
           'sourcePage',
@@ -253,6 +281,12 @@ function hardenCandidate(c: ModelCandidate, timezone: string | undefined): Draft
     domain,
     priority,
     confidence,
+    // Snapped and ordered here even though the response schema constrained it —
+    // a schema the provider may relax under load is not an enforcement mechanism.
+    estimate: normalizeEstimate(
+      { minMinutes: c.estimateMinMinutes, maxMinutes: c.estimateMaxMinutes },
+      'ai',
+    ),
     dueAt,
     notes: c.notes?.trim() || undefined,
     sourcePage: c.sourcePage ?? undefined,

@@ -17,7 +17,7 @@ import { upsertVoiceClarification } from '../modules/clarifications/upsertVoiceC
 import { isTransientGeminiError } from '../modules/ai/voiceCore/geminiRetry'
 import type { DraftItem, ExtractedItem } from '../modules/ai/voiceCore/contract'
 import { getVoiceNoteStorage } from './voiceNoteStorage'
-import { sendVoiceNoteNotification } from './notificationSender'
+import { recordVoiceNoteNotification } from './voiceNoteNotification'
 
 // The real voice pipeline (replaces the old hardcoded stub). For each note:
 //   transcribe (Gemini) -> extract (confidence-scored) -> gate -> persist the
@@ -47,6 +47,7 @@ function draftToReviewItem(item: ExtractedItem): ReviewItem {
     confidence: item.confidence,
     reviewReason: item.reviewReason,
     reasons: item.reasons,
+    estimate: item.estimate,
     dueRaw: item.dueRaw,
     dueAt: item.dueAt,
     notes: item.notes,
@@ -61,6 +62,7 @@ function draftToExtractedTask(item: ExtractedItem): ExtractedTask {
     priority: item.priority,
     confidence: item.confidence,
     reviewReason: item.reviewReason,
+    estimate: item.estimate,
     dueAt: item.dueAt,
     notes: item.notes,
   }
@@ -68,7 +70,7 @@ function draftToExtractedTask(item: ExtractedItem): ExtractedTask {
 
 // Clarify-lane item → the staged ClarifyItem persisted on the note. Only called
 // for items the gate routed to `clarify`, so `clarification` is always set.
-function draftToClarifyItem(item: ExtractedItem): ClarifyItem {
+export function draftToClarifyItem(item: ExtractedItem): ClarifyItem {
   const c = item.clarification
   if (!c) throw new Error('draftToClarifyItem called on a non-clarify item')
   return {
@@ -78,6 +80,7 @@ function draftToClarifyItem(item: ExtractedItem): ClarifyItem {
     priority: item.priority,
     question: c.question,
     kind: c.kind,
+    costOfWrong: c.costOfWrong,
     options: c.options.map((o) => ({ label: o.label, dueAt: o.dueAt })),
     notes: item.notes,
   }
@@ -92,6 +95,7 @@ function recordToItem(record: ExtractedTask): ExtractedItem {
     confidence: record.confidence,
     reviewReason: record.reviewReason,
     reasons: [],
+    estimate: record.estimate,
     dueAt: record.dueAt,
     notes: record.notes,
   }
@@ -172,19 +176,47 @@ export async function processVoiceNote(note: VoiceNoteDoc): Promise<void> {
 // reclaim/retry re-running this never duplicates a question and never reopens
 // one the user already answered. Sequential (not Promise.all) — the lists are
 // tiny and this keeps Mongo write pressure flat.
-async function persistClarifications(note: VoiceNoteDoc): Promise<void> {
+export async function persistClarifications(note: VoiceNoteDoc): Promise<void> {
   for (const item of note.clarifyItems) {
+    // The task comes FIRST and always. A held item used to be a draft with no
+    // task behind it, so a captured thought sat invisible until answered —
+    // absent from Matters, unsearchable, and untouched by "delete everything".
+    // The first option is the model's most-likely guess (it orders them), so it
+    // becomes the provisional date.
+    const guess = item.options[0]?.dueAt ?? undefined
+    const [task] = await persistTasksFromItems({
+      userId: note.userId,
+      voiceNoteId: note._id,
+      items: [
+        {
+          key: item.key,
+          title: item.title,
+          domain: item.domain,
+          priority: item.priority,
+          confidence: 'low',
+          reviewReason: 'vague_date',
+          reasons: [],
+          notes: item.notes,
+          ...(guess ? { dueAt: guess } : {}),
+        },
+      ],
+    })
+    if (!task) continue
+
     await upsertVoiceClarification({
       userId: note.userId,
+      taskId: task._id,
       sourceKey: item.key,
       draft: {
         title: item.title,
         domain: item.domain,
         priority: item.priority,
         notes: item.notes,
+        dueAt: guess,
       },
       question: item.question,
       kind: item.kind,
+      costOfWrong: item.costOfWrong,
       options: item.options.map((o) => ({ label: o.label, dueAt: o.dueAt ?? undefined })),
     })
   }
@@ -219,15 +251,13 @@ async function handleFailure(note: VoiceNoteDoc, err: unknown): Promise<void> {
 }
 
 // Always-surface push (product rule): 'needs_review' -> "N need a look",
-// 'ready' (all-confident) -> "N captured". Outbox guard via notifiedAt so a
-// crash between commit and send re-sends rather than double-sends. Network is
-// skipped in tests (deterministic) — the device-token endpoint is tested
-// separately and sendVoiceNoteNotification is a thin best-effort wrapper.
+// Writes the completion row to the in-app feed. Outbox guard via notifiedAt so
+// a crash between commit and write re-sends rather than double-sends.
 async function maybeNotify(note: VoiceNoteDoc): Promise<void> {
   if (env().NODE_ENV === 'test') return
   if (note.status !== 'needs_review' && note.status !== 'ready') return
   if (note.notifiedAt) return
-  await sendVoiceNoteNotification(note)
+  await recordVoiceNoteNotification(note)
   note.notifiedAt = new Date()
   await note.save().catch(() => {
     /* notifiedAt persistence is best-effort */

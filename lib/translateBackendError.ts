@@ -12,7 +12,16 @@ const FRIENDLY_BY_CODE: Record<string, string> = {
   email_taken: 'An account with this email already exists.',
   invalid_body: 'Some of those details looked off. Check the fields and try again.',
   rate_limited: 'Too many attempts. Wait a moment and try again.',
+  invalid_code: 'That code is wrong or has expired. Send a new one.',
+  email_send_failed: 'We could not send that email. Try again in a moment.',
+  no_pending_email: "There's no email change waiting.",
+  email_unchanged: "That's already your email address.",
 }
+
+// `invalid_credentials` means "wrong email or password" at the sign-in door, but
+// inside Settings the email is not in question — only the password is. Callers
+// re-confirming a password pass this so the message names the right field.
+export const REAUTH_MESSAGES = { invalid_credentials: 'That password is incorrect.' } as const
 
 // Heuristic: raw codes, stack traces, or massive strings shouldn't reach the UI.
 function looksLikeRawError(message: string): boolean {
@@ -26,8 +35,12 @@ function looksLikeRawError(message: string): boolean {
 export function translateBackendError(
   err: unknown,
   fallback = 'Something went wrong. Try again in a moment.',
+  /** Per-surface overrides, e.g. REAUTH_MESSAGES inside Settings. */
+  overrides?: Readonly<Record<string, string>>,
 ): string {
   if (err instanceof ApiError) {
+    const override = overrides?.[err.code]
+    if (override) return override
     const mapped = FRIENDLY_BY_CODE[err.code]
     if (mapped) return mapped
     if (err.status >= 500) return 'Our end hiccuped. Try again in a moment.'

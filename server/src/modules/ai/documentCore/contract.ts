@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { type Domain } from '../../../models/User'
-import { TASK_PRIORITIES, type TaskPriority } from '../../../models/Task'
+import { TASK_PRIORITIES, type TaskEstimate, type TaskPriority } from '../../../models/Task'
 import {
   CONFIDENCE_BUCKETS,
   DOCUMENT_TYPES,
@@ -27,6 +27,10 @@ export const ModelCandidateSchema = z.object({
   domain: z.string().trim().toLowerCase(),
   confidence: z.enum(CONFIDENCE_BUCKETS).catch('low'),
   priority: z.enum(TASK_PRIORITIES).nullish(),
+  // Bucket labels, not integers — see voiceCore/contract.ts for why the model
+  // is asked for strings and why a stray number is still accepted here.
+  estimateMinMinutes: z.union([z.string().max(8), z.number()]).nullish(),
+  estimateMaxMinutes: z.union([z.string().max(8), z.number()]).nullish(),
   dueAt: z.string().max(60).nullish(),
   notes: z.string().max(2000).nullish(),
   sourcePage: z.number().int().min(1).nullish(),
@@ -43,7 +47,12 @@ export const ModelDocumentExtractionSchema = z.object({
   documentTitle: z.string().max(400).nullish(),
   documentSubtitle: z.string().max(600).nullish(),
   issuer: z.string().max(400).nullish(),
-  candidates: z.array(ModelCandidateSchema).max(MAX_EXTRACTED_CANDIDATES).catch([]),
+  // Deliberately unbounded here. Nothing stops the model from returning a 16th
+  // candidate now that the response schema no longer caps the array, and with
+  // `.max()` in front of `.catch([])` one extra item would discard ALL of them.
+  // The extractor slices to MAX_EXTRACTED_CANDIDATES instead — an over-eager
+  // model should cost the user the tail, never the whole scan.
+  candidates: z.array(ModelCandidateSchema).catch([]),
 })
 
 // Hardened candidate the extractor returns (domain validated, date resolved).
@@ -54,6 +63,9 @@ export interface DraftCandidate {
   domain: Domain
   priority: TaskPriority
   confidence: ConfidenceBucket
+  // Bucketed time window for the task itself. Absent when the model gave
+  // nothing usable.
+  estimate?: TaskEstimate
   dueAt?: Date
   notes?: string
   sourcePage?: number

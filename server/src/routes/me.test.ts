@@ -1,5 +1,36 @@
+import { Types } from 'mongoose'
 import { describe, expect, it } from 'vitest'
 import { auth, request, signUp } from '../test/helpers'
+import { AiConversation } from '../models/AiConversation'
+import { AiUsageCounter } from '../models/AiUsageCounter'
+import { Clarification } from '../models/Clarification'
+import { DailyDigest } from '../models/DailyDigest'
+import { DocumentScanUsageCounter } from '../models/DocumentScanUsageCounter'
+import { Notification } from '../models/Notification'
+import { RefreshToken } from '../models/RefreshToken'
+import { ScannedDocument } from '../models/ScannedDocument'
+import { Task } from '../models/Task'
+import { TaskBulkOp } from '../models/TaskBulkOp'
+import { VerificationToken } from '../models/VerificationToken'
+import { VoiceNote } from '../models/VoiceNote'
+
+// Every collection that carries a userId. The cascade test walks this list, so
+// adding a user-scoped model without adding it to deleteUserAndDependents fails
+// here rather than silently leaking that user's rows forever.
+const USER_SCOPED = [
+  Task,
+  TaskBulkOp,
+  VoiceNote,
+  ScannedDocument,
+  AiConversation,
+  AiUsageCounter,
+  DocumentScanUsageCounter,
+  Clarification,
+  DailyDigest,
+  Notification,
+  VerificationToken,
+  RefreshToken,
+] as const
 
 describe('PATCH /me — settings fields', () => {
   it('persists theme and textSize, returned by /auth/me', async () => {
@@ -47,6 +78,39 @@ describe('PATCH /me — settings fields', () => {
     const me = await request.get('/auth/me').set('Authorization', auth(s.accessToken))
     expect(me.body.user.passwordHash).toBeUndefined()
   })
+
+  it('round-trips timezone and locale', async () => {
+    const s = await signUp()
+    const patch = await request
+      .patch('/me')
+      .set('Authorization', auth(s.accessToken))
+      .send({ timezone: 'Africa/Cairo', locale: 'en-GB' })
+
+    expect(patch.status).toBe(200)
+    expect(patch.body.user.timezone).toBe('Africa/Cairo')
+    expect(patch.body.user.locale).toBe('en-GB')
+
+    const me = await request.get('/auth/me').set('Authorization', auth(s.accessToken))
+    expect(me.body.user.timezone).toBe('Africa/Cairo')
+  })
+
+  it('rejects a timezone the runtime does not recognise', async () => {
+    const s = await signUp()
+    const res = await request
+      .patch('/me')
+      .set('Authorization', auth(s.accessToken))
+      .send({ timezone: 'Mars/Olympus_Mons' })
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects a malformed locale', async () => {
+    const s = await signUp()
+    const res = await request
+      .patch('/me')
+      .set('Authorization', auth(s.accessToken))
+      .send({ locale: 'not a locale!' })
+    expect(res.status).toBe(400)
+  })
 })
 
 describe('DELETE /me', () => {
@@ -76,6 +140,51 @@ describe('DELETE /me', () => {
     // Refresh token is gone too — cannot resurrect a session.
     const refresh = await request.post('/auth/refresh').send({ refreshToken: s.refreshToken })
     expect(refresh.status).toBe(401)
+  })
+
+  it('cascades to every user-scoped collection', async () => {
+    const s = await signUp('password123')
+    const userId = new Types.ObjectId(s.userId)
+
+    // Seeded through the driver rather than the models: this is a test about
+    // deletion by userId, and hand-building a schema-valid DailyDigest payload
+    // would only couple it to fields it does not care about.
+    await Promise.all(
+      USER_SCOPED.map((model) => model.collection.insertOne({ userId, seeded: true })),
+    )
+    for (const model of USER_SCOPED) {
+      expect(await model.collection.countDocuments({ userId })).toBeGreaterThan(0)
+    }
+
+    const del = await request
+      .delete('/me')
+      .set('Authorization', auth(s.accessToken))
+      .send({ password: 'password123' })
+    expect(del.status).toBe(204)
+
+    for (const model of USER_SCOPED) {
+      expect(
+        await model.collection.countDocuments({ userId }),
+        `${model.modelName} still holds rows for the deleted user`,
+      ).toBe(0)
+    }
+  })
+
+  it('leaves other accounts untouched', async () => {
+    const mine = await signUp('password123')
+    const theirs = await signUp('password123')
+    const theirId = new Types.ObjectId(theirs.userId)
+
+    await Task.collection.insertOne({ userId: theirId, seeded: true })
+
+    await request
+      .delete('/me')
+      .set('Authorization', auth(mine.accessToken))
+      .send({ password: 'password123' })
+
+    expect(await Task.collection.countDocuments({ userId: theirId })).toBe(1)
+    const stillThere = await request.get('/auth/me').set('Authorization', auth(theirs.accessToken))
+    expect(stillThere.status).toBe(200)
   })
 })
 

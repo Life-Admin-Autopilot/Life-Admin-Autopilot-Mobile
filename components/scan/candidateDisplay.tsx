@@ -5,7 +5,7 @@
 import { cn } from '@/lib/cn'
 import type { ScanCandidateDomain, ScanCandidatePriority } from '@/queries/documentScans'
 
-// A summary sentence Mo wrote (per-document or per-item) — plain, no icon,
+// A summary sentence Kitto wrote (per-document or per-item) — plain, no icon,
 // no tinted box: a small muted eyebrow and the sentence itself rendered bold
 // and legible, not tucked away as if it were secondary metadata.
 export function SummaryNote({ text, className }: { text: string; className?: string }) {

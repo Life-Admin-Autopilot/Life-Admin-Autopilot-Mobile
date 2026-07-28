@@ -18,8 +18,18 @@ export const TIME_BUCKETS = [
 ] as const
 export type TimeBucket = (typeof TIME_BUCKETS)[number]
 
+// "Overdue", not "Slipped".
+//
+// The two are different sets and the app shows both on /matters at once: this
+// header counts everything past its date, while the banner above it counts
+// what taskCounts calls SLIPPING — moved three times, or a fortnight gone.
+// Labelling both "Slipped" put "4 matters have slipped" three rows above
+// "SLIPPED 17", which reads as a bug in the counting rather than as two
+// different questions. "Slipped" now means only the strict signal; the rows
+// under this header already say "8 days overdue", so the header agrees with
+// its own contents.
 export const BUCKET_LABEL: Record<TimeBucket, string> = {
-  overdue: 'Slipped',
+  overdue: 'Overdue',
   today: 'Today',
   tomorrow: 'Tomorrow',
   thisWeek: 'This week',
@@ -62,11 +72,22 @@ export interface TaskGroup {
 }
 
 // Group into time buckets, preserving the server's sort inside each. Empty
-// buckets are dropped — an empty "Slipped" header is a small accusation.
-export function groupByTime(tasks: Task[], now: Date = new Date()): TaskGroup[] {
+// buckets are dropped — an empty "Overdue" header is a small accusation.
+//
+// `pinned` overrides the computed bucket per task id. Completing a matter flips
+// its bucket to `done`, which would otherwise rip the row out of the section
+// the user was looking at and drop it in a "Done" pile at the foot of the list
+// — the row vanishes from under the finger that just ticked it. Callers holding
+// a just-completed row on screen pin it to the bucket it was in beforehand so it
+// goes struck-through in place.
+export function groupByTime(
+  tasks: Task[],
+  now: Date = new Date(),
+  pinned?: ReadonlyMap<string, TimeBucket>,
+): TaskGroup[] {
   const bins = new Map<TimeBucket, Task[]>()
   for (const task of tasks) {
-    const bucket = bucketOf(task, now)
+    const bucket = pinned?.get(task.id) ?? bucketOf(task, now)
     const bin = bins.get(bucket)
     if (bin) bin.push(task)
     else bins.set(bucket, [task])

@@ -1,8 +1,27 @@
 import { type Content, type GoogleGenAI, type Tool, Type } from '@google/genai'
 
 import { env } from '../../../env'
+import { ESTIMATE_BUCKET_LABELS } from '../../../models/Task'
 
 // Gemini function declarations — mirror toolRunner.ts Zod schemas.
+
+// How long the task takes to DO, as a bucketed range. Declared as a STRING
+// enum because Gemini only constrains a parameter to a fixed set when it is a
+// string — an INTEGER would let "23 minutes" through, and the ladder exists
+// precisely so the agent cannot claim that kind of precision.
+const ESTIMATE_MIN_PARAM = {
+  type: Type.STRING,
+  enum: ESTIMATE_BUCKET_LABELS,
+  description:
+    "ALWAYS set this. Lower bound of how long DOING the task takes, in minutes. Estimate the doing, never the waiting: 'book a dentist appointment' is a 5-10 minute phone call, not the appointment; 'renew car insurance' is the paperwork, not the year of cover. The amount of money involved does not change the time.",
+}
+
+const ESTIMATE_MAX_PARAM = {
+  type: Type.STRING,
+  enum: ESTIMATE_BUCKET_LABELS,
+  description:
+    "ALWAYS set this. Upper bound, >= estimateMinMinutes. Use the SAME value as the minimum when the job is tight ('5' and '5'). When you genuinely cannot tell, give a WIDE range rather than a confident narrow one — the width is how the app admits it is guessing.",
+}
 
 const AI_TOOLS: Tool[] = [
   {
@@ -39,6 +58,8 @@ const AI_TOOLS: Tool[] = [
                 "ISO 8601 datetime with literal 'T' separator AND explicit offset (e.g. '2026-06-01T09:00:00+03:00'). Use the offset from the NOW anchor. NEVER emit a space-separated form or a naive datetime — both are rejected.",
             },
             notes: { type: Type.STRING, description: 'Optional longer notes (≤2000 chars).' },
+            estimateMinMinutes: ESTIMATE_MIN_PARAM,
+            estimateMaxMinutes: ESTIMATE_MAX_PARAM,
             tags: {
               type: Type.ARRAY,
               items: { type: Type.STRING },
@@ -49,8 +70,17 @@ const AI_TOOLS: Tool[] = [
           // priority + kind are required so the model can't silently omit them
           // when a strong dueAt signal is present (Gemini drops optional fields
           // when it deems them inferrable). Default priority 'normal' if no cue;
-          // kind forces the reminder-vs-list judgment on every create.
-          required: ['title', 'domain', 'priority', 'kind'],
+          // kind forces the reminder-vs-list judgment on every create. The
+          // estimate bounds are required for the same reason — a task with no
+          // estimate is simply blank in the UI, which reads as a bug.
+          required: [
+            'title',
+            'domain',
+            'priority',
+            'kind',
+            'estimateMinMinutes',
+            'estimateMaxMinutes',
+          ],
         },
       },
       {
@@ -81,6 +111,15 @@ const AI_TOOLS: Tool[] = [
               type: Type.STRING,
               description:
                 'Longer body / description / checklist text (≤2000 chars). Empty string clears existing notes.',
+            },
+            estimateMinMinutes: {
+              ...ESTIMATE_MIN_PARAM,
+              description:
+                "Re-estimate how long the task takes, in minutes. Send BOTH bounds or neither. Only set these when the work itself changed — an estimate the user set by hand is final and your value is ignored.",
+            },
+            estimateMaxMinutes: {
+              ...ESTIMATE_MAX_PARAM,
+              description: 'Upper bound, >= estimateMinMinutes. Send BOTH bounds or neither.',
             },
             tags: {
               type: Type.ARRAY,
@@ -257,7 +296,7 @@ const AI_TOOLS: Tool[] = [
       {
         name: 'holdForClarification',
         description:
-          "HOLD a genuinely-uncertain item instead of creating it, and ask the user. This is HOW YOU ASK NOW — the question becomes a little card RIGHT HERE in the chat with tappable answer chips + a type-your-own field, so do NOT re-type the question or list the options as prose, and do NOT tell the user to go to their home screen. Call this (alongside your createTask calls, same turn) for each held item: a CONFLICTING/unsure date ('the 15th or the 18th', 'the 17th or 19th, not sure'); an UNNAMEABLE task ('email that guy about the thing'); an in-message duplicate; or a TIME-SENSITIVE task given with NO time (a real appointment, a bill/rent, a renewal/expiry, or an explicit 'remind me to …') — for that case set kind='date', question 'When should I remind you?', and offer 2-4 smart time options each with a resolved dueAt. Do NOT hold casual no-time to-dos ('buy bread') — those you just create. Runs immediately — no confirmation. Give ONE short warm lead-in line, then let the card carry the question.",
+          "CREATE a task AND ask the user one question about it. Use this instead of createTask when an item is genuinely uncertain — it still creates the task immediately (nothing is withheld from the user), applies your best guess, and attaches the question. This is HOW YOU ASK NOW — the question becomes a little card RIGHT HERE in the chat with tappable answer chips + a type-your-own field, so do NOT re-type the question or list the options as prose, and do NOT tell the user to go to their home screen. Call this (alongside your createTask calls, same turn) for each uncertain item: a CONFLICTING/unsure date ('the 15th or the 18th', 'the 17th or 19th, not sure'); an UNNAMEABLE task ('email that guy about the thing'); an in-message duplicate; or a TIME-SENSITIVE task given with NO time (a real appointment, a bill/rent, a renewal/expiry, or an explicit 'remind me to …') — for that case set kind='date', question 'When should I remind you?', and offer 2-4 smart time options each with a resolved dueAt. Always set costOfWrong: 'high' when a wrong date means missing something irreversible (bill, flight, court date, passport/licence/insurance expiry) so the reminder waits for confirmation; 'low' when a wrong nudge time just gets rescheduled. Do NOT use this for casual no-time to-dos ('buy bread') — those you just create. Runs immediately — no confirmation. Give ONE short warm lead-in line, then let the card carry the question.",
         parameters: {
           type: Type.OBJECT,
           properties: {
@@ -278,7 +317,13 @@ const AI_TOOLS: Tool[] = [
             dueAtGuess: {
               type: Type.STRING,
               description:
-                "Optional best-guess due date (ISO 8601, literal 'T' + explicit offset). Omit when the date IS the question.",
+                "Optional best-guess due date (ISO 8601, literal 'T' + explicit offset). The task is created with this applied provisionally. Omit when the first option already carries the guess.",
+            },
+            costOfWrong: {
+              type: Type.STRING,
+              enum: ['low', 'high'],
+              description:
+                "What a wrong guess costs. 'high' (a bill, flight, court date, passport/licence/insurance expiry — missing it is irreversible) creates the task but WITHHOLDS its reminder until the user confirms. 'low' (a wrong nudge time just gets rescheduled) lets the reminder fire on the guess. Default to 'high' when unsure.",
             },
             notes: { type: Type.STRING, description: 'Optional notes (≤2000 chars).' },
             question: {
@@ -325,7 +370,7 @@ const AI_TOOLS: Tool[] = [
   },
 ]
 
-// Generation config for the chat stream. A low temperature keeps Ketto's
+// Generation config for the chat stream. A low temperature keeps Kitto's
 // tool-arg extraction (dates, domains, priorities) deterministic — high
 // temperature was a contributor to "bad AI results" (drifting domains,
 // invented dates). 0.3 leaves a little warmth in the prose without

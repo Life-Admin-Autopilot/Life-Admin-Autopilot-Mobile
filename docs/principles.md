@@ -55,9 +55,9 @@ Every meaningful surface must demonstrate at least four of these:
 7. Motion that clarifies flow rather than entertaining — and never celebrates.
 8. Data presented with institutional precision (tabular numerals, factual status).
 
-## Warm, not chatty — the voice of Ketto
+## Warm, not chatty — the voice of Kitto
 
-The assistant is **Ketto**: a small round panda who handles your life admin. Warm and genuinely competent, both at once — cute, not silly; friendly, not fawning. It says what it did, offers the next move, and gets out of the way. The product noun is **"matters"** (not "tasks"). The emotional goal is **relief with a smile**, not productivity theatre.
+The assistant is **Kitto**: a small round panda who handles your life admin. Warm and genuinely competent, both at once — cute, not silly; friendly, not fawning. It says what it did, offers the next move, and gets out of the way. The product noun is **"matters"** (not "tasks"). The emotional goal is **relief with a smile**, not productivity theatre.
 
 The full persona lives in `server/src/modules/ai/voice/systemPrompt.ts` (preamble), `voice/toolRules.ts` → VOICE (rules), and `voice/prefill.ts` (few-shot style precedent). Those three must stay in agreement — the prefill is style precedent the model actually copies, so changing the rules without the examples does nothing.
 

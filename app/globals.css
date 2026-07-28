@@ -3,7 +3,7 @@
 @import "shadcn/tailwind.css";
 
 /*
- * Steward design tokens — "soft planner" identity.
+ * Kitto design tokens — "soft planner" identity.
  * See docs/tokens.md (values), docs/aesthetic.md (vibe), AGENTS.md (rules).
  * Tailwind v4 is CSS-first: tokens in `@theme` generate the semantic utilities
  * (bg-canvas, text-ink-muted, text-display-hero, shadow-card, bg-cat-sage).
@@ -15,7 +15,7 @@
  * etc. are used — no per-component dark: variants needed for token colors.
  *
  * shadcn primitives consume their own vars (--primary, --card, …); we map those
- * onto Steward tokens in :root/.dark so Button/Card/Input inherit the palette.
+ * onto Kitto tokens in :root/.dark so Button/Card/Input inherit the palette.
  *
  * Two accents, deliberately distinct:
  *   `accent`  — coral. ACTIVE / progress / selected / FAB. Never the default CTA.
@@ -24,7 +24,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  /* shadcn semantic colors → Steward CSS vars (defined in :root) */
+  /* shadcn semantic colors → Kitto CSS vars (defined in :root) */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -134,7 +134,23 @@
   --color-cat-pink: rgb(244 198 214);
   --color-cat-pink-ink: rgb(122 48 76);
 
-  /* ---- Domains — the six Steward life-admin domains, on the pastel set ---- */
+  /*
+   * ---- Theme preview swatches ----
+   * The appearance picker draws a miniature of each theme, so it has to render
+   * the DARK palette while the app is light and vice versa. Live tokens can't
+   * do that — `--color-canvas` is only ever the current theme. These mirror the
+   * real canvas/surface values and are deliberately theme-INVARIANT (absent
+   * from `.dark`), for the same reason the category pastels are: the whole
+   * point is to show both at once.
+   */
+  --color-theme-light-canvas: rgb(249 248 252);
+  --color-theme-light-surface: rgb(255 255 255);
+  --color-theme-light-ink: rgb(219 217 226);
+  --color-theme-dark-canvas: rgb(3 3 3);
+  --color-theme-dark-surface: rgb(30 30 33);
+  --color-theme-dark-ink: rgb(72 72 78);
+
+  /* ---- Domains — the six Kitto life-admin domains, on the pastel set ---- */
   --color-domain-health: rgb(183 199 180); /* sage */
   --color-domain-health-ink: rgb(42 92 66);
   --color-domain-home: rgb(245 223 200); /* peach */
@@ -507,5 +523,15 @@
      is meant to be level with. */
   .top-safe {
     top: max(0.5rem, var(--safe-top));
+  }
+  /* A floating panel inset from every edge — `inset-4`, except the vertical
+     insets grow to clear the notch and the home indicator. Plain `inset-4` puts
+     a panel's own header (title, close button) underneath the Dynamic Island in
+     the native shell, where it can't be read or tapped. */
+  .inset-safe {
+    top: max(1rem, calc(var(--safe-top) + 0.5rem));
+    right: max(1rem, var(--safe-right));
+    bottom: max(1rem, calc(var(--safe-bottom) + 0.5rem));
+    left: max(1rem, var(--safe-left));
   }
 }

@@ -282,7 +282,7 @@ interface ToolLoopOutput {
   }>
   /** Sources newly created during this turn (e.g. createTask results).
    *  Merged into the persisted assistant turn's `sources` so any
-   *  [task:<id>] citation Mo emits resolves to a friendly chip on render
+   *  [task:<id>] citation Kitto emits resolves to a friendly chip on render
    *  instead of falling through to (unverified). */
   newSources: ContextSource[]
   usage: Record<string, number | undefined>
@@ -446,7 +446,7 @@ async function* runToolLoop(
           error: null,
         }
         // Stash the affected task as a citable source so [task:<id>]
-        // references in Ketto's reply resolve to friendly chips — not
+        // references in Kitto's reply resolve to friendly chips — not
         // "(unverified)". De-dupe across rounds.
         const src = sourceFromToolResult(out.result)
         if (src && !seenSourceIds.has(src.id)) {

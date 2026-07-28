@@ -41,10 +41,30 @@ set_string() {
 # project — this keeps the two in sync on every sync.
 set_string CFBundleDisplayName "Kitto"
 
-# @capacitor/camera, document scanning. Only CameraSource.Camera is used
-# (lib/documentScan/useCaptureSource.ts), so no photo-library key is needed.
+# @capacitor/camera, document scanning (lib/documentScan/useCaptureSource.ts).
+#
+# All THREE keys are mandatory, even though the flow only ever uses
+# CameraSource.Camera and never touches the photo library. The plugin's
+# checkUsageDescriptions() walks *every* case of CameraPropertyListKeys and
+# rejects the call if any one is absent — it does not look at which source was
+# requested. Drop either photo-library key and "Take a photo" fails with
+# "You are missing NS…UsageDescription… Camera will not function without it",
+# which the UI surfaced as a generic "Could not process that scan."
 set_string NSCameraUsageDescription \
   "Kitto uses your camera to scan documents so it can pull out bills, appointments, and deadlines."
+set_string NSPhotoLibraryAddUsageDescription \
+  "Kitto saves document scans to your photo library only when you ask it to."
+set_string NSPhotoLibraryUsageDescription \
+  "Kitto can attach a bill, letter, or form you already have saved in your photo library."
+
+# Voice capture (lib/ai/useVoiceRecorder.ts) goes through the WebView's
+# getUserMedia rather than a native plugin, but iOS does not care which layer
+# asks: Capacitor's WKUIDelegate auto-grants the WebKit-level request
+# (WebViewDelegationHandler.swift), which then triggers the real TCC prompt.
+# Without this key iOS TERMINATES the app the instant the mic is touched —
+# it reads as "recording is broken", not as a missing permission string.
+set_string NSMicrophoneUsageDescription \
+  "Kitto uses your microphone so you can speak a note or a question instead of typing it."
 
 if [ "$ALLOW_LOCAL_HTTP" -eq 0 ]; then
   echo "Patched $PLIST (product keys only)."

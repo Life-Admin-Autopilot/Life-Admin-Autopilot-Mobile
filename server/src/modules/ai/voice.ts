@@ -1,6 +1,6 @@
 import type { Content } from '@google/genai'
 
-// Ketto's voice — system prompt + few-shot prefill turns. The prefill rides in
+// Kitto's voice — system prompt + few-shot prefill turns. The prefill rides in
 // `contents` as past turn pairs (NOT in systemInstruction). Wiscord lesson:
 // small models read system-prompt examples as canned Q→A lookup tables and
 // copy verbatim. Past turns get read as "this is how I tend to talk" —

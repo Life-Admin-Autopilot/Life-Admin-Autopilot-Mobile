@@ -19,6 +19,7 @@ import { CandidateEditSheet, type CandidateDraft } from '@/components/scan/Candi
 import { formatDue, PriorityPill, SummaryNote } from '@/components/scan/candidateDisplay'
 import { OriginalDocumentPeek } from '@/components/scan/OriginalDocumentPeek'
 import { cn } from '@/lib/cn'
+import { env } from '@/lib/env'
 import { useUpdateTask, type UpdateTaskBody } from '@/queries/tasks'
 import type { ScanCandidate, ScannedDocument } from '@/queries/documentScans'
 
@@ -32,7 +33,7 @@ export function TaskOverview({ doc }: { doc: ScannedDocument }) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-1 px-6 text-center">
         <p className="text-body font-medium text-ink">Nothing was filed from this scan.</p>
-        <p className="text-caption text-ink-subtle">Mo didn&apos;t find anything actionable here.</p>
+        <p className="text-caption text-ink-subtle">{env.appName} didn&apos;t find anything actionable here.</p>
       </div>
     )
   }
@@ -123,7 +124,7 @@ export function TaskOverview({ doc }: { doc: ScannedDocument }) {
                   {display.notes ? (
                     <SummaryNote text={display.notes} />
                   ) : (
-                    <span className="text-caption text-ink-subtle">Nothing more Mo found here.</span>
+                    <span className="text-caption text-ink-subtle">Nothing more {env.appName} found here.</span>
                   )}
                   {c.taskId ? (
                     <button

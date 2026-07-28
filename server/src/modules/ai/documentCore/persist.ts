@@ -35,6 +35,9 @@ export async function persistTasksFromCandidates(args: PersistArgs): Promise<Tas
             sourceDocumentId: documentId,
             sourceTaskKey: it.key,
             confidence: it.confidence,
+            // $setOnInsert, so a duplicate confirm never overwrites an estimate
+            // the user has since edited by hand.
+            ...(it.estimate ? { estimate: it.estimate } : {}),
             ...(it.dueAt ? { dueAt: it.dueAt } : {}),
             ...(it.notes ? { notes: it.notes } : {}),
           },

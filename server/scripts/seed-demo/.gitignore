@@ -1,0 +1,3 @@
+# Written by every run: ~2,500 ObjectIds so --purge can undo exactly that run.
+# Machine state, not source.
+.last-run.json

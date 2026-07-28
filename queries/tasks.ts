@@ -50,6 +50,17 @@ export interface Subtask {
   done: boolean
 }
 
+// An AI-guessed (or user-corrected) window for how long the matter takes to do.
+// Always a bucketed RANGE, never a single number — the width is how the system
+// admits it is estimating. `source: 'user'` means the person set it by hand and
+// no AI pass will overwrite it. Absent on every matter created before the
+// feature existed, so every surface must render without it.
+export interface TaskEstimate {
+  minMinutes: number
+  maxMinutes: number
+  source: 'ai' | 'user'
+}
+
 export interface TaskReminder {
   at: string
   firedAt?: string
@@ -73,6 +84,7 @@ export interface Task {
   completedAt?: string
   snoozedUntil?: string
   confidence?: TaskConfidence
+  estimate?: TaskEstimate
   sourceVoiceNoteId?: string
   sourceDocumentId?: string
   rescheduleCount: number
@@ -190,7 +202,9 @@ export function useTrashedTasks(enabled = true) {
 // Every mutation lands here. Counts and the tag list are derived from tasks, so
 // they always go stale together — invalidating them separately is how a header
 // ends up disagreeing with the rows under it.
-function invalidateTasks(qc: QueryClient) {
+// Exported so queries/categorize.ts reconciles through the same handle rather
+// than growing its own idea of what a task write invalidates.
+export function invalidateTasks(qc: QueryClient) {
   void qc.invalidateQueries({ queryKey: queryKeys.tasks.all })
   void qc.invalidateQueries({ queryKey: queryKeys.notifications })
 }

@@ -160,7 +160,7 @@ describe('processVoiceNote', () => {
     expect(tasks).toHaveLength(1) // only the confident one persisted
   })
 
-  it('holds a clarifiable voice item as an open Clarification, not a task or review item', async () => {
+  it('creates the task for a clarifiable voice item AND attaches the question', async () => {
     transcribeMock.mockResolvedValueOnce('see the doctor on the 17th or 19th, not sure')
     generateContentMock.mockResolvedValueOnce(
       extractResponse([
@@ -186,9 +186,15 @@ describe('processVoiceNote', () => {
     expect(fresh?.reviewItems).toHaveLength(0)
     expect(fresh?.clarifyItems).toHaveLength(1)
 
-    // The whole point: nothing was silently created with a guessed date.
+    // The task exists immediately, carrying the model's most-likely option as a
+    // provisional date. It used to be withheld until the question was answered,
+    // which left the captured item invisible everywhere in the app.
     const tasks = await Task.find({ sourceVoiceNoteId: note._id })
-    expect(tasks).toHaveLength(0)
+    expect(tasks).toHaveLength(1)
+    expect(tasks[0]?.title).toBe('See the doctor')
+    expect(tasks[0]?.dueAt?.toISOString()).toBe('2026-06-17T06:00:00.000Z')
+    // Passive until confirmed — a guessed appointment date must not fire.
+    expect(tasks[0]?.kind).toBe('list')
 
     const clars = await Clarification.find({ userId: note.userId })
     expect(clars).toHaveLength(1)
@@ -196,6 +202,8 @@ describe('processVoiceNote', () => {
     expect(clars[0]?.kind).toBe('date')
     expect(clars[0]?.options).toHaveLength(2)
     expect(clars[0]?.draft.title).toBe('See the doctor')
+    // The link that makes cascade-on-delete possible at all.
+    expect(String(clars[0]?.taskId)).toBe(String(tasks[0]?._id))
   })
 
   it('upserts voice clarifications idempotently across re-processing (no duplicate question)', async () => {

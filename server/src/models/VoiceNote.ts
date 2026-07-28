@@ -5,8 +5,15 @@ import {
   type TaskPriority,
   CONFIDENCE_BUCKETS,
   type ConfidenceBucket,
+  EstimateSchema,
+  type TaskEstimate,
 } from './Task'
-import { CLARIFICATION_KINDS, type ClarificationKind } from './Clarification'
+import {
+  CLARIFICATION_COSTS,
+  CLARIFICATION_KINDS,
+  type ClarificationCost,
+  type ClarificationKind,
+} from './Clarification'
 
 export { CONFIDENCE_BUCKETS, type ConfidenceBucket }
 
@@ -64,6 +71,10 @@ export interface ExtractedTask {
   priority: TaskPriority
   confidence: ConfidenceBucket
   reviewReason: ReviewReason
+  // Carried from extraction so the estimate survives the review hold and lands
+  // on the Task — re-deriving it at accept time would cost a second AI call for
+  // an answer already given.
+  estimate?: TaskEstimate
   dueAt?: Date
   notes?: string
   taskId?: Types.ObjectId
@@ -79,6 +90,7 @@ export interface ReviewItem {
   confidence: ConfidenceBucket
   reviewReason: ReviewReason
   reasons: string[]
+  estimate?: TaskEstimate
   dueRaw?: string
   dueAt?: Date
   notes?: string
@@ -96,6 +108,9 @@ export interface ClarifyItem {
   priority: TaskPriority
   question: string
   kind: ClarificationKind
+  // Decides whether the task staged alongside this question gets a live
+  // reminder or one withheld until the user confirms the date.
+  costOfWrong: ClarificationCost
   options: { label: string; dueAt?: Date }[]
   notes?: string
 }
@@ -133,6 +148,7 @@ const ExtractedTaskSchema = new Schema<ExtractedTask>(
     priority: { type: String, enum: TASK_PRIORITIES, default: 'normal' },
     confidence: { type: String, enum: CONFIDENCE_BUCKETS, default: 'high' },
     reviewReason: { type: String, enum: REVIEW_REASONS, default: 'clear' },
+    estimate: { type: EstimateSchema },
     dueAt: { type: Date },
     notes: { type: String },
     taskId: { type: Schema.Types.ObjectId, ref: 'Task' },
@@ -149,6 +165,7 @@ const ReviewItemSchema = new Schema<ReviewItem>(
     confidence: { type: String, enum: CONFIDENCE_BUCKETS, default: 'medium' },
     reviewReason: { type: String, enum: REVIEW_REASONS, default: 'ambiguous_intent' },
     reasons: { type: [String], default: [] },
+    estimate: { type: EstimateSchema },
     dueRaw: { type: String },
     dueAt: { type: Date },
     notes: { type: String },
@@ -172,6 +189,7 @@ const ClarifyItemSchema = new Schema<ClarifyItem>(
     priority: { type: String, enum: TASK_PRIORITIES, default: 'normal' },
     question: { type: String, required: true },
     kind: { type: String, enum: CLARIFICATION_KINDS, default: 'date' },
+    costOfWrong: { type: String, enum: CLARIFICATION_COSTS, default: 'high' },
     options: { type: [ClarifyItemOptionSchema], default: [] },
     notes: { type: String },
   },

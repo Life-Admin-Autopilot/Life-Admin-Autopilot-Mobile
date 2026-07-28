@@ -23,6 +23,7 @@ import { DocumentRow } from '@/components/scan/DocumentRow'
 import { DocumentSelectionBar } from '@/components/scan/DocumentSelectionBar'
 import { DocumentsHeader } from '@/components/scan/DocumentsHeader'
 import { SketchEmptyTrayGlyph } from '@/components/icons/sketch/flowGlyphs'
+import { env } from '@/lib/env'
 import { useMorphColors } from '@/lib/motion-colors'
 import { useClaimTabBarSlot } from '@/lib/tabBarStore'
 import { toast } from '@/lib/toast'
@@ -160,7 +161,7 @@ export default function DocumentsPage() {
                 centimetre above this, and two identical buttons that close
                 together read as one of them being broken. */}
             <p className="mt-1.5 max-w-[34ch] text-body text-ink-muted">
-              Scan a bill, letter, or form and Mo will pull out anything actionable.
+              Scan a bill, letter, or form and {env.appName} will pull out anything actionable.
             </p>
           </div>
         </div>

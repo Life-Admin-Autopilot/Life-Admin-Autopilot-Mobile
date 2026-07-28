@@ -8,6 +8,7 @@ describe('Clarification model — toJSON', () => {
     const due = new Date('2026-06-18T00:00:00.000Z')
     const doc = await Clarification.create({
       userId: new Types.ObjectId(),
+      taskId: new Types.ObjectId(),
       status: 'open',
       draft: { title: 'Car insurance renewal', domain: 'car', priority: 'high', tags: ['admin'] },
       question: 'Is it the 15th or the 18th?',
@@ -34,6 +35,7 @@ describe('Clarification model — toJSON', () => {
   it('defaults status to open and priority to normal', async () => {
     const doc = await Clarification.create({
       userId: new Types.ObjectId(),
+      taskId: new Types.ObjectId(),
       draft: { title: 'Email someone', domain: 'family' },
       question: 'Who is it to?',
       kind: 'detail',
@@ -41,5 +43,8 @@ describe('Clarification model — toJSON', () => {
     expect(doc.status).toBe('open')
     expect(doc.draft.priority).toBe('normal')
     expect(doc.options).toEqual([])
+    // Defaults to the cautious side: don't act on a guess we were unsure
+    // enough about to ask.
+    expect(doc.costOfWrong).toBe('high')
   })
 })

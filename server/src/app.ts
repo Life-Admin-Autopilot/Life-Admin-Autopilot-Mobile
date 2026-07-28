@@ -5,20 +5,23 @@ import pinoHttp from 'pino-http'
 import { logger } from './logger'
 import { errorHandler } from './middleware/errorHandler'
 import { authEmailRouter } from './routes/auth.email'
+import { authEmailChangeRouter } from './routes/auth.emailChange'
 import { authMagicRouter } from './routes/auth.magic'
 import { authPasswordRouter } from './routes/auth.password'
 import { authSessionRouter } from './routes/auth.session'
 import { healthRouter } from './routes/health'
 import { meRouter } from './routes/me'
+import { meExportRouter } from './routes/me.export'
 import { meBillingRouter } from './routes/me.billing'
 import { meIntegrationsRouter } from './routes/me.integrations'
 import { meSubscriptionRouter } from './routes/me.subscription'
 import { meTasksRouter } from './routes/me.tasks'
+import { meDigestRouter } from './routes/me.digest'
 import { meVoiceNotesRouter } from './routes/me.voiceNotes'
 import { meDocumentScansRouter } from './routes/me.documentScans'
-import { meDeviceTokensRouter } from './routes/me.deviceTokens'
 import { meClarificationsRouter } from './routes/me.clarifications'
 import { meNotificationsRouter } from './routes/me.notifications'
+import { meRemindersRouter } from './routes/me.reminders'
 import { aiRouter } from './modules/ai/routes'
 
 // Explicit CORS allowlist from CORS_ORIGINS (comma-separated). Never reflect an
@@ -63,17 +66,20 @@ export function createApp(): Express {
   app.use(authPasswordRouter)
   app.use(authSessionRouter)
   app.use(authEmailRouter)
+  app.use(authEmailChangeRouter)
   app.use(authMagicRouter)
   app.use(meRouter)
+  app.use(meExportRouter)
   app.use(meSubscriptionRouter)
   app.use(meBillingRouter)
   app.use(meIntegrationsRouter)
   app.use(meTasksRouter)
+  app.use(meDigestRouter)
   app.use(meVoiceNotesRouter)
   app.use(meDocumentScansRouter)
-  app.use(meDeviceTokensRouter)
   app.use(meClarificationsRouter)
   app.use(meNotificationsRouter)
+  app.use(meRemindersRouter)
   app.use(aiRouter)
 
   app.use(errorHandler)

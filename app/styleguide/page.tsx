@@ -5,7 +5,18 @@ import { Clock, Home, Sparkles, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
 
 import { DomainIcon, type Domain } from '@/components/icons/DomainIcon'
+import { DayProgress } from '@/components/dashboard/DayProgress'
+import { NeedsYouStrip } from '@/components/dashboard/NeedsYouStrip'
 import { Button } from '@/components/ui/button'
+import { CodeInput } from '@/components/ui/CodeInput'
+import { Field } from '@/components/ui/Field'
+import { PasswordInput } from '@/components/ui/PasswordInput'
+import {
+  SettingActionRow,
+  SettingRow,
+  SettingToggleRow,
+} from '@/components/ui/SettingRow'
+import { DeadlineMeter } from '@/components/ui/DeadlineMeter'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { CompletionRing, SelectionCheck, Toggle } from '@/components/ui/CompletionRing'
 import { EmojiChip, type CatColor } from '@/components/ui/EmojiChip'
@@ -18,6 +29,7 @@ import { MorphSheet, ChipToggle, SheetSection } from '@/components/ui/Sheet'
 import { StatStrip, StatTile } from '@/components/ui/StatTile'
 import { TabBar } from '@/components/ui/TabBar'
 import { TaskRow } from '@/components/ui/TaskRow'
+import { ThemeChoice, type ThemeChoiceValue } from '@/components/ui/ThemeChoice'
 
 // Live design-system reference. Everything here imports the REAL primitives —
 // a styleguide that keeps local copies of the components stops telling you the
@@ -68,6 +80,9 @@ export default function StyleguidePage() {
   const [chipOpen, setChipOpen] = useState(true)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [trigger, setTrigger] = useState<DOMRect | null>(null)
+  const [code, setCode] = useState('')
+  const [reminders, setReminders] = useState(true)
+  const [themeChoice, setThemeChoice] = useState<ThemeChoiceValue>('light')
 
   return (
     <main className="min-h-dvh pb-36">
@@ -291,6 +306,56 @@ export default function StyleguidePage() {
           </div>
         </Section>
 
+        <Section title="Form fields" hint="Field wraps the label and error; PasswordInput adds reveal.">
+          <div className="flex flex-col gap-5">
+            <Field label="Name" hint="What Kitto calls you.">
+              <Input placeholder="Your name" />
+            </Field>
+            <Field label="Password">
+              <PasswordInput placeholder="Your password" />
+            </Field>
+            <Field label="Email" error="That address is already in use.">
+              <Input placeholder="you@example.com" aria-invalid />
+            </Field>
+          </div>
+        </Section>
+
+        <Section title="Confirmation code" hint="Six boxes, one value. Paste fills them all.">
+          <CodeInput value={code} onChange={setCode} />
+        </Section>
+
+        <Section title="Appearance" hint="Each tile is a miniature of the theme it selects.">
+          <ThemeChoice value={themeChoice} onChange={setThemeChoice} />
+        </Section>
+
+        <Section title="Settings rows" hint="Navigational, switch, and action. Only the first gets a chevron.">
+          <div className="flex flex-col gap-2.5">
+            <SettingRow
+              emoji="✉️"
+              category="sky"
+              title="Email"
+              value="mina@example.com"
+              onOpen={() => {}}
+            />
+            <SettingToggleRow
+              emoji="🔔"
+              category="blush"
+              title="Reminders"
+              meta="A nudge when a matter comes due"
+              checked={reminders}
+              onChange={setReminders}
+            />
+            <SettingActionRow
+              emoji="📦"
+              category="sage"
+              title="Export your data"
+              meta="Everything Kitto holds, as a file"
+              onAction={() => {}}
+            />
+            <SettingRow emoji="🗑️" category="pink" title="Delete account" tone="danger" onOpen={() => {}} />
+          </div>
+        </Section>
+
         <Section title="Card">
           <Card>
             <CardHeader>
@@ -329,6 +394,37 @@ export default function StyleguidePage() {
           >
             Open bottom sheet
           </Button>
+        </Section>
+
+        <Section
+          title="Deadline meter"
+          hint="Non-linear: the last day occupies a third of the track"
+        >
+          <div className="flex flex-col gap-3">
+            {[
+              { label: 'in 2 hours', ms: 2 * 60 * 60 * 1000 },
+              { label: 'tomorrow', ms: 26 * 60 * 60 * 1000 },
+              { label: 'in 3 days', ms: 3 * 24 * 60 * 60 * 1000 },
+              { label: 'overdue', ms: -4 * 60 * 60 * 1000 },
+            ].map((row) => (
+              <div key={row.label} className="flex items-center gap-3">
+                <span className="w-24 shrink-0 text-body-sm text-ink-muted">{row.label}</span>
+                <DeadlineMeter dueAt={new Date(Date.now() + row.ms).toISOString()} />
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        <Section title="Day progress">
+          <div className="flex flex-wrap items-center gap-2">
+            <DayProgress done={0} total={8} />
+            <DayProgress done={3} total={8} />
+            <DayProgress done={8} total={8} />
+          </div>
+        </Section>
+
+        <Section title="Needs you">
+          <NeedsYouStrip needsInput={4} scansAwaitingReview={1} slipping={2} />
         </Section>
 
         <Section title="Elevation">

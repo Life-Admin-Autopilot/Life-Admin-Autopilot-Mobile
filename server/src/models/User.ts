@@ -36,16 +36,6 @@ export interface SubscriptionState {
 export const DEVICE_PLATFORMS = ['ios', 'android', 'web'] as const
 export type DevicePlatform = (typeof DEVICE_PLATFORMS)[number]
 
-// Expo push token registered per device. Used by the voice pipeline to notify
-// when a recording finished processing. Capped + deduped by token on write.
-export interface DeviceToken {
-  token: string
-  platform: DevicePlatform
-  registeredAt: Date
-}
-
-export const MAX_DEVICE_TOKENS = 10
-
 // One captured onboarding Q&A. Persisted so the AI agent can read them later as
 // personalization memory (which areas matter, tone preference, etc.).
 export interface OnboardingAnswer {
@@ -58,19 +48,33 @@ export const MAX_ONBOARDING_ANSWERS = 20
 
 export interface UserAttrs {
   email: string
+  /**
+   * An address the user has asked to move to but not yet confirmed. The account
+   * still authenticates as `email` until the emailed code is accepted, so a
+   * typo'd or hostile address can never lock anyone out.
+   */
+  pendingEmail?: string
   passwordHash?: string
   displayName?: string
   preferredDomains: Domain[]
   hasOnboarded: boolean
   onboardingAnswers: OnboardingAnswer[]
   emailVerifiedAt?: Date
+  /**
+   * IANA zone (e.g. `Africa/Cairo`). Optional on purpose: absent means "trust
+   * whatever the device reports". It matters for the work that runs when no
+   * device is present — the reminder worker and the daily digest both describe
+   * a LOCAL calendar day, and without this they can only guess at UTC.
+   */
+  timezone?: string
+  /** BCP 47 tag (e.g. `en-GB`). Display formatting only. */
+  locale?: string
   theme: Theme
   textSize: TextSize
   mic: MicPrefs
   notifications: NotificationPrefs
   privacy: PrivacyPrefs
   subscription: SubscriptionState
-  deviceTokens: DeviceToken[]
 }
 
 // Sub-schemas use `_id: false` — these are embedded value objects, not
@@ -107,15 +111,6 @@ const SubscriptionSchema = new Schema<SubscriptionState>(
   { _id: false },
 )
 
-const DeviceTokenSchema = new Schema<DeviceToken>(
-  {
-    token: { type: String, required: true },
-    platform: { type: String, enum: DEVICE_PLATFORMS, required: true },
-    registeredAt: { type: Date, default: () => new Date() },
-  },
-  { _id: false },
-)
-
 const OnboardingAnswerSchema = new Schema<OnboardingAnswer>(
   {
     id: { type: String, required: true },
@@ -135,6 +130,11 @@ const UserSchema = new Schema<UserAttrs>(
       trim: true,
       index: true,
     },
+    // Deliberately NOT unique: two people may both have a pending move to the
+    // same address, and only the one who confirms first gets it (the confirm
+    // step re-checks `email` uniqueness). A unique index here would let anyone
+    // block an address just by requesting it.
+    pendingEmail: { type: String, lowercase: true, trim: true },
     passwordHash: { type: String },
     displayName: { type: String },
     preferredDomains: {
@@ -145,13 +145,14 @@ const UserSchema = new Schema<UserAttrs>(
     hasOnboarded: { type: Boolean, default: false },
     onboardingAnswers: { type: [OnboardingAnswerSchema], default: [] },
     emailVerifiedAt: { type: Date },
+    timezone: { type: String },
+    locale: { type: String },
     theme: { type: String, enum: THEMES, default: 'system' },
     textSize: { type: String, enum: TEXT_SIZES, default: 'md' },
     mic: { type: MicSchema, default: () => ({}) },
     notifications: { type: NotificationSchema, default: () => ({}) },
     privacy: { type: PrivacySchema, default: () => ({}) },
     subscription: { type: SubscriptionSchema, default: () => ({}) },
-    deviceTokens: { type: [DeviceTokenSchema], default: [] },
   },
   { timestamps: true },
 )
@@ -163,6 +164,11 @@ UserSchema.set('toJSON', {
     const obj = ret as unknown as Record<string, unknown>
     if (obj._id != null) obj.id = String(obj._id)
     delete obj._id
+    // Whether a password EXISTS is not a secret, and the client genuinely needs
+    // it: a magic-link account has none, so asking it to re-confirm one before
+    // a destructive action would demand something the user cannot give. The
+    // hash itself never leaves here.
+    obj.hasPassword = typeof obj.passwordHash === 'string' && obj.passwordHash.length > 0
     delete obj.passwordHash
     return obj
   },

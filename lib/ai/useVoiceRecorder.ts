@@ -13,8 +13,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { logger } from '@/lib/logger'
+import { classifyMicFailure, isMicApiAvailable, type MicFailure } from '@/lib/ai/micFailure'
 
-export type RecorderPhase = 'idle' | 'requesting' | 'denied' | 'recording' | 'stopping'
+// 'unavailable' covers every reason start() could not produce a recorder —
+// denial is only one of them. Read `failure` for which, and render it with
+// micFailureMessage() rather than assuming a permission problem.
+export type RecorderPhase = 'idle' | 'requesting' | 'unavailable' | 'recording' | 'stopping'
 
 const MAX_RECORDING_MS = 5 * 60 * 1000
 const MIN_CAPTURE_MS = 350
@@ -24,7 +28,10 @@ interface UseVoiceRecorderResult {
   elapsedMs: number
   /** Live mic amplitude, 0 (silence) → 1 (loud). 0 when not recording. */
   level: number
-  start: () => Promise<void>
+  /** Why the last start() failed. Set whenever phase is 'unavailable'. */
+  failure: MicFailure | null
+  /** Resolves null once recording, or the reason it could not start. */
+  start: () => Promise<MicFailure | null>
   /** Resolves with the recording, or null if it was too short / produced no data. */
   stop: () => Promise<Blob | null>
 }
@@ -33,6 +40,7 @@ export function useVoiceRecorder(): UseVoiceRecorderResult {
   const [phase, setPhase] = useState<RecorderPhase>('idle')
   const [elapsedMs, setElapsedMs] = useState(0)
   const [level, setLevel] = useState(0)
+  const [failure, setFailure] = useState<MicFailure | null>(null)
 
   const recorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
@@ -71,11 +79,15 @@ export function useVoiceRecorder(): UseVoiceRecorderResult {
     setLevel(0)
   }, [])
 
-  const start = useCallback(async () => {
-    if (busyRef.current || recorderRef.current) return
+  const start = useCallback(async (): Promise<MicFailure | null> => {
+    if (busyRef.current || recorderRef.current) return null
     busyRef.current = true
     setPhase('requesting')
+    setFailure(null)
     try {
+      // Checked up front so a missing API reads as 'unsupported' rather than
+      // throwing a bare TypeError that looks like a denial further down.
+      if (!isMicApiAvailable()) throw new Error('mediaDevices unavailable')
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
       chunksRef.current = []
@@ -125,12 +137,16 @@ export function useVoiceRecorder(): UseVoiceRecorderResult {
         logger.warn('voiceRecorder:analyser-failed', err)
       }
     } catch (err) {
-      logger.warn('voiceRecorder:start-failed', err)
+      const reason = classifyMicFailure(err)
+      logger.warn('voiceRecorder:start-failed', { reason, err })
       cleanup()
-      setPhase('denied')
+      setFailure(reason)
+      setPhase('unavailable')
+      return reason
     } finally {
       busyRef.current = false
     }
+    return null
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cleanup])
 
@@ -154,5 +170,5 @@ export function useVoiceRecorder(): UseVoiceRecorderResult {
 
   useEffect(() => cleanup, [cleanup])
 
-  return { phase, elapsedMs, level, start, stop: stopInternal }
+  return { phase, elapsedMs, level, failure, start, stop: stopInternal }
 }

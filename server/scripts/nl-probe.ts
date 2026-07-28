@@ -1,4 +1,4 @@
-// Ad-hoc Mo response probe — paste any prompt, see exactly what Gemini
+// Ad-hoc Kitto response probe — paste any prompt, see exactly what Gemini
 // returns. Same system prompt + prefill the production /ai/ask endpoint
 // uses. No DB persistence, no quota, no SSE — straight call.
 //
@@ -174,7 +174,7 @@ async function main() {
     }
   }
 
-  console.log(`\n\n${COLORS.bold('─ Mo replied ─────────────────────────────────────')}`)
+  console.log(`\n\n${COLORS.bold('─ Kitto replied ─────────────────────────────────────')}`)
   console.log(text.trim() || COLORS.dim('(no text)'))
 
   console.log(`\n${COLORS.bold('─ Tool calls ─────────────────────────────────────')}`)

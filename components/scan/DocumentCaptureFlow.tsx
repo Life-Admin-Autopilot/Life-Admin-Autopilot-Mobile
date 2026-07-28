@@ -26,6 +26,7 @@ import { TaskOverview } from '@/components/scan/TaskOverview'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
 import { useCaptureSource, type UseCaptureSourceResult } from '@/lib/documentScan/useCaptureSource'
+import { env } from '@/lib/env'
 import { useMorphColors } from '@/lib/motion-colors'
 import { MORPH_BACKDROP_FADE, MORPH_CONTENT_VARIANTS, MORPH_SPRING } from '@/lib/motion'
 import { useBodyScrollLock } from '@/lib/scrollLock'
@@ -42,6 +43,15 @@ type Phase = 'choose' | 'uploading' | 'processing' | 'review' | 'filed' | 'succe
 const SHEET_HEIGHT = 300
 const SHEET_MARGIN_BOTTOM = 20
 const SHEET_RADIUS = 26
+
+// Padding for the FULLSCREEN phases. Resolved in CSS rather than JS so it
+// tracks orientation changes without a re-render, and falls back to the plain
+// design values (30/24) on any surface without insets — desktop, or iOS before
+// the safe-area vars resolve.
+const CONTENT_INSET = {
+  top: 'max(30px, calc(var(--safe-top) + 12px))',
+  bottom: 'max(24px, calc(var(--safe-bottom) + 8px))',
+} as const
 
 interface DocumentCaptureFlowProps {
   docs: ScannedDocument[]
@@ -219,13 +229,32 @@ export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureF
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="absolute right-3 top-3 z-10 rounded-full p-1.5 text-ink-subtle transition-colors hover:bg-surface-sunken hover:text-ink"
+            // Fullscreen, this sits in the notch/Dynamic Island band unless it
+            // is pushed past the top inset — the sheet phase never reaches
+            // that high, so it keeps its plain 12px.
+            style={{ top: isFullscreen ? CONTENT_INSET.top : 12 }}
+            className="absolute right-3 z-10 rounded-full p-1.5 text-ink-subtle transition-colors hover:bg-surface-sunken hover:text-ink"
           >
             <X size={18} />
           </button>
         ) : null}
 
-        <div className="flex h-full w-full flex-col" style={{ padding: isFullscreen ? '30px 24px 24px' : '20px' }}>
+        {/* Fullscreen means edge-to-edge under the status bar and the home
+            indicator (viewport-fit=cover), so the CONTENT box — not the
+            surface — is what has to clear them. */}
+        <div
+          className="flex h-full w-full flex-col"
+          style={
+            isFullscreen
+              ? {
+                  paddingTop: CONTENT_INSET.top,
+                  paddingLeft: 24,
+                  paddingRight: 24,
+                  paddingBottom: CONTENT_INSET.bottom,
+                }
+              : { padding: 20 }
+          }
+        >
           {/* Content swap keeps the app-wide timing separation: the outgoing
               phase fades out in 60ms, which is exactly MORPH_SPRING's delay,
               so the shell only starts morphing once it's empty. On dismissal
@@ -372,7 +401,7 @@ function SuccessPhase({ result, onDone }: { result: ReviewScanResult; onDone: ()
           {count === 0 ? 'All set.' : count === 1 ? '1 matter filed.' : `${count} matters filed.`}
         </h2>
         <p className="mt-1 text-body text-ink-muted">
-          {count === 0 ? 'Nothing was kept from this scan.' : 'Mo will remind you when it counts.'}
+          {count === 0 ? 'Nothing was kept from this scan.' : `${env.appName} will remind you when it counts.`}
         </p>
       </div>
       <Button variant="solid" className="w-full max-w-xs" onClick={onDone}>

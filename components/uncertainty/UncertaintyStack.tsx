@@ -11,6 +11,7 @@ import { MorphSurface, type MorphShape } from '@/components/ui/MorphSurface'
 import {
   useClarifications,
   useResolveClarification,
+  useDeferClarification,
   useDropClarification,
   type Clarification,
 } from '@/queries/clarifications'
@@ -46,6 +47,7 @@ export function UncertaintyStack() {
 function Walker({ initial }: { initial: Clarification[] }) {
   const router = useRouter()
   const resolve = useResolveClarification()
+  const defer = useDeferClarification()
   const drop = useDropClarification()
 
   const [queue] = useState(initial)
@@ -71,6 +73,13 @@ function Walker({ initial }: { initial: Clarification[] }) {
     resolve.mutate({ id: current.id, answer: { type: 'custom', text: custom.trim() }, timezone: localTz() })
     advance()
   }
+  // Skip is a real dismissal, not just a local index bump — tell the server so
+  // the same question doesn't greet the user again next session.
+  const skip = () => {
+    if (!current) return
+    defer.mutate(current.id)
+    advance()
+  }
   const dropIt = () => {
     if (!current) return
     drop.mutate(current.id)
@@ -94,7 +103,7 @@ function Walker({ initial }: { initial: Clarification[] }) {
               🌤️
             </span>
             <h2 className="font-display-wonk font-display text-display-md text-ink">All clear.</h2>
-            <p className="text-body text-ink-muted">Nothing else needs your call.</p>
+            <p className="text-body text-ink-muted">Everything's filed the way you wanted.</p>
             <Button
               variant="solid"
               className="mt-3 w-full"
@@ -106,8 +115,10 @@ function Walker({ initial }: { initial: Clarification[] }) {
         ) : (
           <div className="flex h-full flex-col p-6">
             <div className="flex items-center justify-between">
+              {/* "Already filed", not "needs your input" — the task exists
+                  either way, so this is an optional correction, not a demand. */}
               <Pill tone="accent" uppercase>
-                Needs your input
+                Filed with a guess
               </Pill>
               <span className="text-body-sm tabular text-ink-muted">
                 {index + 1}/{queue.length}
@@ -157,7 +168,7 @@ function Walker({ initial }: { initial: Clarification[] }) {
               )}
               <div className="flex gap-1">
                 <button
-                  onClick={advance}
+                  onClick={skip}
                   className="rounded-pill px-2 py-1 text-body-sm text-ink-muted hover:text-ink"
                 >
                   Skip

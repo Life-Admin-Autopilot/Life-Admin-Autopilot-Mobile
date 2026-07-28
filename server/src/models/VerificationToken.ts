@@ -1,6 +1,15 @@
 import mongoose, { Schema, type Model, type Types } from 'mongoose'
 
-export const TOKEN_PURPOSES = ['email_verification', 'password_reset', 'magic_link'] as const
+export const TOKEN_PURPOSES = [
+  'email_verification',
+  'password_reset',
+  'magic_link',
+  // Short numeric codes typed into the app rather than links tapped in a mail
+  // client. The native shell registers no URL scheme yet (docs/CAPACITOR.md),
+  // so a mailed link cannot return to the app — a code can.
+  'email_verification_code',
+  'email_change',
+] as const
 export type TokenPurpose = (typeof TOKEN_PURPOSES)[number]
 
 export interface VerificationTokenAttrs {

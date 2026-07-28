@@ -11,6 +11,7 @@ import {
   type BulkOpEntry,
 } from '../../models/TaskBulkOp'
 import { TaskFilterSchema, buildTaskFilter, type TaskFilter } from './taskQuery'
+import { dropClarificationsForTasks } from '../clarifications/dropOpenClarifications'
 
 // Multi-task mutation, with undo as a first-class outcome rather than a
 // bolt-on. Every path here writes exactly one TaskBulkOp before touching a
@@ -137,7 +138,13 @@ function patchFor(
 }
 
 // Split a patch into the $set/$unset halves Mongo needs.
-function toMongoOps(patch: Record<string, unknown>): Record<string, unknown> {
+//
+// Exported for the categorize flow, which applies a reviewed proposal rather
+// than an action. It MUST share this function rather than write its own: undo
+// reads `prior` back through the same translation, so a second implementation
+// that treated `null` differently would make categorize runs un-undoable in a
+// way nothing would catch until someone tried.
+export function toMongoOps(patch: Record<string, unknown>): Record<string, unknown> {
   const set: Record<string, unknown> = {}
   const unset: Record<string, 1> = {}
   for (const [key, value] of Object.entries(patch)) {
@@ -204,6 +211,13 @@ export async function applyBulk(
       updateOne: { filter: { _id: e.taskId, userId }, update: toMongoOps(e.next) },
     })),
   )
+
+  // A question is ABOUT a task. Delete the task and the question is moot —
+  // leaving it open strands a prompt the user can no longer answer, which is
+  // what made "Questions for you" outlive everything the user cleared.
+  if (input.action === 'delete') {
+    await dropClarificationsForTasks({ userId, taskIds: entries.map((e) => e.taskId) })
+  }
 
   return { affected: entries.length, undoToken: String(op._id), warnings }
 }

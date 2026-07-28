@@ -1,4 +1,4 @@
-# Life Admin Autopilot — Mo V2 (Next.js + Capacitor)
+# Kitto — Life Admin Autopilot (Next.js + Capacitor)
 
 Next.js (App Router, **static export**) + Capacitor + TanStack Query + Zustand + Tailwind + shadcn/ui. Backend lives in `server/` (Express + Mongo, JWT auth); the frontend talks via `lib/api/client.ts` against `NEXT_PUBLIC_API_URL`. No Supabase. No Drizzle.
 
@@ -146,7 +146,7 @@ The biggest accuracy risk is the AI extracting a wrong value (wrong renewal date
   - The pastel set is **theme-invariant** — identical in light and dark. It is the one place hue carries meaning, and dimming it in dark mode would throw that away.
   - Emoji belongs in chips and celebration surfaces. It is still not a substitute for a label, and it does not go in body copy.
 - **Chrome icons stay lucide** (`strokeWidth={1.75}`), in `ink` / `ink-muted`. Custom SVGs live in `components/icons/`; the hand-drawn `sketch/*` set is an intentional texture for the scan flow and empty states — keep it.
-- **The panda is Steward's, and stays.** It appears on hero / splash / empty surfaces. Do not swap in any third-party app's mascot or wordmark.
+- **The ghost mascot is Kitto's, and stays.** `assets/ghost/logo.png` via `components/ui/GhostLogo.tsx` — it appears on hero / splash / welcome / chat-avatar surfaces. The earlier panda mascot is retired and its art is deleted. Do not swap in any third-party app's mascot or wordmark.
 - **The mic/record affordance** is the coral FAB in the tab bar centre — the one place coral is a filled circle.
 - **Domain colors** come from the `--color-domain-*` tokens, which map the six domains onto the shared pastel palette (health→sage, home→peach, car→periwinkle, finance→sky, family→blush, pets→lilac).
 - **Third-party brands use real logos** under `assets/logo/<service>`.

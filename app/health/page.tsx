@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useHealth } from '@/queries/health'
+import { env } from '@/lib/env'
 
 // Backend health probe — proves the full client seam (env → baseUrl → api client
 // → CORS → Express). Renders all three async states per AGENTS.md. Moved off `/`
@@ -13,7 +14,7 @@ export default function HealthPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 px-6 py-12">
       <header className="flex flex-col gap-1">
-        <span className="text-label uppercase text-ink-muted">Steward · foundation</span>
+        <span className="text-label uppercase text-ink-muted">{env.appName} · foundation</span>
         <h1 className="font-display text-display-hero text-balance text-ink">Backend reachable?</h1>
         <p className="text-body text-ink-muted">
           End-to-end check against{' '}

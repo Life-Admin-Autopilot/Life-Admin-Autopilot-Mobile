@@ -157,6 +157,65 @@ describe('extractItems', () => {
     expect(items).toHaveLength(1)
   })
 
+  it('carries the estimate the model chose, as an ai-sourced range', async () => {
+    generateContentMock.mockResolvedValueOnce(
+      modelResponse([
+        {
+          ...task({ title: 'Pay water bill', domain: 'finance' }),
+          estimateMinMinutes: '5',
+          estimateMaxMinutes: '15',
+        },
+      ]),
+    )
+    const { extractItems } = await import('./extract')
+    const items = await extractItems({ transcript: 'pay the water bill' })
+    expect(items[0]?.estimate).toEqual({ minMinutes: 5, maxMinutes: 15, source: 'ai' })
+  })
+
+  it('snaps an off-ladder estimate instead of rejecting the task', async () => {
+    // The response schema constrains these to bucket labels, but a provider
+    // that relaxes the constraint must not cost us the whole task.
+    generateContentMock.mockResolvedValueOnce(
+      modelResponse([
+        {
+          ...task({ title: 'Sort the recycling', domain: 'home' }),
+          estimateMinMinutes: 23,
+          estimateMaxMinutes: 47,
+        },
+      ]),
+    )
+    const { extractItems } = await import('./extract')
+    const items = await extractItems({ transcript: 'sort the recycling' })
+    expect(items).toHaveLength(1)
+    expect(items[0]?.estimate).toEqual({ minMinutes: 30, maxMinutes: 45, source: 'ai' })
+  })
+
+  it('orders a backwards estimate rather than dropping it', async () => {
+    generateContentMock.mockResolvedValueOnce(
+      modelResponse([
+        {
+          ...task({ title: 'Deep clean the oven', domain: 'home' }),
+          estimateMinMinutes: '120',
+          estimateMaxMinutes: '45',
+        },
+      ]),
+    )
+    const { extractItems } = await import('./extract')
+    const items = await extractItems({ transcript: 'deep clean the oven' })
+    expect(items[0]?.estimate).toEqual({ minMinutes: 45, maxMinutes: 120, source: 'ai' })
+  })
+
+  it('leaves the estimate absent when the model omitted it', async () => {
+    // Absent is honest. A default would be a number the user reads as a claim.
+    generateContentMock.mockResolvedValueOnce(
+      modelResponse([task({ title: 'Buy bread', domain: 'home' })]),
+    )
+    const { extractItems } = await import('./extract')
+    const items = await extractItems({ transcript: 'buy bread' })
+    expect(items).toHaveLength(1)
+    expect(items[0]?.estimate).toBeUndefined()
+  })
+
   it('never emits a placeholder/stub task', async () => {
     generateContentMock.mockResolvedValueOnce(
       modelResponse([task({ title: 'Book dentist cleaning', domain: 'health' })]),

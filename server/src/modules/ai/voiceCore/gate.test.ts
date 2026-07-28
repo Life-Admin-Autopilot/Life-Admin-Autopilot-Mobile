@@ -46,6 +46,7 @@ describe('gateAndKey', () => {
         clarification: {
           question: 'The 17th or the 19th?',
           kind: 'date',
+          costOfWrong: 'high',
           options: [{ label: 'The 17th' }, { label: 'The 19th' }],
         },
       }),

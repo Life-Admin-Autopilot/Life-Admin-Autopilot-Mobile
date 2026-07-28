@@ -1,16 +1,17 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Eye, EyeOff } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { Field } from '@/components/ui/Field'
 import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/PasswordInput'
 import { useSignIn, useSignUp } from '@/queries/auth'
 import { signInSchema, signUpSchema, type SignInValues } from '@/schemas/auth'
 import { translateBackendError } from '@/lib/translateBackendError'
+import { env } from '@/lib/env'
 
 const COPY = {
   signin: {
@@ -23,7 +24,7 @@ const COPY = {
   },
   signup: {
     title: 'Create your account.',
-    subtitle: 'Mo keeps your life admin in order.',
+    subtitle: `${env.appName} keeps your life admin in order.`,
     submit: 'Create account',
     switchText: 'Already have an account?',
     switchCta: 'Sign in',
@@ -36,7 +37,6 @@ const COPY = {
 // /dashboard). Both mutations are created unconditionally (rules of hooks).
 export function AuthForm({ mode }: { mode: 'signin' | 'signup' }) {
   const copy = COPY[mode]
-  const [reveal, setReveal] = useState(false)
 
   const signUp = useSignUp()
   const signIn = useSignIn()
@@ -77,24 +77,12 @@ export function AuthForm({ mode }: { mode: 'signin' | 'signup' }) {
         </Field>
 
         <Field label="Password" error={errors.password?.message}>
-          <div className="relative">
-            <Input
-              type={reveal ? 'text' : 'password'}
-              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-              placeholder={mode === 'signup' ? 'At least 8 characters' : 'Your password'}
-              aria-invalid={!!errors.password}
-              className="pr-10"
-              {...register('password')}
-            />
-            <button
-              type="button"
-              onClick={() => setReveal((r) => !r)}
-              aria-label={reveal ? 'Hide password' : 'Show password'}
-              className="absolute inset-y-0 right-0 grid w-12 place-items-center text-ink-muted transition-colors hover:text-ink"
-            >
-              {reveal ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
+          <PasswordInput
+            autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+            placeholder={mode === 'signup' ? 'At least 8 characters' : 'Your password'}
+            aria-invalid={!!errors.password}
+            {...register('password')}
+          />
         </Field>
 
         {mutation.isError ? (
@@ -121,23 +109,5 @@ export function AuthForm({ mode }: { mode: 'signin' | 'signup' }) {
         </Link>
       </p>
     </main>
-  )
-}
-
-function Field({
-  label,
-  error,
-  children,
-}: {
-  label: string
-  error?: string
-  children: React.ReactNode
-}) {
-  return (
-    <label className="flex flex-col gap-2">
-      <span className="text-label uppercase text-ink-muted">{label}</span>
-      {children}
-      {error ? <span className="text-body-sm text-danger">{error}</span> : null}
-    </label>
   )
 }

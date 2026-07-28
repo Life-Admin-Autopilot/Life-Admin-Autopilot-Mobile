@@ -52,7 +52,9 @@ export function TabBar({
       <Link href="/documents" aria-label="Documents">
         <Tab icon={<FileText size={21} />} label="Documents" active={active === 'documents'} />
       </Link>
-      <Tab icon={<User size={21} />} label="Profile" active={active === 'profile'} />
+      <Link href="/profile" aria-label="Profile">
+        <Tab icon={<User size={21} />} label="Profile" active={active === 'profile'} />
+      </Link>
     </nav>
   )
 }
