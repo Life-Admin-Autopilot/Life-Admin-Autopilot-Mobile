@@ -119,6 +119,29 @@ It checks, in order:
 
 Read-only — it prints the fix, it never edits. Exit code 1 on any blocking issue, so it can gate a script. `--url <url>` checks a backend you name instead of reading the bundle, useful before syncing against it.
 
+## Animation frame rate
+
+**The island morph cannot exceed 60fps, and no amount of optimization changes that.** Worth knowing before anyone tries again:
+
+- `requestAnimationFrame` is pinned to 60Hz inside WKWebView by deliberate WebKit design. Safari can lift it by disabling "Prefer Page Rendering Updates near 60fps", but [that flag does not apply to WKWebView](https://developer.apple.com/forums/thread/773222) and [PWAs cannot reach it either](https://bugs.webkit.org/show_bug.cgi?id=173434).
+- Framer Motion springs run on rAF. `MorphSurface` animates `width`/`height`/`borderRadius` — layout properties that can never be compositor-driven — so the shell is rAF-bound and tops out at 60.
+- `CADisableMinimumFrameDurationOnPhone` (set by `patch-ios-plist.sh`) lifts the *native* 60Hz cap on ProMotion iPhones. Necessary for CSS/compositor animations to run above 60; it does **not** unlock rAF.
+
+Exceeding 60 would mean animating only `transform`/`opacity` via CSS or WAAPI — i.e. scale-based morphing, which distorts children. That is exactly the failure `lib/motion.ts` documents and exists to avoid. **The target is a locked 60, not 120.**
+
+Measure on-device with the FPS overlay (`components/dev/FpsMeter.tsx`, enabled by `NEXT_PUBLIC_SHOW_FPS=1` in `.env.native-dev.local`). Read *worst frame time*, not average — an average hides a single 200ms hitch. Measure with Xcode detached: an attached debugger and an inspectable WKWebView slow JS by roughly an order of magnitude.
+
+### What was fixed
+
+| Cause | Fix |
+|---|---|
+| `useVoiceRecorder` called `setLevel` every rAF frame, re-rendering the whole `VoiceIsland` tree at 60Hz | `level` is a `MotionValue`; `Pulse` subscribes and writes `transform` directly. Zero re-renders. |
+| Fullscreen `backdrop-filter` re-sampled every frame beneath the moving island | `will-change: opacity` promotes it so the blur rasterizes once |
+| Shell `width`/`height` invalidation walking the whole page each frame | `contain: layout paint` on `MorphSurface` |
+| App capped at 60Hz natively on ProMotion | `CADisableMinimumFrameDurationOnPhone` |
+
+All four are behaviour-preserving — same values, same timing, same markup.
+
 ## Backend CORS
 
 The Express backend only accepts listed origins (`server/src/app.ts`, `CORS_ORIGINS`). `server/.env.example` documents the full set (Next dev, `capacitor://localhost` for iOS, `http://localhost` for Android, and the LAN IP for live-reload). Update your real `server/.env` and restart the server when your LAN IP changes.

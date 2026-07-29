@@ -11,6 +11,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useMotionValue, type MotionValue } from 'framer-motion'
 
 import { logger } from '@/lib/logger'
 import { classifyMicFailure, isMicApiAvailable, type MicFailure } from '@/lib/ai/micFailure'
@@ -26,8 +27,16 @@ const MIN_CAPTURE_MS = 350
 interface UseVoiceRecorderResult {
   phase: RecorderPhase
   elapsedMs: number
-  /** Live mic amplitude, 0 (silence) → 1 (loud). 0 when not recording. */
-  level: number
+  /**
+   * Live mic amplitude, 0 (silence) → 1 (loud). 0 when not recording.
+   *
+   * A MotionValue, NOT React state, because it updates on every animation
+   * frame. As `useState` this re-rendered the whole VoiceIsland subtree —
+   * shell, transcript, AssistantText, Controls — 60 times a second, which
+   * measured as a sustained drop to ~40fps during recording. MotionValue
+   * updates bypass React entirely; subscribers write to the DOM directly.
+   */
+  level: MotionValue<number>
   /** Why the last start() failed. Set whenever phase is 'unavailable'. */
   failure: MicFailure | null
   /** Resolves null once recording, or the reason it could not start. */
@@ -39,7 +48,7 @@ interface UseVoiceRecorderResult {
 export function useVoiceRecorder(): UseVoiceRecorderResult {
   const [phase, setPhase] = useState<RecorderPhase>('idle')
   const [elapsedMs, setElapsedMs] = useState(0)
-  const [level, setLevel] = useState(0)
+  const level = useMotionValue(0)
   const [failure, setFailure] = useState<MicFailure | null>(null)
 
   const recorderRef = useRef<MediaRecorder | null>(null)
@@ -76,8 +85,8 @@ export function useVoiceRecorder(): UseVoiceRecorderResult {
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
     recorderRef.current = null
-    setLevel(0)
-  }, [])
+    level.set(0)
+  }, [level])
 
   const start = useCallback(async (): Promise<MicFailure | null> => {
     if (busyRef.current || recorderRef.current) return null
@@ -128,7 +137,8 @@ export function useVoiceRecorder(): UseVoiceRecorderResult {
           // Normalize: speech RMS ~0.05–0.3 → scale up and clamp, then smooth.
           const norm = Math.min(1, rms * 3.2)
           smoothed = smoothed * 0.6 + norm * 0.4
-          setLevel(smoothed)
+          // .set() — NOT setState. Same value, same cadence, zero re-renders.
+          level.set(smoothed)
           rafRef.current = requestAnimationFrame(loop)
         }
         rafRef.current = requestAnimationFrame(loop)

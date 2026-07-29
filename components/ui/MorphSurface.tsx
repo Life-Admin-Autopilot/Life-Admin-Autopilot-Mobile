@@ -70,7 +70,14 @@ export const MorphSurface = forwardRef<HTMLDivElement, MorphSurfaceProps>(functi
         ...(shape.background ? { backgroundColor: shape.background } : {}),
       }}
       transition={reduced ? { duration: 0 } : MORPH_SPRING}
-      style={MORPH_SHAPE_STYLE}
+      // `contain: layout paint` stops the per-frame width/height invalidation
+      // at this box instead of letting it walk the rest of the page. Safe here
+      // because the shell is absolutely/fixed-positioned and already clips
+      // (`overflow-hidden`), so nothing outside depends on its children's
+      // layout. Renders identically — it only narrows what the engine must
+      // re-solve each frame. `contain: size` is deliberately NOT used: it would
+      // ignore the animated width/height we are setting.
+      style={{ ...MORPH_SHAPE_STYLE, contain: 'layout paint', willChange: 'width, height' }}
       className={cn(
         'overflow-hidden border border-border text-ink shadow-elevated',
         className,

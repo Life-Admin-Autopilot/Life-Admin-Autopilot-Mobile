@@ -57,6 +57,19 @@ set_string NSPhotoLibraryAddUsageDescription \
 set_string NSPhotoLibraryUsageDescription \
   "Kitto can attach a bill, letter, or form you already have saved in your photo library."
 
+# ProMotion. Without this key iOS caps the ENTIRE app at 60Hz on ProMotion
+# iPhones — Apple made high refresh rate opt-in so apps that don't need it
+# don't spend the battery. Necessary but NOT sufficient: it lifts the native
+# cap, and CSS/compositor-driven animations can then run above 60.
+#
+# It does NOT unlock requestAnimationFrame, which WebKit pins to 60Hz inside
+# WKWebView by deliberate design (Safari can lift it behind a feature flag;
+# those flags do not apply to WKWebView). Anything framer-motion springs —
+# including the island shell's width/height morph — therefore tops out at 60fps
+# no matter what. See docs/CAPACITOR.md → "Animation frame rate".
+"$PLIST_BUDDY" -c "Delete :CADisableMinimumFrameDurationOnPhone" "$PLIST" 2>/dev/null || true
+"$PLIST_BUDDY" -c "Add :CADisableMinimumFrameDurationOnPhone bool true" "$PLIST"
+
 # Voice capture (lib/ai/useVoiceRecorder.ts) goes through the WebView's
 # getUserMedia rather than a native plugin, but iOS does not care which layer
 # asks: Capacitor's WKUIDelegate auto-grants the WebKit-level request

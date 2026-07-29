@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, type MotionValue } from 'framer-motion'
 import { Mic, X, Square, Check } from 'lucide-react'
 
 import { AssistantText } from '@/components/chat/AssistantText'
@@ -17,6 +17,12 @@ import { MORPH_BACKDROP_FADE, MORPH_SPRING } from '@/lib/motion'
 import { isAppChatRoute } from '@/lib/appRoutes'
 import type { AiSource } from '@/lib/ai/types'
 import { env } from '@/lib/env'
+
+/**
+ * Safety net for the deferred mic start. Comfortably past the ~360ms morph, so
+ * it only fires when onAnimationComplete does not — never racing it.
+ */
+const MIC_START_FALLBACK_MS = 600
 
 type Phase = 'recording' | 'review' | 'transcribing' | 'thinking' | 'done' | 'error'
 
@@ -47,7 +53,13 @@ export function VoiceIsland() {
   const panelW = Math.min(vp.w * 0.92, 440)
   const panelH = vp.h * 0.8
 
-  // Start recording the moment the surface opens; reset everything on close.
+  // Reset on open; tear down on close. Note what is NOT here: recorder.start().
+  //
+  // Starting the mic on this commit put getUserMedia — which activates an
+  // AVAudioSession, a 100–300ms main-thread stall on iOS — plus `new
+  // AudioContext()` and a fresh rAF loop onto the exact frames the open spring
+  // needs. The animation and the audio hardware fought, and the open measured
+  // ~40fps. The mic now starts once the shell has settled (see below).
   useEffect(() => {
     if (open) {
       setPhase('recording')
@@ -56,13 +68,37 @@ export function VoiceIsland() {
       setReply('')
       setSources([])
       setError(null)
-      void recorder.start()
     } else {
       abortRef.current?.abort()
       void recorder.stop().catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  // Hand the mic the frame AFTER the morph is done, so the audio-session stall
+  // lands on an idle main thread instead of mid-spring.
+  //
+  // Fires from the panel's onAnimationComplete, with a timer as the safety net
+  // for the cases framer will not call it (an interrupted or skipped
+  // animation) — a missed callback here would mean a surface that says
+  // "Recording" and never records.
+  const micStartedRef = useRef(false)
+
+  const startMic = useCallback(() => {
+    if (micStartedRef.current || !open) return
+    micStartedRef.current = true
+    void recorder.start()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  useEffect(() => {
+    if (!open) {
+      micStartedRef.current = false
+      return
+    }
+    const fallback = setTimeout(startMic, MIC_START_FALLBACK_MS)
+    return () => clearTimeout(fallback)
+  }, [open, startMic])
 
   // The mic only opens from the TabBar, which the auth screens don't render —
   // but a sign-out mid-capture would otherwise strand an open, still-recording
@@ -152,6 +188,12 @@ export function VoiceIsland() {
           exit="exit"
           onClick={cancel}
           aria-hidden
+          // willChange promotes the blur to its own layer so WebKit rasterizes
+          // it ONCE and animates opacity on the cached bitmap. Without it the
+          // fullscreen backdrop-filter is re-sampled every frame the island
+          // moves above it — the single most expensive thing on this screen.
+          // Blur radius and color are unchanged; this is a compositing hint only.
+          style={{ willChange: 'opacity' }}
           className="fixed inset-0 z-50 bg-ink/30 backdrop-blur-md"
         />
       ) : null}
@@ -164,6 +206,7 @@ export function VoiceIsland() {
           animate={{ width: panelW, height: panelH, opacity: 1 }}
           exit={{ width: 56, height: 56, opacity: 0 }}
           transition={MORPH_SPRING}
+          onAnimationComplete={startMic}
           style={{ transformOrigin: 'bottom center' }}
           className="bottom-safe fixed left-1/2 z-50 -translate-x-1/2 overflow-hidden rounded-3xl bg-surface shadow-elevated"
         >
@@ -173,7 +216,7 @@ export function VoiceIsland() {
               <div className="flex w-full flex-1 flex-col items-center justify-center gap-6">
                 {phase === 'recording' || phase === 'review' ? (
                   <>
-                    <Pulse level={phase === 'recording' ? recorder.level : 0} active={phase === 'recording'} />
+                    <Pulse level={recorder.level} active={phase === 'recording'} />
                     <span className="tabular text-display-md text-ink">
                       {formatElapsed(phase === 'recording' ? recorder.elapsedMs : capturedMs)}
                     </span>
@@ -227,17 +270,39 @@ function Header({ phase }: { phase: Phase }) {
 }
 
 // A purple disc that scales with the live mic level — the voice made visible.
-function Pulse({ level, active }: { level: number; active: boolean }) {
-  const scale = active ? 1 + level * 0.9 : 1
+/**
+ * Mic level rings.
+ *
+ * Subscribes to the level MotionValue and writes `transform` straight to the
+ * two ring nodes — byte-identical to the strings the previous render-driven
+ * version produced, and the `transition-transform duration-75` classes are
+ * unchanged, so the smoothing is the same. The only thing that changed is that
+ * a new level no longer re-renders this component (or its parent).
+ */
+function Pulse({ level, active }: { level: MotionValue<number>; active: boolean }) {
+  const outerRef = useRef<HTMLDivElement>(null)
+  const innerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const apply = (raw: number) => {
+      // Matches the old parent-side `phase === 'recording' ? level : 0` gate.
+      const l = active ? raw : 0
+      if (outerRef.current) outerRef.current.style.transform = `scale(${1 + l * 1.4})`
+      if (innerRef.current) innerRef.current.style.transform = `scale(${1 + l * 0.9})`
+    }
+    apply(level.get())
+    return level.on('change', apply)
+  }, [level, active])
+
   return (
     <div className="relative grid size-40 place-items-center">
       <div
+        ref={outerRef}
         className="absolute size-28 rounded-full bg-accent/15 transition-transform duration-75"
-        style={{ transform: `scale(${1 + level * 1.4})` }}
       />
       <div
+        ref={innerRef}
         className="absolute size-24 rounded-full bg-accent/25 transition-transform duration-75"
-        style={{ transform: `scale(${scale})` }}
       />
       <div className="relative grid size-20 place-items-center rounded-full bg-accent text-accent-ink">
         <Mic size={28} />

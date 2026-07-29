@@ -5,12 +5,14 @@ import { ThemeProvider } from 'next-themes'
 import { useEffect, useState } from 'react'
 
 import { Toaster } from '@/components/ui/sonner'
+import { FpsMeter } from '@/components/dev/FpsMeter'
 import { AppTabBar } from '@/components/layout/AppTabBar'
 import { PhoneFrame } from '@/components/layout/PhoneFrame'
 import { ChatIsland } from '@/components/chat/ChatIsland'
 import { LocaleProvider } from '@/components/i18n/LocaleProvider'
 import { VoiceIsland } from '@/components/voice/VoiceIsland'
 import { bootSessionStore, useSessionStore } from '@/lib/auth/sessionStore'
+import { env } from '@/lib/env'
 import { adoptUserLocale } from '@/lib/i18n/localeStore'
 import { useNotificationActions } from '@/lib/notifications/useNotificationActions'
 import { createQueryClient } from '@/queries/client'
@@ -61,6 +63,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <ChatIsland />
             <VoiceIsland />
             <Toaster />
+            {env.showFps ? <FpsMeter /> : null}
           </PhoneFrame>
         </QueryClientProvider>
       </LocaleProvider>

@@ -61,6 +61,9 @@ function ChatIslandSurface() {
             exit="exit"
             onClick={() => setOpen(false)}
             aria-hidden
+            // See VoiceIsland's backdrop: compositing hint only, so the
+            // fullscreen blur rasterizes once instead of every frame.
+            style={{ willChange: 'opacity' }}
             className="fixed inset-0 z-30 bg-ink/20 backdrop-blur-md"
           />
         ) : null}

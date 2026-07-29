@@ -11,6 +11,12 @@ interface PublicEnv {
   apiUrl: string
   /** Product name shown in chrome, the wordmark, and the document title. */
   appName: string
+  /**
+   * Dev-only on-device FPS overlay (components/dev/FpsMeter.tsx). Lives in the
+   * native-dev profile only, so `cap:sync:prod` (which reads .env.production)
+   * can never ship it — same mechanism that keeps the LAN IP out of prod.
+   */
+  showFps: boolean
 }
 
 const API_URL_HELP =
@@ -38,4 +44,5 @@ export const envError: string | null =
 export const env: PublicEnv = {
   apiUrl: apiUrl ?? '',
   appName,
+  showFps: process.env.NEXT_PUBLIC_SHOW_FPS === '1',
 }
