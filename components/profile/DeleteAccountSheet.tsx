@@ -129,7 +129,7 @@ export function DeleteAccountSheet({
           type="button"
           onClick={runExport}
           disabled={exportData.isPending}
-          className="flex items-center gap-3 rounded-2xl bg-surface-sunken px-4 py-3.5 text-left transition-transform active:scale-[0.99] disabled:opacity-50"
+          className="flex items-center gap-3 rounded-2xl bg-surface-sunken px-4 py-3.5 text-start transition-transform active:scale-[0.99] disabled:opacity-50"
         >
           <span className="min-w-0 flex-1">
             <span className="block text-heading-sm text-ink">

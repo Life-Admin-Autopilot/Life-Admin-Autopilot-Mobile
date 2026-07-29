@@ -2,8 +2,8 @@
 
 // Full-bleed list row for /documents.
 //
-// Shape: [type tile] [title / subtitle] [time], with the unresolved dot floated
-// into the left margin rather than given a column. Each row is its own soft
+// Shape: [type tile] [title / subtitle] [time], with the unresolved dot badged
+// onto the tile rather than given a column. Each row is its own soft
 // white card separated by whitespace — no dividers — so the eye runs down the
 // titles instead of stopping at eleven borders.
 //
@@ -17,19 +17,14 @@
 // `min-w-0` on the text column is what actually lets `truncate` engage inside
 // a flex row — without it the column refuses to shrink below its content.
 
-import { useCallback, useEffect, useRef } from 'react'
 import { Loader2 } from 'lucide-react'
 
 import { DocumentTypeIcon } from '@/components/scan/DocumentTypeIcon'
 import { SelectionCheck } from '@/components/ui/CompletionRing'
 import { cn } from '@/lib/cn'
 import { formatScanTime } from '@/lib/scanTime'
+import { useLongPress } from '@/lib/useLongPress'
 import type { ScannedDocument } from '@/queries/documentScans'
-
-const LONG_PRESS_MS = 450
-// A press that wanders this far was a scroll, not a hold. Without it, dragging
-// the list with a finger resting on a row arms selection mid-scroll.
-const LONG_PRESS_SLOP_PX = 10
 
 function sourceLabel(doc: ScannedDocument): string {
   if (doc.sourceType === 'pdf') return 'PDF'
@@ -139,93 +134,48 @@ export function DocumentRow({
 
   // Press-and-hold is the only way into selection mode — the header has no
   // Select button. Pointer events (not touch) so it works with a mouse too.
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const origin = useRef<{ x: number; y: number } | null>(null)
-  // Set when the hold fires, so the click that follows the finger lifting does
-  // not ALSO open the document behind the selection UI that just appeared.
-  const consumed = useRef(false)
-
-  const cancelPress = useCallback(() => {
-    if (timer.current) clearTimeout(timer.current)
-    timer.current = null
-    origin.current = null
-  }, [])
-
-  // A row can unmount mid-hold (the list refetches on a poll), and a timer left
-  // running would fire onLongPress for a row that is no longer on screen.
-  useEffect(() => cancelPress, [cancelPress])
-
-  const startPress = (e: React.PointerEvent) => {
-    if (selectable || !onLongPress) return
-    origin.current = { x: e.clientX, y: e.clientY }
-    consumed.current = false
-    timer.current = setTimeout(() => {
-      consumed.current = true
-      cancelPress()
-      onLongPress()
-    }, LONG_PRESS_MS)
-  }
-
-  const movePress = (e: React.PointerEvent) => {
-    const start = origin.current
-    if (!start) return
-    if (
-      Math.abs(e.clientX - start.x) > LONG_PRESS_SLOP_PX ||
-      Math.abs(e.clientY - start.y) > LONG_PRESS_SLOP_PX
-    ) {
-      cancelPress()
-    }
-  }
+  const press = useLongPress(onLongPress, selectable)
 
   return (
     <button
       type="button"
       onClick={() => {
-        if (consumed.current) {
-          consumed.current = false
-          return
-        }
+        if (press.consumeClick()) return
         if (selectable) onToggleSelect()
         else onOpen()
       }}
-      onPointerDown={startPress}
-      onPointerMove={movePress}
-      onPointerUp={cancelPress}
-      onPointerCancel={cancelPress}
-      onPointerLeave={cancelPress}
-      // Desktop affordance for the same gesture — a right-click on a list row
-      // reaching for "select" should not drop the browser menu on top of it.
-      onContextMenu={(e) => {
-        if (selectable || !onLongPress) return
-        e.preventDefault()
-        onLongPress()
-      }}
+      {...press.handlers}
       aria-pressed={selectable ? selected : undefined}
       className={cn(
-        'relative flex w-full select-none items-center gap-3.5 rounded-2xl py-3 pr-4 text-left shadow-card transition-colors',
-        selectable ? 'pl-3' : 'pl-4',
+        'relative flex w-full select-none items-center gap-3.5 rounded-2xl py-3 pe-4 text-start shadow-card transition-colors',
+        selectable ? 'ps-3' : 'ps-4',
         selected ? 'bg-accent-soft' : 'bg-surface',
       )}
     >
-      {/* The dot is ABSOLUTE, floating in the left margin — it does not get a
-          column of its own. A reserved 18px column plus a gap pushed every row
-          30px inward to make space for a marker that most rows never show,
-          which is a lot of empty gutter to pay for an occasional dot. */}
-      {!selectable && unresolved ? (
-        <span
-          aria-hidden
-          className="absolute -left-1 top-1/2 size-2 -translate-y-1/2 rounded-full bg-accent"
-        />
-      ) : null}
-
-      {/* Selection DOES get a column — the checkbox is the thing being acted
-          on, so it earns the space, and the shift only happens on an explicit
-          mode change the user just asked for. */}
+      {/* Selection gets a column of its own — the checkbox is the thing being
+          acted on, so it earns the space, and the shift only happens on an
+          explicit mode change the user just asked for. */}
       {selectable ? (
         <SelectionCheck checked={selected} size={24} />
       ) : null}
 
-      <DocumentTypeIcon type={doc.documentType} size={48} />
+      {/* The unresolved marker BADGES THE TILE rather than getting a column or
+          floating in the page gutter. A reserved 18px column plus a gap pushed
+          every row 30px inward to make space for a marker most rows never show;
+          hanging the dot off the card's left edge instead cost nothing but read
+          as a stray speck in the margin, unattached to anything. On the tile it
+          is unmistakably about THIS document, the way an unread badge is, and
+          still costs no layout. The ring in the card colour keeps it legible
+          over whichever pastel the type happens to be. */}
+      <span className="relative shrink-0">
+        <DocumentTypeIcon type={doc.documentType} size={48} />
+        {!selectable && unresolved ? (
+          <span
+            aria-hidden
+            className="absolute -end-0.5 -top-0.5 size-2.5 rounded-full bg-accent ring-2 ring-surface"
+          />
+        ) : null}
+      </span>
 
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex items-baseline gap-2">

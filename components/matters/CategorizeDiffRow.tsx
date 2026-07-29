@@ -5,7 +5,7 @@ import { ArrowRight, Check } from 'lucide-react'
 import { EmojiChip } from '@/components/ui/EmojiChip'
 import { domainCategory, domainEmoji } from '@/components/icons/DomainIcon'
 import { cn } from '@/lib/cn'
-import { DOMAIN_LABEL } from '@/queries/tasks'
+import { useDomainLabels } from '@/hooks/useDomainLabels'
 import type { Confidence, ProposedChange } from '@/queries/categorize'
 
 // One proposed refiling, as a reviewable line.
@@ -34,6 +34,7 @@ export function CategorizeDiffRow({
   checked: boolean
   onToggle: () => void
 }) {
+  const domainLabels = useDomainLabels()
   const moved = change.fromDomain !== change.toDomain
   const note = CONFIDENCE_COPY[change.confidence]
 
@@ -44,7 +45,7 @@ export function CategorizeDiffRow({
         onClick={onToggle}
         aria-pressed={checked}
         className={cn(
-          'flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left transition-colors',
+          'flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-start transition-colors',
           checked ? 'bg-accent-soft' : 'bg-surface-field hover:brightness-[0.98]',
         )}
       >
@@ -68,14 +69,14 @@ export function CategorizeDiffRow({
                 category={domainCategory(change.fromDomain)}
                 size={22}
               />
-              <span className="line-through">{DOMAIN_LABEL[change.fromDomain]}</span>
+              <span className="line-through">{domainLabels[change.fromDomain]}</span>
               <ArrowRight size={13} className="shrink-0 text-accent" />
               <EmojiChip
                 emoji={domainEmoji(change.toDomain)}
                 category={domainCategory(change.toDomain)}
                 size={22}
               />
-              <span className="font-bold text-ink">{DOMAIN_LABEL[change.toDomain]}</span>
+              <span className="font-bold text-ink">{domainLabels[change.toDomain]}</span>
             </span>
           ) : null}
 

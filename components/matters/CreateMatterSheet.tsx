@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 
+import { useDomainLabels } from '@/hooks/useDomainLabels'
 import { DomainIcon } from '@/components/icons/DomainIcon'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,7 +12,6 @@ import { fromLocalInputValue } from '@/lib/taskFormat'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
 import {
-  DOMAIN_LABEL,
   TASK_DOMAINS,
   useCreateTask,
   type TaskDomain,
@@ -77,6 +77,7 @@ export function CreateMatterSheet({
   trigger: DOMRect | null
   onClose: () => void
 }) {
+  const domainLabels = useDomainLabels()
   const createTask = useCreateTask()
   const [title, setTitle] = useState('')
   const [domain, setDomain] = useState<TaskDomain>('home')
@@ -171,12 +172,12 @@ export function CreateMatterSheet({
                 onClick={() => setDomain(d)}
                 aria-pressed={domain === d}
                 className={cn(
-                  'flex items-center gap-2 rounded-pill py-1.5 pl-1.5 pr-3.5 text-body-sm font-bold transition-colors',
+                  'flex items-center gap-2 rounded-pill py-1.5 ps-1.5 pe-3.5 text-body-sm font-bold transition-colors',
                   domain === d ? 'bg-accent text-accent-ink' : 'bg-surface-field text-ink',
                 )}
               >
                 <DomainIcon domain={d} size={28} />
-                {DOMAIN_LABEL[d]}
+                {domainLabels[d]}
               </button>
             ))}
           </div>

@@ -1,13 +1,23 @@
 import type { Types } from 'mongoose'
+import { Clarification, visibleOpen } from '../../models/Clarification'
+import { ScannedDocument } from '../../models/ScannedDocument'
 import { Task, notDeleted } from '../../models/Task'
 import { dayBoundaries, toUserObjectId } from './taskQuery'
 
-// Bucket counts for the Matters header, the filter badges, and the dashboard
-// hero (which ships hardcoded numbers today).
+// Bucket counts for the Matters header, the filter badges, and the dashboard.
 //
 // The buckets are deliberately the same ones the list groups by, computed from
 // the same boundaries, so a section header reading "TODAY 3" can never disagree
 // with the badge above it.
+//
+// This is also the DASHBOARD's count source, and that is the whole point of it.
+// Every number on home used to come from /me/digest, which awaits a Gemini call
+// to write its headline before it returns anything at all. The counts were
+// computed in milliseconds and then held hostage by a sentence — so "Needs you"
+// appeared visibly later than the matters list beside it, and worse, it appeared
+// LATE precisely when the user had just changed something (a changed fingerprint
+// is exactly what misses the digest cache). Counts are deterministic and cheap;
+// prose is neither. They are served separately now. See modules/tasks/dailyDigest.
 
 export interface TaskCounts {
   // Live buckets — open/snoozed only. Mutually exclusive and exhaustive.
@@ -25,6 +35,13 @@ export interface TaskCounts {
   // construction: research is unambiguous that an unbounded lifetime overdue
   // count is what drives people to delete the app.
   slipping: number
+  // Finished inside the caller's local day — the numerator of the day-progress
+  // pill. Distinct from `done`, which is every matter ever completed.
+  completedToday: number
+  // The two other "needs you" inboxes, so the dashboard strip resolves from ONE
+  // request instead of racing a fast query against a slow one.
+  needsInput: number
+  scansAwaitingReview: number
   byDomain: Record<string, number>
   byPriority: Record<string, number>
 }
@@ -78,15 +95,44 @@ export async function computeTaskCounts(
           },
           { $count: 'n' },
         ],
+        completedToday: [
+          {
+            $match: {
+              userId: uid,
+              status: 'done',
+              completedAt: { $gte: todayStart, $lt: tomorrowStart },
+            },
+          },
+          { $count: 'n' },
+        ],
         byDomain: [{ $match: live }, { $group: { _id: '$domain', n: { $sum: 1 } } }],
         byPriority: [{ $match: live }, { $group: { _id: '$priority', n: { $sum: 1 } } }],
       },
     },
   ])
 
-  // Trash lives outside the main $match (which excludes deleted rows), so it
-  // needs its own query.
-  const trashed = await Task.countDocuments({ userId: uid, deletedAt: { $exists: true } })
+  // Three collections, so three reads — but concurrent, and all of them are
+  // covered index counts. Trash lives outside the main $match (which excludes
+  // deleted rows), so it needs its own query too.
+  const [trashed, needsInput, scansAwaitingReview] = await Promise.all([
+    Task.countDocuments({ userId: uid, deletedAt: { $exists: true } }),
+    // visibleOpen() — NOT `status: 'open'`. A question the user skipped is
+    // deferred, not outstanding, and counting it would re-assert an obligation
+    // they explicitly put down. Composing the shared predicate is what keeps
+    // this in step with the /uncertainties list. See models/Clarification.
+    Clarification.countDocuments({ userId: uid, ...visibleOpen(now) }),
+    // `ready_for_review` is the TERMINAL SUCCESS state of scanning, not a
+    // to-do: every document that scanned cleanly keeps it forever, confirmed or
+    // not. `reviewedAt` is what the server stamps once every candidate has been
+    // resolved, so its ABSENCE is the real "needs you". The digest's own
+    // fingerprint omits this guard and therefore overcounts; the dashboard was
+    // already filtering client-side to compensate.
+    ScannedDocument.countDocuments({
+      userId: uid,
+      status: 'ready_for_review',
+      reviewedAt: { $exists: false },
+    }),
+  ])
 
   const scalar = (key: string): number =>
     (facet?.[key]?.[0]?.n as number | undefined) ?? 0
@@ -110,6 +156,9 @@ export async function computeTaskCounts(
     done: scalar('done'),
     trashed,
     slipping: scalar('slipping'),
+    completedToday: scalar('completedToday'),
+    needsInput,
+    scansAwaitingReview,
     byDomain: group('byDomain'),
     byPriority: group('byPriority'),
   }

@@ -66,7 +66,7 @@ function ChatIslandSurface() {
         ) : null}
       </AnimatePresence>
 
-      <div className="fixed bottom-24 right-3 z-40 flex items-center gap-2.5">
+      <div className="fixed bottom-24 end-3 z-40 flex items-center gap-2.5">
         {!open ? (
           <button
             type="button"
@@ -253,7 +253,7 @@ function ChatPanel({ onClose }: { onClose: () => void }) {
             <button
               onClick={() => void recorder.stop()}
               aria-label="Discard recording"
-              className="ml-auto grid size-9 shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
+              className="ms-auto grid size-9 shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
             >
               <X size={16} />
             </button>

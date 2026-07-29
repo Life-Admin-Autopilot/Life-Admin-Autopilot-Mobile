@@ -56,7 +56,7 @@ export function SectionHeaderChip({
       {collapsible ? (
         <ChevronDown
           size={15}
-          className={cn('ml-0.5 transition-transform', !open && '-rotate-90')}
+          className={cn('ms-0.5 transition-transform', !open && '-rotate-90')}
         />
       ) : null}
     </>

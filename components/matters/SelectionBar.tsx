@@ -56,10 +56,18 @@ export function SelectionActionBar({
       <Action label="Snooze" onClick={onSnooze} disabled={disabled}>
         <Clock size={20} />
       </Action>
-      {/* Sits between the reversible actions and the destructive one, because
+      {/* Say the plain word.
+          This was "File", then "Tidy". Both failed the only test that matters:
+          someone looking at the bar could not tell what would happen. "File"
+          reads as the noun in an app that has a Documents tab, and "Tidy" is
+          warm but says nothing. "Categorize" is longer and duller and is the
+          word people actually reach for when asking what this does — it fits
+          the 80px slot, same as "Documents" in the tab bar.
+
+          Sits between the reversible actions and the destructive one, because
           that is what it is: it proposes, nothing is written until reviewed,
           and an applied run undoes like any other. */}
-      <Action label="File" onClick={onCategorize} disabled={disabled}>
+      <Action label="Categorize" onClick={onCategorize} disabled={disabled}>
         <Sparkles size={20} />
       </Action>
       <Action label="Delete" onClick={onDelete} disabled={disabled} danger>

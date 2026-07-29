@@ -11,7 +11,8 @@ import { useState } from 'react'
 import { Check, ChevronDown, X } from 'lucide-react'
 
 import { SketchDomainIcon } from '@/components/icons/sketch/domainGlyphs'
-import { DOMAIN_LABEL, DOMAINS, formatDue, PriorityPill, SummaryNote } from '@/components/scan/candidateDisplay'
+import { DOMAINS, formatDue, PriorityPill, SummaryNote } from '@/components/scan/candidateDisplay'
+import { useDomainLabels } from '@/hooks/useDomainLabels'
 import { OriginalDocumentPeek } from '@/components/scan/OriginalDocumentPeek'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
@@ -64,6 +65,7 @@ interface ScanReviewCardProps {
 }
 
 export function ScanReviewCard({ doc, onReviewed }: ScanReviewCardProps) {
+  const domainLabels = useDomainLabels()
   const pending = doc.candidates.filter((c) => !c.taskId)
   const [discarded, setDiscarded] = useState<Set<string>>(new Set())
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -212,7 +214,7 @@ export function ScanReviewCard({ doc, onReviewed }: ScanReviewCardProps) {
                               : 'border-border bg-surface text-ink-muted hover:bg-surface-sunken',
                           )}
                         >
-                          {DOMAIN_LABEL[d]}
+                          {domainLabels[d]}
                         </button>
                       ))}
                     </div>

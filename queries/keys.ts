@@ -23,6 +23,13 @@ export const queryKeys = {
     // they come back, and the sheet reopens from this rather than from state.
     categorizePending: () => ['tasks', 'categorize', 'pending'] as const,
   },
+  // Subscribed calendar feeds. Separate from `tasks` even though a sync writes
+  // matters — the feed list carries its own health (last synced, last error),
+  // and a sync has to invalidate BOTH namespaces.
+  icsFeeds: ['icsFeeds'] as const,
+  // The connected Google account. Separate from icsFeeds — both write matters,
+  // but their connection state and health are unrelated.
+  googleIntegration: ['integrations', 'google'] as const,
   documentScans: ['documentScans'] as const,
   // Nested under the scans namespace but a separate key: the quota changes on
   // upload while the list changes on upload AND on delete, so sharing one key
@@ -36,4 +43,9 @@ export const queryKeys = {
   // Keyed by IANA zone: the digest describes a local calendar day, so the same
   // user in a different zone is a different digest, not a stale one.
   digest: (tz: string) => ['digest', tz] as const,
+  // The blunt invalidation handle, mirroring `tasks.all`. Mutations don't know
+  // the caller's zone and shouldn't have to — the dashboard's counts (including
+  // the "Needs you" strip) come from the digest, so anything that changes a
+  // count has to reach every cached zone, not just one.
+  digestAll: ['digest'] as const,
 }

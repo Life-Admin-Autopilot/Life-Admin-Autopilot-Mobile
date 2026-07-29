@@ -15,7 +15,28 @@ const EnvSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().min(1).default('onboarding@resend.dev'),
 
-  APP_DEEP_LINK_SCHEME: z.string().default('lifeadmin'),
+  // The custom URL scheme the native shell answers to. Was 'lifeadmin' from the
+  // pre-Kitto brand; the scheme must match CFBundleURLSchemes in
+  // ios/App/App/Info.plist and the Android intent-filter, or every link the
+  // server mints — email verification and now the OAuth return leg — opens
+  // nothing.
+  APP_DEEP_LINK_SCHEME: z.string().default('kitto'),
+
+  // Google — optional so the server boots without them. The integration routes
+  // answer 503 when absent rather than failing deep inside a redirect.
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  // Must match a redirect URI registered on the Google Cloud client EXACTLY,
+  // including scheme and trailing path. Google compares it as a literal string.
+  GOOGLE_REDIRECT_URI: z.string().optional(),
+
+  // 32 bytes of hex (64 characters) — `openssl rand -hex 32`. Encrypts
+  // third-party refresh tokens at rest; see lib/tokenCipher.ts. Optional so
+  // dev/test boot without it, but connecting an account is refused without one.
+  INTEGRATION_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/, 'INTEGRATION_ENCRYPTION_KEY must be 64 hex characters')
+    .optional(),
 
   VOICE_NOTE_STORAGE_DIR: z.string().optional(),
   VOICE_NOTE_MAX_BYTES: z.coerce.number().int().positive().default(5 * 1024 * 1024),

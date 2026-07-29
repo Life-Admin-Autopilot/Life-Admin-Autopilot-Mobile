@@ -11,12 +11,12 @@
 // docs/CAPACITOR.md for the permission-string patch step that must be
 // reapplied after every `cap add`/`cap sync` regenerates ios/android.
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
-import { useUploadScan, ApiError } from '@/lib/documentScan/uploadScan'
-import type { ScanSource } from '@/lib/documentScan/uploadScan'
+import { useUploadScan, ApiError, isRetryableUploadError } from '@/lib/documentScan/uploadScan'
+import type { ScanSource, UploadScanArgs } from '@/lib/documentScan/uploadScan'
 import {
   cameraDeniedMessage,
   ensureCameraAccess,
@@ -39,9 +39,16 @@ async function fileToBytes(file: File): Promise<Uint8Array> {
 export interface UseCaptureSourceResult {
   busy: boolean
   error: string | null
+  /** A retryable upload failed and its bytes are still held — the caller can
+   *  offer "Try again" instead of sending the user back to re-capture. */
+  canRetry: boolean
   captureCamera: () => Promise<void>
   captureFile: () => void
   onFileChosen: (e: React.ChangeEvent<HTMLInputElement>) => Promise<void>
+  retryUpload: () => Promise<void>
+  /** Drop the held payload and clear the error — for "choose a different
+   *  document", which must not leave the previous capture retryable. */
+  dismissRetry: () => void
 }
 
 // The hidden <input type=file> ref is owned by the CALLER, not returned from
@@ -54,19 +61,73 @@ export function useCaptureSource(
   onUploaded?: (doc: ScannedDocument) => void,
 ): UseCaptureSourceResult {
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // Message and retryability are ONE piece of state, not two. Split, they can
+  // contradict each other — "retry available" with no message to explain what
+  // went wrong — and every capture entry point would have to remember to reset
+  // both. A single nullable object makes the invalid combination unspellable.
+  const [failure, setFailure] = useState<{ message: string; retryable: boolean } | null>(null)
+  // The bytes live in a ref, not state: they're megabytes of payload nothing
+  // renders, and re-rendering the flow on every capture would be pure cost. The
+  // ref is only ever touched inside callbacks, never during render, so it stays
+  // clear of the ref-safety analysis noted above.
+  const pendingUploadRef = useRef<UploadScanArgs | null>(null)
   const upload = useUploadScan()
 
-  const handleError = (err: unknown) => {
+  // Every capture entry point starts here: a new capture abandons whatever the
+  // last one left behind, so a stale payload can never be resent under a fresh
+  // document's error message.
+  const beginCapture = () => {
+    pendingUploadRef.current = null
+    setFailure(null)
+  }
+
+  const fail = (err: unknown, retryable: boolean) => {
     const message = err instanceof ApiError ? err.message : 'Could not process that scan.'
     logger.warn('captureSource:failed', err)
-    setError(message)
+    setFailure({ message, retryable })
+  }
+
+  // Single upload seam for all three entry points (camera, file picker, retry),
+  // so the hold-the-payload behavior can't drift between them.
+  const runUpload = async (args: UploadScanArgs): Promise<void> => {
+    // Stamped once, here, rather than left to uploadScan's `?? new Date()`
+    // default. Now that a payload can outlive its first attempt, letting the
+    // default fire again would date the document to the RETRY instead of the
+    // capture — a scan taken at 11pm and resent after a tunnel at 12:20am would
+    // file under the wrong day.
+    const stamped: UploadScanArgs = { ...args, capturedAt: args.capturedAt ?? new Date() }
+    setBusy(true)
+    setFailure(null)
+    try {
+      const doc = await upload(stamped)
+      pendingUploadRef.current = null
+      onUploaded?.(doc)
+    } catch (err: unknown) {
+      const retryable = isRetryableUploadError(err)
+      // Held only when a resend could actually work. Dropped otherwise, so the
+      // retry button is never offered for bytes the server has already judged.
+      pendingUploadRef.current = retryable ? stamped : null
+      fail(err, retryable)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const retryUpload = async (): Promise<void> => {
+    const pending = pendingUploadRef.current
+    if (!pending || busy) return
+    await runUpload(pending)
+  }
+
+  const dismissRetry = () => {
+    pendingUploadRef.current = null
+    setFailure(null)
   }
 
   const captureCamera = async () => {
     if (busy) return
+    beginCapture()
     setBusy(true)
-    setError(null)
     try {
       // Dynamic import: @capacitor/camera pulls in the native bridge, which
       // has no meaningful browser fallback of its own — Capacitor.isNativePlatform()
@@ -80,7 +141,9 @@ export function useCaptureSource(
         // made a blocked camera surface as "Could not process that scan."
         const access = await ensureCameraAccess(Camera)
         if (access === 'denied') {
-          setError(cameraDeniedMessage(env.appName))
+          // Not retryable: there are no bytes to resend, and the fix is in
+          // Settings, not in tapping again.
+          setFailure({ message: cameraDeniedMessage(env.appName), retryable: false })
           setBusy(false)
           return
         }
@@ -100,7 +163,10 @@ export function useCaptureSource(
           }
           if (isCameraUnavailable(err)) {
             logger.warn('captureSource:camera-unavailable', err)
-            setError('No camera available on this device. Choose a file instead.')
+            setFailure({
+              message: 'No camera available on this device. Choose a file instead.',
+              retryable: false,
+            })
             setBusy(false)
             return
           }
@@ -109,13 +175,16 @@ export function useCaptureSource(
         if (!photo.base64String) throw new Error('No photo data returned.')
         const bytes = base64ToBytes(photo.base64String)
         const mimeType = photo.format === 'png' ? 'image/png' : 'image/jpeg'
-        const doc = await upload({ bytes, mimeType, source: 'camera' })
-        onUploaded?.(doc)
-        setBusy(false)
+        // Handles its own busy/failure state — and, crucially, keeps `bytes`
+        // alive for a retry. A photo of a physical document is the one payload
+        // in this flow the user cannot cheaply reproduce.
+        await runUpload({ bytes, mimeType, source: 'camera' })
         return
       }
     } catch (err) {
-      handleError(err)
+      // Everything reaching here failed BEFORE any bytes existed (bridge
+      // import, permission probe), so there is nothing to resend.
+      fail(err, false)
       setBusy(false)
       return
     }
@@ -129,6 +198,7 @@ export function useCaptureSource(
 
   const captureFile = () => {
     if (busy) return
+    beginCapture()
     fileInputRef.current?.removeAttribute('capture')
     fileInputRef.current?.setAttribute('accept', 'application/pdf,image/*')
     fileInputRef.current?.click()
@@ -138,19 +208,30 @@ export function useCaptureSource(
     const file = e.target.files?.[0]
     e.target.value = '' // allow re-picking the same file next time
     if (!file) return
+    // Busy covers the read too — a multi-megabyte PDF takes long enough that
+    // leaving the choose buttons live would invite a second pick mid-read.
     setBusy(true)
-    setError(null)
+    let bytes: Uint8Array
     try {
-      const bytes = await fileToBytes(file)
-      const source: ScanSource = file.type === 'application/pdf' ? 'pdf' : 'gallery'
-      const doc = await upload({ bytes, mimeType: file.type, source })
-      onUploaded?.(doc)
-    } catch (err) {
-      handleError(err)
-    } finally {
+      bytes = await fileToBytes(file)
+    } catch (err: unknown) {
+      // A file the browser couldn't read has no bytes to resend.
+      fail(err, false)
       setBusy(false)
+      return
     }
+    const source: ScanSource = file.type === 'application/pdf' ? 'pdf' : 'gallery'
+    await runUpload({ bytes, mimeType: file.type, source })
   }
 
-  return { busy, error, captureCamera, captureFile, onFileChosen }
+  return {
+    busy,
+    error: failure?.message ?? null,
+    canRetry: failure?.retryable ?? false,
+    captureCamera,
+    captureFile,
+    onFileChosen,
+    retryUpload,
+    dismissRetry,
+  }
 }

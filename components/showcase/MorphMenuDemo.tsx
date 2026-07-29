@@ -52,7 +52,7 @@ export function MorphMenuDemo() {
         />
       </button>
 
-      <div className="absolute left-0 top-full z-30 mt-2">
+      <div className="absolute start-0 top-full z-30 mt-2">
         <MorphPanel open={open} width={WIDTH} height={height} radius={14}>
           <ul role="menu" className="flex flex-col p-2" style={{ width: WIDTH }}>
             {ITEMS.map((item) => (

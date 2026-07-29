@@ -7,7 +7,7 @@ import { AiUsageCounter, utcDateBucket } from '../../models/AiUsageCounter'
 import { Clarification } from '../../models/Clarification'
 import { ScannedDocument } from '../../models/ScannedDocument'
 import { DailyDigest } from '../../models/DailyDigest'
-import { buildDailyDigest } from './dailyDigest'
+import { buildDailyDigest, whenDigestProseSettled } from './dailyDigest'
 
 // AI seam. The digest is contractually allowed to run without a model at all,
 // so the default here is "not configured" — every counting test therefore also
@@ -35,7 +35,11 @@ beforeEach(() => {
   userId = new Types.ObjectId().toHexString()
 })
 
-afterEach(() => {
+afterEach(async () => {
+  // The prose refresh is fire-and-forget in production. Drain it before
+  // resetting the spy, or a call started by THIS test lands during the next one
+  // and fails an assertion that has nothing to do with it.
+  await whenDigestProseSettled()
   aiConfigured = false
   generateContent.mockReset()
 })
@@ -311,6 +315,17 @@ describe('buildDailyDigest — the written half', () => {
     generateContent.mockResolvedValue({ text: JSON.stringify(body) })
   }
 
+  // The model's sentence arrives one read LATE, by design: the first build ships
+  // the computed headline immediately rather than holding every count hostage to
+  // a language model (see dailyDigest.ts). So the written half is asserted the
+  // way the dashboard actually receives it — build, let the background write
+  // land, read again.
+  async function digestAfterProse() {
+    await digest()
+    await whenDigestProseSettled()
+    return digest()
+  }
+
   it('takes the headline and theme labels from the model', async () => {
     const a = await task({ title: 'Renew road tax', dueAt: new Date('2026-07-27T09:00:00.000Z') })
     const b = await task({ title: 'Car service', dueAt: new Date('2026-07-28T09:00:00.000Z') })
@@ -320,7 +335,7 @@ describe('buildDailyDigest — the written half', () => {
       themes: [{ label: 'Car paperwork', taskIds: [String(a._id), String(b._id)] }],
     })
 
-    const result = await digest()
+    const result = await digestAfterProse()
 
     expect(result.headline).toBe('Today is mostly car paperwork.')
     expect(result.themes).toEqual([
@@ -328,6 +343,51 @@ describe('buildDailyDigest — the written half', () => {
     ])
     // The figures are still ours, not the model's.
     expect(result.counts.dueToday).toBe(1)
+  })
+
+  it('ships the computed headline first and upgrades it in the background', async () => {
+    await task({ title: 'Renew road tax', dueAt: new Date('2026-07-27T09:00:00.000Z') })
+    aiConfigured = true
+    modelReturns({ headline: 'Today is mostly car paperwork.', themes: [] })
+
+    // The read the user actually waits on never touches the model.
+    const first = await digest()
+    expect(first.headline).toBe('1 matter due today.')
+
+    await whenDigestProseSettled()
+    expect((await digest()).headline).toBe('Today is mostly car paperwork.')
+  })
+
+  it('discards prose that resolves after the matters moved on', async () => {
+    await task({ title: 'Renew road tax', dueAt: new Date('2026-07-27T09:00:00.000Z') })
+    aiConfigured = true
+
+    // Hold the model's answer open so it can be made to land AFTER the rebuild —
+    // the race the sourceHash guard exists for. A mock that resolves immediately
+    // would win before the rebuild and never exercise it.
+    let release!: () => void
+    generateContent.mockReturnValue(
+      new Promise((resolve) => {
+        release = () =>
+          resolve({ text: JSON.stringify({ headline: 'Sentence about one matter.', themes: [] }) })
+      }),
+    )
+
+    await digest()
+
+    // A second matter lands, so the row is rewritten against a new fingerprint.
+    // The model goes away for the rebuild, so nothing competes with the answer
+    // still in flight for the OLD state.
+    await task({ title: 'Book dentist', dueAt: new Date('2026-07-27T11:00:00.000Z') })
+    aiConfigured = false
+    await digest()
+
+    release()
+    await whenDigestProseSettled()
+
+    // The late sentence described one matter; there are now two. It is dropped
+    // rather than stapled onto counts it does not match.
+    expect((await digest()).headline).toBe('2 matters due today.')
   })
 
   it('drops theme ids the model was never given', async () => {
@@ -341,7 +401,7 @@ describe('buildDailyDigest — the written half', () => {
       ],
     })
 
-    const result = await digest()
+    const result = await digestAfterProse()
 
     expect(result.themes).toHaveLength(1)
     expect(result.themes[0]?.label).toBe('Real')
@@ -355,7 +415,7 @@ describe('buildDailyDigest — the written half', () => {
       themes: [],
     })
 
-    const result = await digest()
+    const result = await digestAfterProse()
 
     expect(result.headline).not.toContain(String(a._id))
     expect(result.headline).toContain('Pay electricity bill')
@@ -432,6 +492,9 @@ describe('buildDailyDigest — resilience', () => {
     generateContent.mockRejectedValue(new Error('gemini exploded'))
 
     await digest()
+    // Admission and refund both happen on the background refresh now, so the
+    // slot is still held the instant the digest returns.
+    await whenDigestProseSettled()
 
     const row = await AiUsageCounter.findOne({
       userId: new Types.ObjectId(userId),
@@ -450,6 +513,8 @@ describe('buildDailyDigest — resilience', () => {
       }),
     })
     await digest()
+    // The themes only reach the cache row once the background write lands.
+    await whenDigestProseSettled()
 
     // The matters move, forcing a rebuild — but now the model is down.
     await task({ title: 'Book dentist', dueAt: new Date('2026-07-27T11:00:00.000Z') })

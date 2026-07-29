@@ -1,9 +1,11 @@
 'use client'
 
 import { ArrowDown, ArrowUp, Loader2 } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { useEffect, useState } from 'react'
 
 import { cn } from '@/lib/cn'
+import { useIntlTag } from '@/lib/i18n/localeStore'
 import { formatRange } from '@/lib/taskFormat'
 import { SUMMARY_RANGES, useSummarize, type TaskSummary } from '@/queries/mattersAi'
 import type { TaskFilters } from '@/queries/tasks'
@@ -110,6 +112,8 @@ function Report({
   range: { dueAfter: string; dueBefore: string } | null
   onDrillDown: (filters: TaskFilters, label: string) => void
 }) {
+  const t = useTranslations('matters')
+  const tag = useIntlTag()
   const { counts } = summary
   const delta = counts.completedInRange - counts.completedPrevious
 
@@ -118,7 +122,7 @@ function Report({
       <div className="py-10 text-center">
         <p className="text-body font-medium text-ink">Nothing scheduled.</p>
         <p className="mt-1 text-caption text-ink-subtle">
-          {formatRange(summary.range.from, summary.range.to)} is clear.
+          {t('summary.rangeClear', { range: formatRange(summary.range.from, summary.range.to, { t, tag }) })}
         </p>
       </div>
     )
@@ -193,7 +197,7 @@ function Report({
                 <button
                   type="button"
                   onClick={() => onDrillDown({ q: dupe.title }, dupe.title)}
-                  className="flex w-full items-baseline justify-between gap-2 text-left"
+                  className="flex w-full items-baseline justify-between gap-2 text-start"
                 >
                   <span className="truncate text-body-sm text-ink">{dupe.title}</span>
                   <span className="shrink-0 text-caption tabular text-accent">

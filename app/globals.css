@@ -23,6 +23,56 @@
  */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * SF Arabic — Apple's system Arabic face, reached by local() only.
+ *
+ * Apple's font licence forbids redistributing SF as a webfont, so there is no
+ * url() here and never can be. local() is legitimate: it asks for a font the
+ * device already has and downloads nothing. When the device does not have it
+ * (Android, every desktop browser that isn't Safari-on-macOS), all sources fail
+ * to match, this @font-face resolves to nothing, and the character falls
+ * through to IBM Plex Sans Arabic — which is why that OFL face must stay in
+ * every stack.
+ *
+ * Several aliases because the name that resolves is not stable across OS
+ * versions: "SF Arabic" is the human-readable family, ".SFArabic-Regular" the
+ * dot-prefixed PostScript name iOS uses internally, and "Geeza Pro" the
+ * pre-SF-Arabic system face still present on older iOS. WKWebView blocks
+ * dot-prefixed lookups in some versions — hence the belt-and-braces list, and
+ * hence this must be verified on a device rather than assumed.
+ *
+ * unicode-range confines the face to Arabic script. Without it the browser
+ * would consider SF Arabic a candidate for Latin text too and quietly override
+ * Nunito on iOS.
+ */
+@font-face {
+  font-family: "SFArabic";
+  src:
+    local("SF Arabic"),
+    local("SFArabic-Regular"),
+    local(".SFArabic-Regular"),
+    local("Geeza Pro");
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF,
+    U+10E60-10E7F, U+1EE00-1EEFF;
+}
+
+@font-face {
+  font-family: "SFArabic";
+  src:
+    local("SF Arabic Semibold"),
+    local("SFArabic-Semibold"),
+    local(".SFArabic-Semibold"),
+    local("Geeza Pro Bold");
+  font-weight: 600 800;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF,
+    U+10E60-10E7F, U+1EE00-1EEFF;
+}
+
 @theme inline {
   /* shadcn semantic colors → Kitto CSS vars (defined in :root) */
   --color-background: var(--background);
@@ -44,11 +94,31 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* Type families (loaded via next/font in layout.tsx) */
-  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
-  --font-serif: var(--font-fraunces), ui-serif, Georgia, serif;
-  --font-sans: var(--font-nunito), ui-rounded, ui-sans-serif, system-ui, sans-serif;
-  --font-wordmark: var(--font-nunito), ui-rounded, ui-sans-serif, sans-serif;
+  /*
+   * Type families (loaded via next/font in layout.tsx).
+   *
+   * Each stack is Latin-first, then Arabic. That ordering is the whole
+   * mechanism: CSS font fallback runs PER CHARACTER, so a Latin letter is
+   * served by Fraunces/Nunito (which have it) and an Arabic letter falls
+   * through to SFArabic → Plex Arabic (because Fraunces/Nunito have no Arabic
+   * glyphs at all). One stack renders a mixed "Renew جواز السفر" string
+   * correctly with no conditional CSS and no locale class on the root.
+   *
+   * `SFArabic` is a local()-only face declared below — present on iOS/macOS,
+   * silently absent everywhere else.
+   *
+   * Note --font-display: Fraunces has no Arabic, so Arabic headlines render in
+   * the same face as Arabic body text. The serif/sans pairing does not survive
+   * translation; in Arabic the hierarchy is carried by scale and weight alone,
+   * which docs/aesthetic.md already names as the primary device.
+   */
+  --font-display: var(--font-fraunces), "SFArabic", var(--font-plex-arabic), ui-serif, Georgia,
+    serif;
+  --font-serif: var(--font-fraunces), "SFArabic", var(--font-plex-arabic), ui-serif, Georgia, serif;
+  --font-sans: var(--font-nunito), "SFArabic", var(--font-plex-arabic), ui-rounded, ui-sans-serif,
+    system-ui, sans-serif;
+  --font-wordmark: var(--font-nunito), "SFArabic", var(--font-plex-arabic), ui-rounded,
+    ui-sans-serif, sans-serif;
 
   /* Radius — nothing sharp: everything is a pill or a large round */
   --radius-sm: 8px;
@@ -225,6 +295,7 @@
   /* ---- Motion ---- */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out-quad: cubic-bezier(0.4, 0, 0.2, 1);
+
 
   /*
    * The mascot's gaze (components/ui/GhostLogo.tsx). Translation is a
@@ -410,6 +481,55 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+}
+
+/*
+ * ---- Arabic type corrections ----
+ *
+ * The Latin scale does not transfer. Two things go wrong if it is left alone:
+ *
+ * 1. LETTER-SPACING BREAKS ARABIC. Arabic is a connected script — letters join
+ *    into a continuous baseline stroke. Adding tracking pulls those joins apart
+ *    and renders the word as disconnected fragments; it is not a subtle
+ *    tightening the way it is in Latin, it is a legibility bug. Every tracking
+ *    token is therefore zeroed, including the negative ones (which jam the
+ *    joins into each other instead).
+ *
+ * 2. Arabic needs more vertical room. The script hangs below the baseline and
+ *    stacks diacritics above it, so a line-height tuned to Nunito's Latin
+ *    x-height clips both. Each is opened up roughly 15%.
+ *
+ * Scoped to the document element by lang, so a single Arabic string inside an
+ * otherwise-English app is unaffected — this is about the app being IN Arabic,
+ * not about the characters on screen.
+ */
+html[lang="ar"] {
+  --text-wordmark--line-height: 28px;
+  --text-wordmark--letter-spacing: 0;
+
+  --text-display-hero--line-height: 60px;
+  --text-display-hero--letter-spacing: 0;
+  --text-display-md--line-height: 46px;
+  --text-display-md--letter-spacing: 0;
+  --text-heading-serif--line-height: 38px;
+  --text-countdown--line-height: 74px;
+
+  --text-heading-xl--line-height: 36px;
+  --text-heading-xl--letter-spacing: 0;
+  --text-heading-md--line-height: 32px;
+  --text-heading-sm--line-height: 28px;
+  --text-body--line-height: 28px;
+  --text-body-sm--line-height: 24px;
+
+  /* The label token is the worst offender: 0.08em tracking on an uppercase
+   * Latin eyebrow is the house style, and on Arabic it is shrapnel. Arabic has
+   * no uppercase either, so the eyebrow leans on weight and colour instead. */
+  --text-label--line-height: 20px;
+  --text-label--letter-spacing: 0;
+
+  --text-caption--line-height: 22px;
+  --text-tab--line-height: 18px;
+  --text-micro--line-height: 18px;
 }
 
 @layer utilities {

@@ -25,6 +25,7 @@ export function SearchResults({
   onToggleSelect,
   onOpen,
   onToggleDone,
+  onLongPress,
   onClear,
 }: {
   result: SearchResult
@@ -33,6 +34,9 @@ export function SearchResults({
   onToggleSelect: (task: Task) => void
   onOpen: (task: Task, rect: DOMRect) => void
   onToggleDone: (task: Task) => void
+  /** Same press-and-hold entry as the main list — an answer IS the list while
+   *  it is on screen, so the gesture cannot stop working here. */
+  onLongPress?: (task: Task) => void
   onClear: () => void
 }) {
   if (result.matches.length === 0) {
@@ -75,6 +79,7 @@ export function SearchResults({
               onToggleSelect={onToggleSelect}
               onOpen={onOpen}
               onToggleDone={onToggleDone}
+              onLongPress={onLongPress}
             />
             {match.reason ? (
               <p className="px-4 pb-2 -mt-1 text-caption text-ink-subtle">{match.reason}</p>

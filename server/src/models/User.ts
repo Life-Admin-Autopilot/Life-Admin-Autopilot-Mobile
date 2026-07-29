@@ -23,6 +23,30 @@ export interface NotificationPrefs {
   emailDigest: boolean
   marketing: boolean
 }
+/**
+ * How obligations imported from an external source behave.
+ *
+ * `defaultTimeOfDay` is load-bearing for the trust contract, not a cosmetic
+ * setting. Google Tasks, Microsoft To Do and all-day EKReminders all hand us a
+ * date with NO time, and Task.ts requires a reminder to carry a real dueAt. This
+ * is the value we apply instead of letting a model invent one — which is what
+ * lets the citation chip honestly say "your 09:00 default" rather than implying
+ * the source specified a time it never had.
+ *
+ * See `modules/integrations/dateOnly.ts` for the full policy.
+ */
+export interface ImportPrefs {
+  /** 'HH:mm' on a 24-hour clock, interpreted in the user's `timezone`. */
+  defaultTimeOfDay: string
+}
+
+/**
+ * Fallback when the user has never set one. Lives here rather than alongside the
+ * resolver because Task already imports User — putting it the other way round
+ * would let a future value-import turn `User -> dateOnly -> Task -> User` into a
+ * real require cycle.
+ */
+export const DEFAULT_IMPORT_TIME = '09:00'
 export interface PrivacyPrefs {
   analytics: boolean
   crashReports: boolean
@@ -73,6 +97,7 @@ export interface UserAttrs {
   textSize: TextSize
   mic: MicPrefs
   notifications: NotificationPrefs
+  imports: ImportPrefs
   privacy: PrivacyPrefs
   subscription: SubscriptionState
 }
@@ -90,6 +115,20 @@ const NotificationSchema = new Schema<NotificationPrefs>(
     push: { type: Boolean, default: true },
     emailDigest: { type: Boolean, default: true },
     marketing: { type: Boolean, default: false },
+  },
+  { _id: false },
+)
+
+const ImportSchema = new Schema<ImportPrefs>(
+  {
+    // Validated at the edge as well as here — parseTimeOfDay() falls back rather
+    // than throwing, and a silent fallback to 00:00 would fire imported
+    // reminders in the middle of the night.
+    defaultTimeOfDay: {
+      type: String,
+      default: DEFAULT_IMPORT_TIME,
+      match: /^([01]\d|2[0-3]):([0-5]\d)$/,
+    },
   },
   { _id: false },
 )
@@ -151,6 +190,7 @@ const UserSchema = new Schema<UserAttrs>(
     textSize: { type: String, enum: TEXT_SIZES, default: 'md' },
     mic: { type: MicSchema, default: () => ({}) },
     notifications: { type: NotificationSchema, default: () => ({}) },
+    imports: { type: ImportSchema, default: () => ({}) },
     privacy: { type: PrivacySchema, default: () => ({}) },
     subscription: { type: SubscriptionSchema, default: () => ({}) },
   },

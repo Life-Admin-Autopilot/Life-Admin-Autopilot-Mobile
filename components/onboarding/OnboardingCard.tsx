@@ -86,7 +86,7 @@ export function StepHeader({
             type="button"
             onClick={onBack}
             aria-label="Back"
-            className="ml-auto grid size-8 shrink-0 place-items-center rounded-full text-ink-subtle outline-none transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:ring-3 focus-visible:ring-ring/40"
+            className="ms-auto grid size-8 shrink-0 place-items-center rounded-full text-ink-subtle outline-none transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:ring-3 focus-visible:ring-ring/40"
           >
             <ArrowLeft size={17} />
           </button>

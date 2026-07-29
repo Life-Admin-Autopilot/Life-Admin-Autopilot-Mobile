@@ -17,15 +17,6 @@ export function SummaryNote({ text, className }: { text: string; className?: str
 }
 
 export const DOMAINS: ScanCandidateDomain[] = ['health', 'home', 'car', 'finance', 'family', 'pets']
-export const DOMAIN_LABEL: Record<ScanCandidateDomain, string> = {
-  health: 'Health',
-  home: 'Home',
-  car: 'Car',
-  finance: 'Finance',
-  family: 'Family',
-  pets: 'Pets',
-}
-
 export function formatDue(iso?: string): string | null {
   if (!iso) return null
   return new Date(iso).toLocaleString(undefined, {

@@ -142,8 +142,8 @@ export function TimezoneSheet({
                 aria-pressed={selected === zone}
                 className={
                   selected === zone
-                    ? 'flex w-full items-center justify-between gap-3 rounded-xl bg-accent-soft px-3 py-2.5 text-left'
-                    : 'flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-surface-sunken'
+                    ? 'flex w-full items-center justify-between gap-3 rounded-xl bg-accent-soft px-3 py-2.5 text-start'
+                    : 'flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-start hover:bg-surface-sunken'
                 }
               >
                 <span

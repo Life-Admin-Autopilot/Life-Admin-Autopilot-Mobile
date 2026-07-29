@@ -1,8 +1,13 @@
 'use client'
 
-import { Check, Plus, Trash2, X } from 'lucide-react'
+import { Check, Trash2 } from 'lucide-react'
+import { useTranslations } from 'next-intl'
+
+import { useDomainLabels } from '@/hooks/useDomainLabels'
 import { useState } from 'react'
 
+import { MatterSteps } from '@/components/matters/MatterSteps'
+import { TimeProvenance } from '@/components/matters/TimeProvenance'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
 import {
@@ -11,13 +16,9 @@ import {
   toLocalInputValue,
 } from '@/lib/taskFormat'
 import {
-  DOMAIN_LABEL,
   TASK_DOMAINS,
   TASK_PRIORITIES,
-  useAddSubtask,
   useDeleteTask,
-  useRemoveSubtask,
-  useToggleSubtask,
   useUpdateTask,
   type Task,
   type TaskDomain,
@@ -122,15 +123,13 @@ function Editor({
   onClose: () => void
   onDeleted: (undoToken: string | null, title: string) => void
 }) {
+  const t = useTranslations('matters')
+  const domainLabels = useDomainLabels()
   const [draft, setDraft] = useState<Draft>(() => draftFrom(task))
-  const [newSubtask, setNewSubtask] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const updateTask = useUpdateTask()
   const deleteTask = useDeleteTask()
-  const addSubtask = useAddSubtask()
-  const toggleSubtask = useToggleSubtask()
-  const removeSubtask = useRemoveSubtask()
 
   const patch = (p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p }))
 
@@ -214,7 +213,7 @@ function Editor({
         <div className="flex flex-wrap gap-1.5">
           {TASK_DOMAINS.map((d) => (
             <ChipToggle key={d} selected={draft.domain === d} onClick={() => patch({ domain: d })}>
-              {DOMAIN_LABEL[d]}
+              {domainLabels[d]}
             </ChipToggle>
           ))}
         </div>
@@ -235,6 +234,7 @@ function Editor({
       </SheetSection>
 
       <SheetSection label="Due">
+        <TimeProvenance task={task} />
         <div className="flex items-center gap-2">
           <input
             type="datetime-local"
@@ -256,80 +256,23 @@ function Editor({
         <div className="flex flex-wrap gap-1.5">
           {SNOOZE_PRESETS.map((preset) => (
             <ChipToggle
-              key={preset.label}
+              key={preset.labelKey}
               selected={false}
               onClick={() => patch({ dueAt: preset.at(new Date()).toISOString() })}
             >
-              {preset.label}
+              {t(`snooze.${preset.labelKey}`)}
             </ChipToggle>
           ))}
         </div>
       </SheetSection>
 
       <SheetSection label={`Steps${task.subtasks.length > 0 ? ` · ${task.subtasks.length}` : ''}`}>
-        <ul className="flex flex-col gap-1">
-          {task.subtasks.map((sub) => (
-            <li key={sub.id} className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  toggleSubtask.mutate({ taskId: task.id, subtaskId: sub.id, done: !sub.done })
-                }
-                aria-label={sub.done ? `Reopen ${sub.text}` : `Complete ${sub.text}`}
-                className={cn(
-                  'flex size-5 shrink-0 items-center justify-center rounded-sm border transition-colors',
-                  sub.done ? 'border-accent bg-accent text-accent-ink' : 'border-border-strong',
-                )}
-              >
-                {sub.done ? <Check size={12} strokeWidth={3} /> : null}
-              </button>
-              <span
-                className={cn(
-                  'flex-1 truncate text-body-sm',
-                  sub.done ? 'text-ink-subtle line-through' : 'text-ink',
-                )}
-              >
-                {sub.text}
-              </span>
-              <button
-                type="button"
-                onClick={() => removeSubtask.mutate({ taskId: task.id, subtaskId: sub.id })}
-                aria-label={`Remove ${sub.text}`}
-                className="text-ink-subtle hover:text-danger"
-              >
-                <X size={14} />
-              </button>
-            </li>
-          ))}
-        </ul>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            const text = newSubtask.trim()
-            if (!text) return
-            addSubtask.mutate({ taskId: task.id, text }, { onSuccess: () => setNewSubtask('') })
-          }}
-          className="flex items-center gap-2"
-        >
-          <input
-            value={newSubtask}
-            onChange={(e) => setNewSubtask(e.target.value)}
-            placeholder="Add a step"
-            dir="auto"
-            className="h-9 flex-1 rounded-md bg-surface-sunken px-3 text-body-sm text-ink outline-none placeholder:text-ink-subtle"
-          />
-          <button
-            type="submit"
-            disabled={!newSubtask.trim()}
-            aria-label="Add step"
-            className="rounded-md p-2 text-accent disabled:opacity-40"
-          >
-            <Plus size={16} />
-          </button>
-        </form>
+        <MatterSteps task={task} />
       </SheetSection>
 
-      <SheetSection label="Notes">
+      {/* Everything below Steps rides its growth, so it slides rather than
+          snapping to a new position each time a step is added or removed. */}
+      <SheetSection label="Notes" animateLayout>
         <textarea
           value={draft.notes ?? ''}
           onChange={(e) => patch({ notes: e.target.value })}

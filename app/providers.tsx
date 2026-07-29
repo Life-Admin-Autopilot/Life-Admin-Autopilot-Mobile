@@ -8,8 +8,10 @@ import { Toaster } from '@/components/ui/sonner'
 import { AppTabBar } from '@/components/layout/AppTabBar'
 import { PhoneFrame } from '@/components/layout/PhoneFrame'
 import { ChatIsland } from '@/components/chat/ChatIsland'
+import { LocaleProvider } from '@/components/i18n/LocaleProvider'
 import { VoiceIsland } from '@/components/voice/VoiceIsland'
-import { bootSessionStore } from '@/lib/auth/sessionStore'
+import { bootSessionStore, useSessionStore } from '@/lib/auth/sessionStore'
+import { adoptUserLocale } from '@/lib/i18n/localeStore'
 import { useNotificationActions } from '@/lib/notifications/useNotificationActions'
 import { createQueryClient } from '@/queries/client'
 
@@ -17,6 +19,21 @@ import { createQueryClient } from '@/queries/client'
 // reminder is answered from the Lock Screen.
 function NativeNotifications() {
   useNotificationActions()
+  return null
+}
+
+// Adopts `User.locale` once the session resolves, so a language chosen on
+// another device carries over. Reads the session store rather than a query
+// because bootSessionStore already fetches /auth/me — a second request would
+// tell us nothing new. Deliberately one-way: it never writes back, so it cannot
+// fight the picker in Settings.
+function AdoptAccountLocale() {
+  const accountLocale = useSessionStore((s) => s.user?.locale ?? null)
+
+  useEffect(() => {
+    adoptUserLocale(accountLocale)
+  }, [accountLocale])
+
   return null
 }
 
@@ -34,16 +51,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-      <QueryClientProvider client={queryClient}>
-        <NativeNotifications />
-        <PhoneFrame>
-          {children}
-          <AppTabBar />
-          <ChatIsland />
-          <VoiceIsland />
-          <Toaster />
-        </PhoneFrame>
-      </QueryClientProvider>
+      <LocaleProvider>
+        <QueryClientProvider client={queryClient}>
+          <NativeNotifications />
+          <AdoptAccountLocale />
+          <PhoneFrame>
+            {children}
+            <AppTabBar />
+            <ChatIsland />
+            <VoiceIsland />
+            <Toaster />
+          </PhoneFrame>
+        </QueryClientProvider>
+      </LocaleProvider>
     </ThemeProvider>
   )
 }

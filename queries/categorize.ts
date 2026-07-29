@@ -48,7 +48,10 @@ export function useProposeCategorization() {
   return useMutation({
     mutationFn: (body: { ids: string[] }) =>
       api<Proposal>('/me/tasks/categorize', { method: 'POST', body }),
-    onSuccess: () => {
+    // onSettled, not onSuccess. The interesting failure is a 409 — a proposal
+    // is already open — and the sheet answers that by SHOWING the open one, so
+    // the error path needs the refetch at least as much as the success path.
+    onSettled: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.tasks.categorizePending() })
     },
   })

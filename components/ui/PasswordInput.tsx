@@ -22,14 +22,14 @@ export const PasswordInput = React.forwardRef<
       <Input
         ref={ref}
         type={reveal ? 'text' : 'password'}
-        className={cn('pr-12', className)}
+        className={cn('pe-12', className)}
         {...props}
       />
       <button
         type="button"
         onClick={() => setReveal((r) => !r)}
         aria-label={reveal ? 'Hide password' : 'Show password'}
-        className="absolute inset-y-0 right-0 grid w-12 place-items-center text-ink-muted transition-colors hover:text-ink"
+        className="absolute inset-y-0 end-0 grid w-12 place-items-center text-ink-muted transition-colors hover:text-ink"
       >
         {reveal ? <EyeOff size={18} /> : <Eye size={18} />}
       </button>

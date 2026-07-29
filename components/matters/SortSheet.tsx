@@ -90,7 +90,7 @@ function Row({
       onClick={onClick}
       aria-pressed={selected}
       className={cn(
-        'flex w-full items-center justify-between border-b border-border px-3 py-2.5 text-left text-body-sm last:border-b-0 transition-colors',
+        'flex w-full items-center justify-between border-b border-border px-3 py-2.5 text-start text-body-sm last:border-b-0 transition-colors',
         selected ? 'bg-accent-soft text-ink' : 'bg-surface text-ink-muted hover:bg-surface-sunken',
       )}
     >

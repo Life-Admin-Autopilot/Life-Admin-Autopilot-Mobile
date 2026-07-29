@@ -35,15 +35,6 @@ export type TaskKind = (typeof TASK_KINDS)[number]
 
 export type TaskConfidence = 'high' | 'medium' | 'low'
 
-export const DOMAIN_LABEL: Record<TaskDomain, string> = {
-  health: 'Health',
-  home: 'Home',
-  car: 'Car',
-  finance: 'Finance',
-  family: 'Family',
-  pets: 'Pets',
-}
-
 export interface Subtask {
   id: string
   text: string
@@ -87,6 +78,18 @@ export interface Task {
   estimate?: TaskEstimate
   sourceVoiceNoteId?: string
   sourceDocumentId?: string
+  /** Set when this matter came from a connected service rather than from you. */
+  externalSource?: 'google_calendar' | 'google_tasks' | 'apple_calendar' | 'apple_reminders' | 'ics_feed' | 'email_forward'
+  /**
+   * How precisely the external source specified the time.
+   *
+   * `dateOnly` — the source gave a date and no time, so `dueAt`'s time-of-day is
+   * YOUR default, not theirs. `floating` — the source gave a wall clock with no
+   * timezone, so we assumed yours and the matter does not nudge until you
+   * confirm. Both must be visible: a rendered time that looks source-derived but
+   * isn't is exactly the trust failure principles.md is built around.
+   */
+  timePrecision?: 'exact' | 'dateOnly' | 'floating'
   rescheduleCount: number
   createdAt: string
   updatedAt: string
@@ -142,6 +145,11 @@ export interface TaskCounts {
   done: number
   trashed: number
   slipping: number
+  /** Finished inside the local day — the day-progress numerator. */
+  completedToday: number
+  /** Open questions and unreviewed scans: the "Needs you" strip, in one read. */
+  needsInput: number
+  scansAwaitingReview: number
   byDomain: Partial<Record<TaskDomain, number>>
   byPriority: Partial<Record<TaskPriority, number>>
 }
@@ -184,6 +192,24 @@ export function useTaskCounts() {
   })
 }
 
+// Nudge the cached "questions waiting on you" figure without a round trip.
+//
+// The count drives a row on the home screen, and home sits BEHIND the chat
+// island rather than being replaced by it — so a question raised mid-turn, or
+// answered on the card stack, is editing a surface the user can see. Waiting for
+// the server to confirm a number we already know the delta of is the difference
+// between the strip responding to the tap and responding a second later.
+//
+// A no-op until the counts have loaded once: inventing a cache entry from a
+// delta would put an unanchored number on screen. Clamped at zero, and always
+// followed by an invalidation — this closes the gap, it is not the source of
+// truth.
+export function adjustNeedsInput(qc: QueryClient, delta: number): void {
+  qc.setQueryData<TaskCounts>(queryKeys.tasks.counts(), (prev) =>
+    prev ? { ...prev, needsInput: Math.max(0, prev.needsInput + delta) } : prev,
+  )
+}
+
 export function useTaskTags() {
   return useQuery({
     queryKey: queryKeys.tasks.tags(),
@@ -207,6 +233,10 @@ export function useTrashedTasks(enabled = true) {
 export function invalidateTasks(qc: QueryClient) {
   void qc.invalidateQueries({ queryKey: queryKeys.tasks.all })
   void qc.invalidateQueries({ queryKey: queryKeys.notifications })
+  // The digest's headline is written FROM the matters, so a write staled it too.
+  // Its counts no longer matter here — the dashboard reads those from
+  // tasks.counts, which the blunt tasks.all handle above already covers.
+  void qc.invalidateQueries({ queryKey: queryKeys.digestAll })
 }
 
 export interface CreateTaskBody {
@@ -370,47 +400,129 @@ export function useUndoBulk() {
 
 // ---- Subtasks ----
 
-export function useAddSubtask() {
+// Steps are edited in a tight loop — type, enter, tick, tick, remove — and the
+// list is right under the thumb, so every one of them lands in the cache on the
+// spot and reconciles with the server afterwards. Waiting on a round trip here
+// is what made ticking a step feel like submitting a form.
+const TEMP_SUBTASK_PREFIX = 'pending:'
+
+let tempSubtaskSeq = 0
+
+// Ids the server hasn't issued yet. Never collides with a Mongo ObjectId, and
+// the UI keys off it to know a row is still in flight.
+export function isPendingSubtaskId(id: string): boolean {
+  return id.startsWith(TEMP_SUBTASK_PREFIX)
+}
+
+// Shared so every subtask write can count how many of its siblings are still in
+// the air. Ticking a step twice in under a second puts two of them there, and
+// they finish in an order nobody controls.
+const SUBTASK_MUTATION_KEY = ['subtask'] as const
+
+function useSubtaskMutation<V extends { taskId: string }>(
+  mutationFn: (vars: V) => Promise<Task>,
+  optimistic: (subtasks: Subtask[], vars: V) => Subtask[],
+  // Optional, and deliberately narrow: it may only touch the row this write
+  // created. A response is the task as it looked when the SERVER handled this
+  // write, so pasting it over the cache wholesale replays stale state on top of
+  // newer intent — tick then untick fast and the row flips back to ticked
+  // before correcting itself. Toggle and remove learn nothing from the response
+  // and so never run one.
+  reconcile?: (subtasks: Subtask[], server: Task, vars: V) => Subtask[],
+) {
   const qc = useQueryClient()
+
+  // Inside a callback the mutation that owns it still counts as pending, so "1"
+  // means "nothing else of mine is in the air".
+  const isLastInFlight = () => qc.isMutating({ mutationKey: SUBTASK_MUTATION_KEY }) === 1
+
   return useMutation({
-    mutationFn: ({ taskId, text }: { taskId: string; text: string }) =>
+    mutationKey: SUBTASK_MUTATION_KEY,
+    mutationFn,
+    onMutate: async (vars: V) => {
+      const snapshot = qc.getQueriesData({ queryKey: queryKeys.tasks.all })
+      // Patch FIRST, then await. `cancelQueries` is a promise, and there is
+      // almost always a refetch in flight to abort — awaiting it before touching
+      // the cache pushes the optimistic write past the next paint, which is the
+      // exact lag this whole thing exists to remove.
+      patchTaskInCache(qc, vars.taskId, (t) => ({ ...t, subtasks: optimistic(t.subtasks, vars) }))
+      await qc.cancelQueries({ queryKey: queryKeys.tasks.all })
+      return { snapshot }
+    },
+    // A snapshot taken while siblings were in flight has their optimistic writes
+    // baked into it, so restoring it would undo work that hasn't failed. When
+    // this isn't the last write, whichever one is will invalidate and let the
+    // server settle it.
+    onError: (_err, _vars, ctx) => {
+      if (!isLastInFlight()) return
+      for (const [key, data] of ctx?.snapshot ?? []) qc.setQueryData(key, data)
+    },
+    onSuccess: (task, vars) => {
+      if (!reconcile) return
+      patchTaskInCache(qc, vars.taskId, (t) => ({
+        ...t,
+        subtasks: reconcile(t.subtasks, task, vars),
+      }))
+    },
+    // One refetch per burst, not per write: a refetch fired mid-burst answers
+    // with state from before the writes that followed it.
+    onSettled: () => {
+      if (!isLastInFlight()) return
+      invalidateTasks(qc)
+    },
+  })
+}
+
+export function useAddSubtask() {
+  return useSubtaskMutation(
+    ({ taskId, text }: { taskId: string; text: string }) =>
       api<{ task: Task }>(`/me/tasks/${taskId}/subtasks`, {
         method: 'POST',
         body: { text },
       }).then((r) => r.task),
-    onSuccess: () => invalidateTasks(qc),
-  })
+    (subtasks, { text }) => [
+      ...subtasks,
+      { id: `${TEMP_SUBTASK_PREFIX}${++tempSubtaskSeq}`, text, done: false },
+    ],
+    // Swap the placeholder for the id the server just issued, and touch nothing
+    // else — the row this write created is the only thing the response can tell
+    // us that we didn't already know. Found by "an id the cache has never seen,
+    // with our text" rather than by position, so a burst of adds reconciling out
+    // of order still lands each id on its own row.
+    (subtasks, server, { text }) => {
+      const known = new Set(subtasks.map((s) => s.id))
+      const issued = server.subtasks.find((s) => !known.has(s.id) && s.text === text)
+      if (!issued) return subtasks
+      let claimed = false
+      return subtasks.map((s) => {
+        if (claimed || s.text !== text || !isPendingSubtaskId(s.id)) return s
+        claimed = true
+        return { ...s, id: issued.id }
+      })
+    },
+  )
 }
 
 export function useToggleSubtask() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({
-      taskId,
-      subtaskId,
-      done,
-    }: {
-      taskId: string
-      subtaskId: string
-      done: boolean
-    }) =>
+  return useSubtaskMutation(
+    ({ taskId, subtaskId, done }: { taskId: string; subtaskId: string; done: boolean }) =>
       api<{ task: Task }>(`/me/tasks/${taskId}/subtasks/${subtaskId}`, {
         method: 'PATCH',
         body: { done },
       }).then((r) => r.task),
-    onSuccess: () => invalidateTasks(qc),
-  })
+    (subtasks, { subtaskId, done }) =>
+      subtasks.map((s) => (s.id === subtaskId ? { ...s, done } : s)),
+  )
 }
 
 export function useRemoveSubtask() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: ({ taskId, subtaskId }: { taskId: string; subtaskId: string }) =>
+  return useSubtaskMutation(
+    ({ taskId, subtaskId }: { taskId: string; subtaskId: string }) =>
       api<{ task: Task }>(`/me/tasks/${taskId}/subtasks/${subtaskId}`, {
         method: 'DELETE',
       }).then((r) => r.task),
-    onSuccess: () => invalidateTasks(qc),
-  })
+    (subtasks, { subtaskId }) => subtasks.filter((s) => s.id !== subtaskId),
+  )
 }
 
 // Patch one task everywhere it appears across every cached filter+page, so an

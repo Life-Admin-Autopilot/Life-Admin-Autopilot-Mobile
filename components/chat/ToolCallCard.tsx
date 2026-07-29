@@ -152,7 +152,7 @@ export function ToolCallCard({ call, onConfirm, onDecline, pendingAction = null 
         </span>
       ) : null}
       {meta ? (
-        <span className="tabular ml-auto shrink-0 text-caption text-ink-subtle">{meta}</span>
+        <span className="tabular ms-auto shrink-0 text-caption text-ink-subtle">{meta}</span>
       ) : null}
     </div>
   )

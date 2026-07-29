@@ -28,7 +28,7 @@ export function VoiceRecordPopup() {
       onClick={rec ? undefined : () => setRec(true)}
       role="button"
       aria-label={rec ? 'Recording' : 'Start voice capture'}
-      className={`fixed bottom-24 left-5 z-40 ${rec ? '' : 'cursor-pointer'}`}
+      className={`fixed bottom-24 start-5 z-40 ${rec ? '' : 'cursor-pointer'}`}
     >
       {state === 'idle' ? (
         <div className="grid h-full w-full place-items-center">
@@ -41,7 +41,7 @@ export function VoiceRecordPopup() {
           <button
             onClick={() => setRec(false)}
             aria-label="Stop recording"
-            className="ml-auto grid size-9 shrink-0 place-items-center rounded-md bg-accent text-accent-ink"
+            className="ms-auto grid size-9 shrink-0 place-items-center rounded-md bg-accent text-accent-ink"
           >
             <Square size={13} fill="currentColor" />
           </button>

@@ -33,6 +33,13 @@ export const SCANNED_DOCUMENT_CLAIMABLE_STATUSES: readonly ScannedDocumentStatus
 export const SCANNED_DOCUMENT_SOURCES = ['camera', 'pdf', 'gallery'] as const
 export type ScannedDocumentSource = (typeof SCANNED_DOCUMENT_SOURCES)[number]
 
+// How many times a user may hand-restart extraction on a document that has
+// already failed terminally. Lives here rather than in the route because the
+// `canRetry` flag toJSON() derives from it has to agree with the gate the route
+// enforces — one constant, so the button can never be offered for a retry the
+// server will refuse.
+export const MAX_MANUAL_SCAN_RETRIES = 3
+
 // What the document IS, not what it asks of you — a bill you've already paid is
 // still a bill. Drives the leading icon on the /documents row, so the set is
 // deliberately small enough that every value maps to a glyph a user can learn.
@@ -111,6 +118,11 @@ export interface ScannedDocumentAttrs {
   // Job machinery (Mongo-backed worker). Never sent to the client.
   attempts: number
   maxAttempts: number
+  /** How many times the USER has hand-restarted extraction after a terminal
+   *  failure (POST /:id/reprocess). `attempts`/`maxAttempts` bound one automatic
+   *  ladder; this bounds how many ladders a retry button can buy, so a stuck
+   *  document can't become an unbounded spend loop around the monthly quota. */
+  manualRetries: number
   lockedUntil: Date | null
   nextRunAt: Date
   lastError?: string
@@ -156,6 +168,7 @@ const ScannedDocumentSchema = new Schema<ScannedDocumentAttrs>(
     // Job machinery
     attempts: { type: Number, default: 0 },
     maxAttempts: { type: Number, default: 4 },
+    manualRetries: { type: Number, default: 0 },
     lockedUntil: { type: Date, default: null },
     nextRunAt: { type: Date, default: () => new Date(), index: true },
     lastError: { type: String },
@@ -169,11 +182,17 @@ const ScannedDocumentSchema = new Schema<ScannedDocumentAttrs>(
         ret.id = String(ret._id)
         delete ret._id
         delete ret.__v
+        // The retry budget is machinery, but WHETHER a retry is still on the
+        // table is product state the error screen needs — derive the boolean
+        // here so the client never has to know the counter or the cap.
+        ret.canRetry =
+          ret.status === 'failed' && Number(ret.manualRetries ?? 0) < MAX_MANUAL_SCAN_RETRIES
         // Never leak storage location, raw OCR text, or job machinery to clients.
         delete ret.storageKey
         delete ret.rawExtractedText
         delete ret.attempts
         delete ret.maxAttempts
+        delete ret.manualRetries
         delete ret.lockedUntil
         delete ret.nextRunAt
         delete ret.lastError

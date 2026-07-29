@@ -47,6 +47,10 @@ export interface ScannedDocument {
   byteSize: number
   status: 'pending' | 'processing' | 'ready_for_review' | 'failed'
   failureReason?: string
+  /** Server-derived: this document failed AND still has retry budget left, so
+   *  extraction can be re-run on the stored bytes. False on a healthy document
+   *  and on one that has burned through its retries. */
+  canRetry: boolean
   /** One-to-two-sentence AI overview, for the detail surfaces (review card,
    *  task overview) — not the list row. */
   documentSummary?: string
@@ -110,6 +114,44 @@ export function useDeleteScannedDocuments() {
       // whichever ids did delete.
       void queryClient.invalidateQueries({ queryKey: queryKeys.documentScans })
       void queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
+    },
+  })
+}
+
+// Re-run extraction on a document that failed, from the bytes the server
+// already holds. Distinct from the capture-side retry in useCaptureSource:
+// that one resends an upload that never landed, this one restarts processing
+// on an upload that did.
+//
+// Invalidating is what advances the UI — the server flips the document back to
+// `pending`, and the list query resumes its poll (it only polls while something
+// is pending/processing), which walks the flow from 'error' back to
+// 'processing' with no local phase state to keep in sync.
+export function useReprocessScannedDocument() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (documentId: string) =>
+      api<{ scannedDocument: ScannedDocument }>(`/me/document-scans/${documentId}/reprocess`, {
+        method: 'POST',
+      }),
+    onSuccess: ({ scannedDocument }) => {
+      // Written into the cache from the response BEFORE invalidating. The
+      // refetch alone would leave the document reading `failed` for a round
+      // trip, so the error screen would sit there with a live "Try again"
+      // button after the retry had already been accepted — long enough to tap
+      // twice. Patching first flips the flow to 'processing' on the same tick.
+      queryClient.setQueryData<{ scannedDocuments: ScannedDocument[] }>(
+        queryKeys.documentScans,
+        (prev) =>
+          prev
+            ? {
+                scannedDocuments: prev.scannedDocuments.map((d) =>
+                  d.id === scannedDocument.id ? scannedDocument : d,
+                ),
+              }
+            : prev,
+      )
+      void queryClient.invalidateQueries({ queryKey: queryKeys.documentScans })
     },
   })
 }

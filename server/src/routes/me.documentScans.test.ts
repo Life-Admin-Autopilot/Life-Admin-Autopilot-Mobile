@@ -190,4 +190,152 @@ describe('GET /me/document-scans', () => {
     expect(row.issuer).toBe('City Power')
     expect(row.storageKey).toBeUndefined()
   })
+
+  it('exposes canRetry without leaking the retry counter', async () => {
+    const session = await signUp()
+    await seedScan(session.userId, { status: 'failed', failureReason: 'Model timed out.' })
+
+    const res = await request
+      .get('/me/document-scans')
+      .set('Authorization', auth(session.accessToken))
+      .expect(200)
+
+    const [row] = res.body.scannedDocuments
+    expect(row.canRetry).toBe(true)
+    expect(row.manualRetries).toBeUndefined()
+    expect(row.attempts).toBeUndefined()
+  })
+
+  it('reports canRetry false on a document that has not failed', async () => {
+    const session = await signUp()
+    await seedScan(session.userId)
+
+    const res = await request
+      .get('/me/document-scans')
+      .set('Authorization', auth(session.accessToken))
+      .expect(200)
+
+    expect(res.body.scannedDocuments[0].canRetry).toBe(false)
+  })
+})
+
+describe('POST /me/document-scans/:id/reprocess', () => {
+  it('rejects unauthenticated requests', async () => {
+    const res = await request.post(
+      `/me/document-scans/${new Types.ObjectId().toHexString()}/reprocess`,
+    )
+    expect(res.status).toBe(401)
+  })
+
+  it('requeues a failed document and clears the failure', async () => {
+    const session = await signUp()
+    const doc = await seedScan(session.userId, {
+      status: 'failed',
+      failureReason: 'Model timed out.',
+      lastError: 'Model timed out.',
+      attempts: 4,
+    })
+
+    const res = await request
+      .post(`/me/document-scans/${doc.id}/reprocess`)
+      .set('Authorization', auth(session.accessToken))
+      .expect(202)
+
+    expect(res.body.scannedDocument.status).toBe('pending')
+    expect(res.body.scannedDocument.failureReason).toBeUndefined()
+
+    const stored = await ScannedDocument.findById(doc.id)
+    expect(stored?.status).toBe('pending')
+    expect(stored?.failureReason).toBeUndefined()
+    expect(stored?.lastError).toBeUndefined()
+    expect(stored?.lockedUntil).toBeNull()
+    // The automatic ladder restarts, so a document that exhausted its attempts
+    // during an outage gets a real retry rather than one last try.
+    expect(stored?.attempts).toBe(0)
+    expect(stored?.manualRetries).toBe(1)
+  })
+
+  it('keeps the stored bytes so extraction can re-read them', async () => {
+    const session = await signUp()
+    const doc = await seedScan(session.userId, { status: 'failed' })
+
+    await request
+      .post(`/me/document-scans/${doc.id}/reprocess`)
+      .set('Authorization', auth(session.accessToken))
+      .expect(202)
+
+    await expect(getDocumentScanStorage().get(doc.storageKey)).resolves.toBeDefined()
+  })
+
+  it('does not charge the monthly quota again', async () => {
+    const session = await signUp()
+    const doc = await seedScan(session.userId, { status: 'failed' })
+    const month = utcMonthBucket()
+    await DocumentScanUsageCounter.updateOne(
+      { userId: session.userId, month },
+      { $set: { count: 1 } },
+      { upsert: true },
+    )
+
+    await request
+      .post(`/me/document-scans/${doc.id}/reprocess`)
+      .set('Authorization', auth(session.accessToken))
+      .expect(202)
+
+    const counter = await DocumentScanUsageCounter.findOne({ userId: session.userId, month })
+    expect(counter?.count).toBe(1)
+  })
+
+  it('is a no-op success on a document that is not failed', async () => {
+    const session = await signUp()
+    const doc = await seedScan(session.userId)
+
+    const res = await request
+      .post(`/me/document-scans/${doc.id}/reprocess`)
+      .set('Authorization', auth(session.accessToken))
+      .expect(200)
+
+    expect(res.body.scannedDocument.status).toBe('ready_for_review')
+    const stored = await ScannedDocument.findById(doc.id)
+    expect(stored?.status).toBe('ready_for_review')
+    expect(stored?.manualRetries).toBe(0)
+  })
+
+  it('refuses once the manual retry budget is spent', async () => {
+    const session = await signUp()
+    const doc = await seedScan(session.userId, { status: 'failed', manualRetries: 3 })
+
+    const res = await request
+      .post(`/me/document-scans/${doc.id}/reprocess`)
+      .set('Authorization', auth(session.accessToken))
+      .expect(400)
+
+    expect(res.body.error.code).toBe('document_scan_retry_exhausted')
+    expect(await ScannedDocument.findById(doc.id).then((d) => d?.status)).toBe('failed')
+  })
+
+  it('stops advertising a retry once the budget is spent', async () => {
+    const session = await signUp()
+    await seedScan(session.userId, { status: 'failed', manualRetries: 3 })
+
+    const res = await request
+      .get('/me/document-scans')
+      .set('Authorization', auth(session.accessToken))
+      .expect(200)
+
+    expect(res.body.scannedDocuments[0].canRetry).toBe(false)
+  })
+
+  it("refuses to reprocess another user's document", async () => {
+    const owner = await signUp()
+    const other = await signUp()
+    const doc = await seedScan(owner.userId, { status: 'failed' })
+
+    await request
+      .post(`/me/document-scans/${doc.id}/reprocess`)
+      .set('Authorization', auth(other.accessToken))
+      .expect(404)
+
+    expect(await ScannedDocument.findById(doc.id).then((d) => d?.status)).toBe('failed')
+  })
 })

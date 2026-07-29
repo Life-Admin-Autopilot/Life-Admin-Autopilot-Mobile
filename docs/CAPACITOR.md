@@ -97,6 +97,28 @@ npm run android:open   # syncs a prod-flavored build, opens Android Studio
 
 iOS builds require Xcode on macOS — not possible from a Windows machine directly. Android builds/runs work fully on Windows via Android Studio.
 
+## Preflight: is the build actually wired to the backend?
+
+```bash
+npm run ios:check           # Simulator
+npm run ios:check:device    # physical iPhone (stricter — rejects localhost)
+```
+
+`scripts/check-ios-backend.sh` answers "will the app I'm about to run reach the backend I just started?" It reads what iOS will **actually** load (`ios/App/App/`), not what the env files intend, because `NEXT_PUBLIC_API_URL` is baked in at build time — a backend that moved after the last sync produces a spinner and a network error, never a config error.
+
+It checks, in order:
+
+1. `ios/` exists and has a synced web bundle
+2. Which `NEXT_PUBLIC_API_URL` is baked into that bundle, and which env profile it came from (live-reload instead reports what the running `next dev` serves)
+3. The backend is listening on that port, `/health` is 200, Mongo is connected, and the port agrees with `server/.env`'s `PORT`
+4. The host is reachable **from the device** — LAN IP drift against `npm run lan:ip`, plus a real probe of `http://<LAN-IP>:<port>/health` to prove the server bound `0.0.0.0` and macOS isn't blocking it
+5. CORS — asks the **running** server whether it accepts the webview's origin (`capacitor://localhost`, or the live-reload origin), since the allowlist is only read at startup
+6. ATS plist keys are present for a plaintext `http://` backend — and warns when a relaxed policy lingers on an `https://` build (do not ship it)
+7. `out/` and the synced `ios/` copy agree, catching a rebuild that was never `cap sync`'d
+8. `APP_DEEP_LINK_SCHEME` matches `CFBundleURLSchemes` in the plist
+
+Read-only — it prints the fix, it never edits. Exit code 1 on any blocking issue, so it can gate a script. `--url <url>` checks a backend you name instead of reading the bundle, useful before syncing against it.
+
 ## Backend CORS
 
 The Express backend only accepts listed origins (`server/src/app.ts`, `CORS_ORIGINS`). `server/.env.example` documents the full set (Next dev, `capacitor://localhost` for iOS, `http://localhost` for Android, and the LAN IP for live-reload). Update your real `server/.env` and restart the server when your LAN IP changes.

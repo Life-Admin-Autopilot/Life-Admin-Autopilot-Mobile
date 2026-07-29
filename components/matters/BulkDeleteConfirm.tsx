@@ -1,9 +1,11 @@
 'use client'
 
 import { AlertTriangle } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { useIntlTag } from '@/lib/i18n/localeStore'
 import { formatDue, formatRange } from '@/lib/taskFormat'
 import type { BulkPreview, TaskFilters } from '@/queries/tasks'
 import { Sheet } from '@/components/ui/Sheet'
@@ -41,6 +43,8 @@ export function BulkDeleteConfirm({
   onConfirm: () => void
   onClose: () => void
 }) {
+  const t = useTranslations('matters')
+  const tag = useIntlTag()
   const [showAll, setShowAll] = useState(false)
 
   // The caller clears `preview` on the same tick it closes this, so hold the
@@ -85,7 +89,7 @@ export function BulkDeleteConfirm({
       {ranged ? (
         <p className="text-body-sm text-ink">
           <span className="tabular font-medium">
-            {formatRange(filters?.dueAfter, filters?.dueBefore)}
+            {formatRange(filters?.dueAfter, filters?.dueBefore, { t, tag })}
           </span>
           <span className="text-ink-subtle"> · resolved dates</span>
         </p>
@@ -131,7 +135,7 @@ export function BulkDeleteConfirm({
               >
                 <span className="truncate text-body-sm text-ink">{task.title}</span>
                 <span className="shrink-0 text-caption tabular text-ink-subtle">
-                  {formatDue(task.dueAt)}
+                  {formatDue(task.dueAt, { t, tag })}
                 </span>
               </li>
             ))}

@@ -66,6 +66,24 @@ set_string NSPhotoLibraryUsageDescription \
 set_string NSMicrophoneUsageDescription \
   "Kitto uses your microphone so you can speak a note or a question instead of typing it."
 
+# Custom URL scheme — the ONLY way anything gets back into the app from outside
+# it. Two flows depend on it:
+#
+#   * Email verification (server/src/lib/authFlows.ts mints kitto:// links).
+#   * Google OAuth, whose consent screen MUST open in the system browser —
+#     Google returns `disallowed_useragent` inside a WKWebView — so the return
+#     leg is a deep link and nothing else.
+#
+# This was never registered, which means every kitto:// link minted so far has
+# opened nothing at all. Keep the value in step with APP_DEEP_LINK_SCHEME in
+# server/src/env.ts; they are two halves of one contract.
+"$PLIST_BUDDY" -c "Delete :CFBundleURLTypes" "$PLIST" 2>/dev/null || true
+"$PLIST_BUDDY" -c "Add :CFBundleURLTypes array" "$PLIST"
+"$PLIST_BUDDY" -c "Add :CFBundleURLTypes:0 dict" "$PLIST"
+"$PLIST_BUDDY" -c "Add :CFBundleURLTypes:0:CFBundleURLName string com.kitto.app" "$PLIST"
+"$PLIST_BUDDY" -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" "$PLIST"
+"$PLIST_BUDDY" -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string kitto" "$PLIST"
+
 if [ "$ALLOW_LOCAL_HTTP" -eq 0 ]; then
   echo "Patched $PLIST (product keys only)."
   exit 0

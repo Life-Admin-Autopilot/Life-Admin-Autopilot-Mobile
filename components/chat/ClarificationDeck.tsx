@@ -163,19 +163,24 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
     setTyping(false)
   }
 
-  // All answered (or submitted) → a quiet confirmation row.
+  // All answered (or submitted) → a quiet confirmation row. Past tense, and
+  // about the CORRECTION rather than the filing: the matters were filed when the
+  // question was raised, so "Filing 3 matters…" described work that had already
+  // finished and left the user waiting for nothing.
   if (!current || submitted) {
     return (
       <div className="flex items-center gap-2 rounded-xl bg-surface-field px-3 py-2">
         <span className="text-caption font-medium text-ink">
-          {total === 1 ? 'Noted.' : `Filing ${total} matters…`}
+          {total === 1 ? 'Updated.' : `Updated ${total} matters.`}
         </span>
       </div>
     )
   }
 
   const pending = text.trim() ? text.trim() : storedAnswer
-  const primaryLabel = completesDeck ? 'File all' : 'Next'
+  // "File all" promised an action that had already happened. Answering sets the
+  // date on matters that exist.
+  const primaryLabel = completesDeck ? 'Save' : 'Next'
   const showInput = typing || !hasOptions
 
   return (
@@ -219,7 +224,16 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
             {current.domain ? (
               <DomainIcon domain={current.domain} size={24} className="rounded-full" />
             ) : null}
-            {current.title ? <p className="text-caption text-ink-muted">{current.title}</p> : null}
+            {/* The matter ALREADY EXISTS — holdForClarification creates it up
+                front and attaches the question to it. Saying so is not a detail:
+                without it the card reads as a form standing between the user and
+                a task that hasn't been saved, which is the opposite of what
+                happened, and it is the reason people answer these under a mild
+                sense of obligation. /uncertainties has always said "Filed with a
+                guess"; the chat said nothing and implied the reverse. */}
+            <p className="text-caption text-ink-subtle">
+              Filed already{current.title ? ` — ${current.title}` : ''}
+            </p>
             <p className="text-body-sm font-semibold text-ink" dir="auto">
               {current.question}
             </p>

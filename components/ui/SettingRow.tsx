@@ -48,7 +48,7 @@ export function SettingRow({
       onClick={(e) => onOpen(e.currentTarget.getBoundingClientRect())}
       className={cn(
         ROW,
-        'text-left transition-transform active:scale-[0.99] disabled:opacity-50',
+        'text-start transition-transform active:scale-[0.99] disabled:opacity-50',
         className,
       )}
     >
@@ -95,7 +95,7 @@ export function SettingToggleRow({
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={cn(ROW, 'text-left disabled:opacity-50', className)}
+      className={cn(ROW, 'text-start disabled:opacity-50', className)}
     >
       <EmojiChip emoji={emoji} category={category} size={40} />
       <span className="flex min-w-0 flex-1 flex-col">
@@ -138,7 +138,7 @@ export function SettingActionRow({
       onClick={onAction}
       className={cn(
         ROW,
-        'text-left transition-transform active:scale-[0.99] disabled:opacity-50',
+        'text-start transition-transform active:scale-[0.99] disabled:opacity-50',
         className,
       )}
     >

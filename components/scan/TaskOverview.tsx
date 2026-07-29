@@ -102,7 +102,7 @@ export function TaskOverview({ doc }: { doc: ScannedDocument }) {
               <button
                 type="button"
                 onClick={() => setExpanded(isExpanded ? null : c.key)}
-                className="flex w-full items-center gap-3 text-left"
+                className="flex w-full items-center gap-3 text-start"
               >
                 <SketchDomainIcon domain={display.domain} size={22} className="shrink-0" />
                 <div className="flex min-w-0 flex-1 flex-col">

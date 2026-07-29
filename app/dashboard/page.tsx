@@ -5,10 +5,10 @@ import { DashboardView } from '@/components/dashboard/DashboardView'
 import { useSessionStore, selectUser } from '@/lib/auth/sessionStore'
 import { toast } from '@/lib/toast'
 import { useDigest } from '@/queries/digest'
-import { useScannedDocuments } from '@/queries/documentScans'
 import {
   useCompleteTask,
   useSnoozeTask,
+  useTaskCounts,
   useTasks,
   useToggleSubtask,
   useUpdateTask,
@@ -31,12 +31,22 @@ function tomorrowMorning(now: Date): string {
 
 // Data container only. The layout lives in DashboardView so the preview route
 // can render the identical tree against fixtures — see /zz-preview-dashboard.
+//
+// TWO reads, split by cost, not by topic. `counts` is pure aggregation and
+// returns in milliseconds; `digest` writes a sentence with a language model and
+// does not. Every FIGURE on the screen comes from the fast one so the page can
+// resolve without the slow one — the digest now contributes only its headline.
+//
+// It used to be one read for both, and the dashboard inherited the slower half:
+// "Needs you" arrived visibly after the matters beside it, and it arrived latest
+// exactly when the user had just changed something, because a changed
+// fingerprint is precisely what misses the digest's cache.
 export default function DashboardPage() {
   const user = useSessionStore(selectUser)
   const name = firstName(user?.displayName, user?.email)
 
   const list = useTasks({ status: ['open'] }, 'due-asc')
-  const scans = useScannedDocuments()
+  const counts = useTaskCounts()
   const digest = useDigest()
 
   const completeTask = useCompleteTask()
@@ -73,15 +83,11 @@ export default function DashboardPage() {
     )
   }
 
-  // `ready_for_review` is the TERMINAL SUCCESS state of processing, not a
-  // to-do: every document that scanned cleanly keeps it forever, confirmed or
-  // not. `reviewedAt` is what the server stamps once every candidate has been
-  // resolved (me.documentScans.ts), so its absence is the real "needs you".
-  const scansAwaitingReview =
-    scans.data?.scannedDocuments.filter(
-      (doc) => doc.status === 'ready_for_review' && !doc.reviewedAt,
-    ).length ?? 0
-
+  // The scan count was derived client-side from the full documents list, which
+  // meant loading every scan to learn one number. It is a server count now —
+  // computeTaskCounts applies the same `ready_for_review AND no reviewedAt`
+  // rule, which is the real "needs you" signal (the status alone is terminal
+  // and is kept forever, reviewed or not).
   return (
     <main className="min-h-dvh pb-32">
       <AppHeader />
@@ -90,10 +96,14 @@ export default function DashboardPage() {
         now={now}
         openTasks={list.data?.pages[0]?.tasks ?? []}
         loaded={!list.isPending}
-        completedToday={digest.data?.counts.completedToday ?? 0}
-        needsInput={digest.data?.counts.needsInput ?? 0}
-        scansAwaitingReview={scansAwaitingReview}
-        slipping={digest.data?.counts.slipping ?? 0}
+        completedToday={counts.data?.completedToday ?? 0}
+        needsInput={counts.data?.needsInput ?? 0}
+        scansAwaitingReview={counts.data?.scansAwaitingReview ?? 0}
+        slipping={counts.data?.slipping ?? 0}
+        // Until the counts land, zero is UNKNOWN, not "nothing needs you" —
+        // the strip renders placeholders rather than asserting an all-clear it
+        // cannot yet support, and reserves its space so nothing jumps.
+        countsLoaded={!counts.isPending}
         digest={digest.data}
         busy={completeTask.isPending || snoozeTask.isPending || toggleSubtask.isPending}
         onComplete={(task) => completeTask.mutate({ taskId: task.id, done: true })}

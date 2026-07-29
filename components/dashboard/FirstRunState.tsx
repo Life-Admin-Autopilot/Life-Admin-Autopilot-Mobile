@@ -63,7 +63,7 @@ export function FirstRunState() {
         const content = (
           <>
             <EmojiChip emoji={route.emoji} category={route.category} size={40} />
-            <span className="flex min-w-0 flex-1 flex-col text-left">
+            <span className="flex min-w-0 flex-1 flex-col text-start">
               <span className="truncate text-heading-sm text-ink">{route.title}</span>
               <span className="truncate text-body-sm text-ink-muted">{route.body}</span>
             </span>

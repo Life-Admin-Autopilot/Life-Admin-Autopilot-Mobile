@@ -21,6 +21,24 @@ export type TaskKind = (typeof TASK_KINDS)[number]
 export const CONFIDENCE_BUCKETS = ['high', 'medium', 'low'] as const
 export type ConfidenceBucket = (typeof CONFIDENCE_BUCKETS)[number]
 
+// Connected services a matter can arrive from. Kept as a closed set rather than
+// a free string so an importer cannot invent a provider name that the idempotency
+// index and the citation chip then disagree about.
+export const EXTERNAL_SOURCES = [
+  'google_calendar',
+  'google_tasks',
+  'apple_calendar',
+  'apple_reminders',
+  'ics_feed',
+  'email_forward',
+] as const
+export type ExternalSource = (typeof EXTERNAL_SOURCES)[number]
+
+// Declared here rather than imported from modules/integrations/dateOnly to keep
+// the dependency pointing one way (dateOnly -> models, never models -> modules).
+export const TIME_PRECISIONS = ['exact', 'dateOnly', 'floating'] as const
+export type TimePrecision = (typeof TIME_PRECISIONS)[number]
+
 // How long a matter takes to DO, as a bucketed range. Buckets, not integers,
 // are the whole point: a model that answers "23 minutes" is claiming a
 // precision it does not have, and the user reads that precision as a promise.
@@ -166,6 +184,20 @@ export interface TaskAttrs {
   // Stable per-(note,item) key for voice-extracted tasks. Powers idempotent
   // upserts so a worker retry / job reclaim never double-creates a task.
   sourceTaskKey?: string
+  // Provenance for a matter imported from a connected service. `externalSource`
+  // names the provider; `externalId` is that provider's own stable id. Together
+  // with userId they give the same idempotency guarantee the voice and document
+  // pipelines already have — a re-run of a poll can never double-create.
+  externalSource?: ExternalSource
+  externalId?: string
+  // How precisely the EXTERNAL source specified the time, when this matter came
+  // from one. 'dateOnly' means the source gave a date and dueAt's time-of-day is
+  // the user's own stated default; 'floating' means the source gave a wall clock
+  // with no timezone and we assumed the user's. Both must be visible in the
+  // citation — a rendered time that looks source-derived but isn't is precisely
+  // the trust failure principles.md is built around. See
+  // modules/integrations/dateOnly.ts.
+  timePrecision?: TimePrecision
   confidence?: ConfidenceBucket
   // How long this is expected to take. Optional everywhere and absent on every
   // task created before the feature existed — every consumer must render
@@ -277,6 +309,9 @@ const TaskSchema = new Schema<TaskAttrs>(
     sourceVoiceNoteId: { type: Schema.Types.ObjectId, ref: 'VoiceNote' },
     sourceDocumentId: { type: Schema.Types.ObjectId },
     sourceTaskKey: { type: String },
+    externalSource: { type: String, enum: EXTERNAL_SOURCES },
+    externalId: { type: String },
+    timePrecision: { type: String, enum: TIME_PRECISIONS },
     confidence: { type: String, enum: CONFIDENCE_BUCKETS },
     estimate: { type: EstimateSchema },
     completedAt: { type: Date },
@@ -348,6 +383,21 @@ TaskSchema.index(
     partialFilterExpression: {
       sourceTaskKey: { $type: 'string' },
       sourceDocumentId: { $type: 'objectId' },
+    },
+  },
+)
+// And for matters imported from a connected service. This is what makes a poll
+// safe to re-run: Google Tasks has no webhooks, so the importer re-reads an
+// overlapping window on every tick, and without this a slow tick would fan a
+// single reminder out into duplicates. Partial so only imported rows are
+// constrained — manual, voice and document matters carry no externalId.
+TaskSchema.index(
+  { userId: 1, externalSource: 1, externalId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      externalSource: { $type: 'string' },
+      externalId: { $type: 'string' },
     },
   },
 )

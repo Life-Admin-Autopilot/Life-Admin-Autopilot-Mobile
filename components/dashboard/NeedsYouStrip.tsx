@@ -26,16 +26,28 @@ interface NeedsYouItem {
  * Ordered by how cheap the item is to clear, not by how loud it is. Answering a
  * held question takes seconds; sorting out a slipped matter takes a decision.
  * Leading with the cheap one means the strip usually gets shorter when tapped.
+ *
+ * While the counts are still in flight this renders a placeholder row rather
+ * than nothing. Returning null was doing two bad things at once: it asserted
+ * "nothing needs you" before that was known, and because the section occupied no
+ * space, the real rows shoved the page down when they arrived. Skeletons are the
+ * standard answer to both — they hold the space and they communicate progress
+ * instead of a false all-clear.
  */
 export function NeedsYouStrip({
   needsInput = 0,
   scansAwaitingReview = 0,
   slipping = 0,
+  loaded = true,
 }: {
   needsInput?: number
   scansAwaitingReview?: number
   slipping?: number
+  /** False while the counts are still loading — renders placeholders. */
+  loaded?: boolean
 }) {
+  if (!loaded) return <NeedsYouSkeleton />
+
   const items: NeedsYouItem[] = []
 
   if (needsInput > 0) {
@@ -84,6 +96,7 @@ export function NeedsYouStrip({
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-label uppercase text-ink-muted">Needs you</h2>
+
       {items.map((item) => (
         <Link
           key={item.key}
@@ -98,6 +111,20 @@ export function NeedsYouStrip({
           <ChevronRight size={18} className="shrink-0 text-ink-subtle" />
         </Link>
       ))}
+    </section>
+  )
+}
+
+// One placeholder row. Deliberately ONE, not three: the strip is usually short
+// or absent, and reserving three rows to collapse to nothing would trade the
+// shift we are removing for a bigger one in the other direction. Its height
+// matches a real row so the common cases (one row, or none) settle without
+// moving the page.
+function NeedsYouSkeleton() {
+  return (
+    <section className="flex flex-col gap-3" aria-hidden>
+      <h2 className="text-label uppercase text-ink-muted">Needs you</h2>
+      <div className="h-[68px] animate-pulse rounded-2xl bg-surface-sunken" />
     </section>
   )
 }

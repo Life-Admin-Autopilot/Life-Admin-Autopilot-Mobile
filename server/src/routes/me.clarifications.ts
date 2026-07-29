@@ -4,7 +4,12 @@ import { z } from 'zod'
 
 import { asyncHandler, AppError, BadRequest, NotFound, Unauthorized } from '../lib/errors'
 import { requireAuth } from '../middleware/auth'
-import { Clarification, visibleOpen } from '../models/Clarification'
+import {
+  Clarification,
+  visibleOpen,
+  type ClarificationDoc,
+  type ClarificationStatus,
+} from '../models/Clarification'
 import { Task, notDeleted } from '../models/Task'
 import { utcDateBucket } from '../models/AiUsageCounter'
 import { runTool } from '../modules/ai/toolRunner'
@@ -52,6 +57,23 @@ meClarificationsRouter.get(
   }),
 )
 
+// Close a question out with an atomic $set instead of doc.save().
+//
+// save() revalidates the WHOLE document, and `taskId` is required — but rows
+// written before that field existed have none. Every terminal action on such a
+// row (resolve / skip / drop) therefore threw a ValidationError and 500'd, so
+// the question could never be cleared and came back on every reload. The state
+// change here touches only fields we are actually setting, so a legacy row can
+// still be closed out; scripts/backfill-clarification-tasks.ts repairs the link
+// itself. Keeps the in-memory doc in step so the response echoes what was saved.
+async function closeOut(
+  doc: ClarificationDoc,
+  patch: { status?: ClarificationStatus; resolvedAt?: Date; answer?: string; deferredUntil?: Date },
+): Promise<void> {
+  await Clarification.updateOne({ _id: doc._id }, { $set: patch })
+  doc.set(patch)
+}
+
 const ResolveBodySchema = z.object({
   answer: z.discriminatedUnion('type', [
     // Picked a pre-resolved suggestion → deterministic create (no AI).
@@ -98,11 +120,11 @@ meClarificationsRouter.post(
     // The task already exists — it was created when the question was raised.
     // If it has since been deleted the question is moot: close it out rather
     // than resurrecting work the user threw away.
-    const existing = await Task.findOne({ _id: doc.taskId, userId: auth.sub, ...notDeleted() })
+    const existing = doc.taskId
+      ? await Task.findOne({ _id: doc.taskId, userId: auth.sub, ...notDeleted() })
+      : null
     if (!existing) {
-      doc.status = 'dropped'
-      doc.resolvedAt = new Date()
-      await doc.save()
+      await closeOut(doc, { status: 'dropped', resolvedAt: new Date() })
       res.status(200).json({ clarification: doc.toJSON(), task: null })
       return
     }
@@ -166,10 +188,7 @@ meClarificationsRouter.post(
       timezone,
     })
 
-    doc.status = 'resolved'
-    doc.answer = answerLabel
-    doc.resolvedAt = new Date()
-    await doc.save()
+    await closeOut(doc, { status: 'resolved', answer: answerLabel, resolvedAt: new Date() })
 
     // Count the (paid) custom interpretation against the chat quota — best
     // effort, NOT gated: resolving a held item completes work the user already
@@ -203,8 +222,7 @@ meClarificationsRouter.post(
     if (!doc) throw NotFound('clarification_not_found', 'That question is no longer here.')
 
     if (doc.status === 'open') {
-      doc.deferredUntil = new Date(Date.now() + DEFER_MS)
-      await doc.save()
+      await closeOut(doc, { deferredUntil: new Date(Date.now() + DEFER_MS) })
     }
     res.status(200).json({ clarification: doc.toJSON() })
   }),
@@ -226,9 +244,7 @@ meClarificationsRouter.post(
     if (!doc) throw NotFound('clarification_not_found', 'That question is no longer here.')
 
     if (doc.status === 'open') {
-      doc.status = 'dropped'
-      doc.resolvedAt = new Date()
-      await doc.save()
+      await closeOut(doc, { status: 'dropped', resolvedAt: new Date() })
     }
     res.status(200).json({ clarification: doc.toJSON() })
   }),

@@ -10,6 +10,10 @@ process.env.JWT_REFRESH_SECRET ??= 'test-refresh-secret-0123456789-abcdefghij'
 process.env.JWT_ACCESS_TTL ??= '15m'
 process.env.JWT_REFRESH_TTL ??= '30d'
 process.env.LOG_LEVEL ??= 'fatal'
+// Deterministic non-secret key so token encryption is exercised by the suite
+// rather than skipped. 64 hex chars = the 32 bytes AES-256 requires.
+process.env.INTEGRATION_ENCRYPTION_KEY ??=
+  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 // Placeholder so the lazily-cached env() validates at import time. The real
 // in-memory URI (set in beforeAll) is passed straight to mongoose.connect, so
 // the cached placeholder is never actually used to connect.

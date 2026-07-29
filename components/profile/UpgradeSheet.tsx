@@ -24,8 +24,8 @@ function Row({ label, free, pro }: { label: string; free: string; pro: string })
   return (
     <li className="flex items-center gap-3 py-2.5">
       <span className="min-w-0 flex-1 text-body-sm text-ink">{label}</span>
-      <span className="w-16 shrink-0 text-right text-body-sm tabular text-ink-muted">{free}</span>
-      <span className="w-16 shrink-0 text-right text-body-sm tabular font-bold text-gold">{pro}</span>
+      <span className="w-16 shrink-0 text-end text-body-sm tabular text-ink-muted">{free}</span>
+      <span className="w-16 shrink-0 text-end text-body-sm tabular font-bold text-gold">{pro}</span>
     </li>
   )
 }
@@ -57,8 +57,8 @@ export function UpgradeSheet({
       <ul className="flex flex-col divide-y divide-border">
         <li className="flex items-center gap-3 pb-2">
           <span className="min-w-0 flex-1" />
-          <span className="w-16 shrink-0 text-right text-label uppercase text-ink-muted">Free</span>
-          <span className="w-16 shrink-0 text-right text-label uppercase text-gold">Pro</span>
+          <span className="w-16 shrink-0 text-end text-label uppercase text-ink-muted">Free</span>
+          <span className="w-16 shrink-0 text-end text-label uppercase text-gold">Pro</span>
         </li>
         <Row
           label="AI questions a day"

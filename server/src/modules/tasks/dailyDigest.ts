@@ -119,10 +119,18 @@ async function tally(
   }
 }
 
-async function readSourceState(uid: Types.ObjectId, localDate: string): Promise<SourceState> {
+async function readSourceState(
+  uid: Types.ObjectId,
+  localDate: string,
+  now: Date,
+): Promise<SourceState> {
   const [tasks, clarifications, scans] = await Promise.all([
     tally(Task, { userId: uid, ...notDeleted() }),
-    tally(Clarification, { userId: uid, ...visibleOpen() }),
+    // `now` is threaded through rather than left to visibleOpen's default: the
+    // digest is called with an injected clock (tests, and any backfill), and a
+    // deferred question judged against the wall clock instead would make this
+    // count disagree with taskCounts for the same instant.
+    tally(Clarification, { userId: uid, ...visibleOpen(now) }),
     tally(ScannedDocument, { userId: uid, status: 'ready_for_review' }),
   ])
 
@@ -327,7 +335,7 @@ export async function buildDailyDigest(
   const localDate = localDateKey(now, timezone)
 
   const [source, cached] = await Promise.all([
-    readSourceState(uid, localDate),
+    readSourceState(uid, localDate, now),
     DailyDigest.findOne({ userId: uid, localDate }).lean(),
   ])
 
@@ -336,20 +344,27 @@ export async function buildDailyDigest(
   }
 
   const computed = await computeDigest({ uid, now, timezone, source })
-  const prose = await writeDigestProse({ userId: String(uid), pool: computed.pool, now })
 
-  // With no model available, keep the themes from the last successful build —
-  // re-validated against today's matters, so they are stale only in wording.
-  // The headline is not carried: a sentence about yesterday presented as today
-  // is a lie, whereas a plain count is merely plain.
+  // The prose is NOT awaited. It used to be, and that one `await` was the
+  // slowest thing on the home screen: every count here is already in hand after
+  // the aggregation above, and they were then made to wait on a language model
+  // writing a single sentence. Worse, the wait landed on exactly the visits that
+  // matter — a cache miss means the user just changed something, so the moment
+  // they act is the moment the dashboard goes quiet. The counts ship now with
+  // the computed headline; the model's sentence is written in the background and
+  // lands on the next read. A plain sentence immediately beats a nicer one late.
+  //
+  // Themes carry over from the last successful build, re-validated against
+  // today's matters, so they are stale only in wording. The headline is never
+  // carried: a sentence about yesterday presented as today is a lie, whereas a
+  // plain count is merely plain.
   const poolIds = new Set(computed.pool.map((row) => String(row._id)))
-  const carried = keepRealThemes(cached?.payload.themes ?? [], poolIds)
-  const themes = prose && prose.themes.length > 0 ? prose.themes : carried
+  const themes = keepRealThemes(cached?.payload.themes ?? [], poolIds)
 
   const payload: DailyDigestPayload = {
     localDate,
     generatedAt: now.toISOString(),
-    headline: prose?.headline ?? neutralHeadline(computed.counts),
+    headline: neutralHeadline(computed.counts),
     counts: computed.counts,
     estimatedMinutesToday: computed.estimatedMinutesToday,
     themes,
@@ -370,7 +385,58 @@ export async function buildDailyDigest(
     logger.warn({ err }, 'daily-digest:cache-write-failed')
   }
 
+  trackProse(refineProse({ uid, localDate, sourceHash: source.hash, pool: computed.pool, now }))
+
   return payload
+}
+
+// In-flight background prose jobs.
+//
+// Production never reads this — the whole point is that nothing waits. It
+// exists so TESTS can be deterministic: an unawaited promise outlives the case
+// that started it, and a model call from one test then shows up in the next
+// one's spy. A fire-and-forget with no handle is untestable by construction.
+const inFlightProse = new Set<Promise<void>>()
+
+function trackProse(job: Promise<void>): void {
+  inFlightProse.add(job)
+  void job.finally(() => inFlightProse.delete(job))
+}
+
+/** Test-only: settle every background prose refresh started so far. */
+export function whenDigestProseSettled(): Promise<void> {
+  return Promise.all([...inFlightProse]).then(() => undefined)
+}
+
+// Upgrade a just-written digest row from the computed headline to the model's,
+// in the background. Fire-and-forget: nothing on the dashboard waits for it and
+// a failure leaves a complete, honest digest in place.
+//
+// The $match includes sourceHash, which is the whole safety argument: by the
+// time this resolves the user may have filed three more matters, and the row
+// will have been rewritten against a new fingerprint. Matching on the hash this
+// prose was generated FROM means a late write lands only if it is still true,
+// and is silently dropped otherwise. Without that guard the slow path would
+// staple a sentence about the old state onto the new counts.
+async function refineProse(args: {
+  uid: Types.ObjectId
+  localDate: string
+  sourceHash: string
+  pool: Record<string, unknown>[]
+  now: Date
+}): Promise<void> {
+  const { uid, localDate, sourceHash, pool, now } = args
+  try {
+    const prose = await writeDigestProse({ userId: String(uid), pool, now })
+    if (!prose) return
+
+    const set: Record<string, unknown> = { 'payload.headline': prose.headline }
+    if (prose.themes.length > 0) set['payload.themes'] = prose.themes
+
+    await DailyDigest.updateOne({ userId: uid, localDate, sourceHash }, { $set: set })
+  } catch (err: unknown) {
+    logger.warn({ err, localDate }, 'daily-digest:prose-refine-failed')
+  }
 }
 
 // Rebuild the response from a lean cache row. Explicit rather than spread so a

@@ -5,7 +5,7 @@ import { X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { cn } from '@/lib/cn'
-import { MORPH_BACKDROP_FADE, MORPH_CONTENT_VARIANTS, MORPH_SPRING } from '@/lib/motion'
+import { LIST_SPRING, MORPH_BACKDROP_FADE, MORPH_CONTENT_VARIANTS, MORPH_SPRING } from '@/lib/motion'
 import { useMorphColors } from '@/lib/motion-colors'
 
 // The app's bottom-sheet primitive — Matters' filter/arrange/detail/delete
@@ -356,15 +356,29 @@ export function ChipToggle({
 
 export function SheetSection({
   label,
+  animateLayout = false,
   children,
 }: {
   label: string
+  /** Slide instead of snapping when a section above this one changes height.
+   *  Opt-in and `position`-only: plain `layout` animates the box, which would
+   *  squash a section's own contents while it moves. */
+  animateLayout?: boolean
   children: React.ReactNode
 }) {
+  const className = 'flex flex-col gap-2.5 py-3'
+  if (!animateLayout) {
+    return (
+      <div className={className}>
+        <span className="text-label uppercase text-ink-muted">{label}</span>
+        {children}
+      </div>
+    )
+  }
   return (
-    <div className="flex flex-col gap-2.5 py-3">
+    <motion.div layout="position" transition={LIST_SPRING} className={className}>
       <span className="text-label uppercase text-ink-muted">{label}</span>
       {children}
-    </div>
+    </motion.div>
   )
 }

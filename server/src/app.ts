@@ -13,6 +13,8 @@ import { healthRouter } from './routes/health'
 import { meRouter } from './routes/me'
 import { meExportRouter } from './routes/me.export'
 import { meBillingRouter } from './routes/me.billing'
+import { integrationsGoogleRouter } from './routes/integrations.google'
+import { meIcsFeedsRouter } from './routes/me.icsFeeds'
 import { meIntegrationsRouter } from './routes/me.integrations'
 import { meSubscriptionRouter } from './routes/me.subscription'
 import { meTasksRouter } from './routes/me.tasks'
@@ -73,6 +75,8 @@ export function createApp(): Express {
   app.use(meSubscriptionRouter)
   app.use(meBillingRouter)
   app.use(meIntegrationsRouter)
+  app.use(meIcsFeedsRouter)
+  app.use(integrationsGoogleRouter)
   app.use(meTasksRouter)
   app.use(meDigestRouter)
   app.use(meVoiceNotesRouter)

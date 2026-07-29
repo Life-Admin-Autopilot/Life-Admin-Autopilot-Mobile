@@ -17,7 +17,8 @@
 import { useState } from 'react'
 import { Check, X } from 'lucide-react'
 
-import { DOMAIN_LABEL, DOMAINS } from '@/components/scan/candidateDisplay'
+import { DOMAINS } from '@/components/scan/candidateDisplay'
+import { useDomainLabels } from '@/hooks/useDomainLabels'
 import { Button } from '@/components/ui/button'
 import { Sheet } from '@/components/ui/Sheet'
 import { cn } from '@/lib/cn'
@@ -60,6 +61,7 @@ export function CandidateEditSheet({
   onSave: (draft: CandidateDraft) => void
   onClose: () => void
 }) {
+  const domainLabels = useDomainLabels()
   const [draft, setDraft] = useState<CandidateDraft | null>(initial)
   // Reseed on open, and whenever a DIFFERENT candidate is opened. Doing it in
   // render rather than an effect means the sheet never paints one frame of the
@@ -119,7 +121,7 @@ export function CandidateEditSheet({
             <div className="flex flex-wrap gap-1.5">
               {DOMAINS.map((d) => (
                 <Chip key={d} active={draft.domain === d} onClick={() => patch({ domain: d })}>
-                  {DOMAIN_LABEL[d]}
+                  {domainLabels[d]}
                 </Chip>
               ))}
             </div>

@@ -14,6 +14,9 @@
 //
 // Idempotent — re-running skips rows that already have a taskId.
 
+// dotenv first: env() validates MONGODB_URI on its first call, and a script
+// (unlike src/index.ts) has nothing else loading the .env file for it.
+import 'dotenv/config'
 import mongoose from 'mongoose'
 
 import { env } from '../src/env'

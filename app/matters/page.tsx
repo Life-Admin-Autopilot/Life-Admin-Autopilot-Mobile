@@ -1,8 +1,9 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowRight, ListFilter, ArrowUpDown, CalendarRange, CheckSquare, Plus } from 'lucide-react'
+import { ArrowRight, ListFilter, ArrowUpDown, CalendarRange, Plus } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 
 import { SketchEmptyTrayGlyph } from '@/components/icons/sketch/flowGlyphs'
 import { BulkDeleteConfirm } from '@/components/matters/BulkDeleteConfirm'
@@ -27,6 +28,7 @@ import { usePendingProposal, useProposeCategorization } from '@/queries/categori
 import { useClaimTabBarSlot } from '@/lib/tabBarStore'
 import { toast } from '@/lib/toast'
 import type { SearchResult } from '@/queries/mattersAi'
+import { useDomainLabels } from '@/hooks/useDomainLabels'
 import {
   bucketOf,
   groupByDomain,
@@ -36,7 +38,6 @@ import {
   type TimeBucket,
 } from '@/lib/taskFormat'
 import {
-  DOMAIN_LABEL,
   hasActiveFilters,
   useBulkAction,
   useBulkPreview,
@@ -98,6 +99,8 @@ interface HeldRow {
 const NO_HELD_ROWS: HeldRow[] = []
 
 export default function MattersPage() {
+  const t = useTranslations('matters')
+  const domainLabels = useDomainLabels()
   const [filters, setFilters] = useState<TaskFilters>(DEFAULT_FILTERS)
   const [sort, setSort] = useState<TaskSort>('due-asc')
   const [group, setGroup] = useState<GroupMode>('time')
@@ -118,6 +121,9 @@ export default function MattersPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deletePreview, setDeletePreview] = useState<BulkPreview | null>(null)
   const [categorizeOpen, setCategorizeOpen] = useState(false)
+  // Captured at tap time: selection mode is exited once the sheet closes, so
+  // the sheet's own copy can't read `selected.size` and still be right.
+  const [categorizeCount, setCategorizeCount] = useState(0)
 
   // Each sheet morphs out of whatever opened it, so we hold the rect of the
   // last-tapped control. One slot is enough — only one sheet is ever open.
@@ -236,11 +242,11 @@ export default function MattersPage() {
   )
 
   const groups: TaskGroup[] = useMemo(() => {
-    if (group === 'domain') return groupByDomain(tasks, DOMAIN_LABEL)
-    if (group === 'priority') return groupByPriority(tasks)
-    if (group === 'flat') return [{ key: 'all', label: 'All matters', tasks }]
-    return groupByTime(tasks, undefined, pinnedBuckets)
-  }, [tasks, group, pinnedBuckets])
+    if (group === 'domain') return groupByDomain(tasks, domainLabels)
+    if (group === 'priority') return groupByPriority(tasks, t)
+    if (group === 'flat') return [{ key: 'all', label: t('group.allMatters'), tasks }]
+    return groupByTime(tasks, t, undefined, pinnedBuckets)
+  }, [tasks, group, pinnedBuckets, domainLabels, t])
 
   // The two-tier fold applies only to the unfiltered default view — once the
   // user has asked a specific question, they get the whole answer.
@@ -287,6 +293,14 @@ export default function MattersPage() {
     })
   }, [])
 
+  // Entering from a hold starts with THAT row picked. Entering with nothing
+  // selected would make the gesture feel like it had only turned a mode on,
+  // and leave the action bar disabled under the finger that just held.
+  const enterSelect = useCallback((task: Task) => {
+    setSelectMode(true)
+    setSelected(new Set([task.id]))
+  }, [])
+
   const exitSelect = useCallback(() => {
     setSelectMode(false)
     setSelected(new Set())
@@ -328,23 +342,29 @@ export default function MattersPage() {
     })
   }
 
-  // Categorising is the one bulk action that writes nothing on the way out:
+  // Categorizing is the one bulk action that writes nothing on the way out:
   // it stages a proposal, and the sheet is where the user decides what of it
   // actually lands. Selection mode is left as-is until they have decided —
   // exiting here would drop the set behind the sheet reviewing it.
   const askCategorize = (rect: DOMRect) => {
     setTriggerRect(rect)
+    // The sheet opens FIRST, before the model has answered.
+    //
+    // The round trip takes seconds, and opening on success meant the button
+    // appeared to do nothing for the whole of it — the one interaction in the
+    // app where the user is most likely to tap again, or give up. The sheet
+    // carries its own loading state and, while it waits, is also the only
+    // place that explains what this feature does.
+    setCategorizeCount(selected.size)
+    setCategorizeOpen(true)
     proposeCategorization.mutate(
       { ids: [...selected] },
       {
-        onSuccess: () => setCategorizeOpen(true),
         onError: (err) => {
-          // A proposal is already open — send them to it rather than making
-          // them guess why nothing happened.
-          if (err instanceof ApiError && err.code === 'categorize_already_open') {
-            setCategorizeOpen(true)
-            return
-          }
+          // A proposal is already open — the sheet reads it from the server
+          // anyway, so land on it rather than reporting a failure for a state
+          // the user can act on.
+          if (err instanceof ApiError && err.code === 'categorize_already_open') return
           toast.error(
             err instanceof ApiError ? err.message : 'Could not look at those. Try again.',
           )
@@ -428,11 +448,12 @@ export default function MattersPage() {
                 setSummaryOpen(true)
               }}
             />
-            <Control
-              icon={<CheckSquare size={15} />}
-              label="Select"
-              onClick={() => setSelectMode(true)}
-            />
+            {/* No "Select" pill.
+                Four labelled pills do not fit a 390px screen, so it lived at
+                the end of the scroll and was invisible unless you thought to
+                drag the row sideways — a control nobody can find is not a
+                control. Selection is entered by pressing and holding a row,
+                which is how /documents has always done it. */}
             </div>
 
             {/* There is deliberately no "Clear" button here. It was a third
@@ -471,7 +492,7 @@ export default function MattersPage() {
           <button
             type="button"
             onClick={() => setFilters({ ...DEFAULT_FILTERS, overdue: true })}
-            className="flex items-center gap-3.5 rounded-2xl bg-accent-soft px-4 py-3.5 text-left"
+            className="flex items-center gap-3.5 rounded-2xl bg-accent-soft px-4 py-3.5 text-start"
           >
             <EmojiChip emoji="🌾" category="peach" size={40} />
             <span className="min-w-0 flex-1 text-body text-ink">
@@ -493,6 +514,7 @@ export default function MattersPage() {
               setDetailId(t.id)
             }}
             onToggleDone={toggleDone}
+            onLongPress={enterSelect}
             onClear={clearSearch}
           />
         ) : list.isPending ? (
@@ -569,6 +591,7 @@ export default function MattersPage() {
                             setDetailId(t.id)
                           }}
                           onToggleDone={toggleDone}
+                          onLongPress={enterSelect}
                         />
                       </motion.li>
                     ))}
@@ -642,6 +665,9 @@ export default function MattersPage() {
           result, so one left open survives a reload and reopens where it was. */}
       <CategorizeSheet
         open={categorizeOpen}
+        loading={proposeCategorization.isPending}
+        failed={proposeCategorization.isError && !pendingProposal.data}
+        selectedCount={categorizeCount}
         proposal={pendingProposal.data ?? null}
         trigger={triggerRect}
         onClose={() => {

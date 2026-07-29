@@ -1,9 +1,12 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
+
+import { useDomainLabels } from '@/hooks/useDomainLabels'
+
 import { Button } from '@/components/ui/button'
 import { RANGE_PRESETS, toLocalInputValue, fromLocalInputValue } from '@/lib/taskFormat'
 import {
-  DOMAIN_LABEL,
   TASK_DOMAINS,
   TASK_KINDS,
   TASK_PRIORITIES,
@@ -60,6 +63,8 @@ export function FilterSheet({
   filters: TaskFilters
   onChange: (next: TaskFilters) => void
 }) {
+  const t = useTranslations('matters')
+  const domainLabels = useDomainLabels()
   const tags = useTaskTags()
   const patch = (p: Partial<TaskFilters>) => onChange({ ...filters, ...p })
 
@@ -131,7 +136,7 @@ export function FilterSheet({
               selected={filters.domain?.includes(d) ?? false}
               onClick={() => patch({ domain: toggle(filters.domain, d) })}
             >
-              {DOMAIN_LABEL[d]}
+              {domainLabels[d]}
             </ChipToggle>
           ))}
         </div>
@@ -189,7 +194,7 @@ export function FilterSheet({
               filters.dueAfter === range.dueAfter && filters.dueBefore === range.dueBefore
             return (
               <ChipToggle
-                key={preset.label}
+                key={preset.labelKey}
                 selected={active}
                 onClick={() =>
                   patch(
@@ -199,7 +204,7 @@ export function FilterSheet({
                   )
                 }
               >
-                {preset.label}
+                {t(`range.preset.${preset.labelKey}`)}
               </ChipToggle>
             )
           })}

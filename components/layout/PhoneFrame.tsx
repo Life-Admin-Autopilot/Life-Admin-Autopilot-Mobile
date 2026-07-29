@@ -16,7 +16,10 @@ export function PhoneFrame({ children }: { children: React.ReactNode }) {
   return (
     <div className="lg:flex lg:min-h-dvh lg:items-center lg:justify-center lg:bg-canvas-veined lg:p-10">
       <div className="lg:relative lg:h-[864px] lg:w-[410px] lg:overflow-hidden lg:rounded-[52px] lg:border-[10px] lg:border-neutral-900 lg:bg-canvas lg:shadow-2xl lg:ring-1 lg:ring-black/10 lg:transform-gpu">
-        {/* Side buttons */}
+        {/* Side buttons. These stay physical left/right on purpose — they are
+            the volume rocker and power button of a drawn iPhone, and hardware
+            does not mirror when the UI does. The only left/right in the app
+            that must NOT become start/end. */}
         <div className="pointer-events-none absolute -left-[10px] top-[130px] hidden h-8 w-[3px] rounded-l-sm bg-neutral-900 lg:block" />
         <div className="pointer-events-none absolute -left-[10px] top-[172px] hidden h-14 w-[3px] rounded-l-sm bg-neutral-900 lg:block" />
         <div className="pointer-events-none absolute -left-[10px] top-[236px] hidden h-14 w-[3px] rounded-l-sm bg-neutral-900 lg:block" />

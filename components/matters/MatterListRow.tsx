@@ -2,11 +2,14 @@
 
 import { ListChecks } from 'lucide-react'
 import { motion, useReducedMotion } from 'framer-motion'
+import { useTranslations } from 'next-intl'
 
 import { DomainIcon } from '@/components/icons/DomainIcon'
 import { Pill } from '@/components/ui/Pill'
 import { CompletionRing, SelectionCheck } from '@/components/ui/CompletionRing'
 import { cn } from '@/lib/cn'
+import { useIntlTag } from '@/lib/i18n/localeStore'
+import { useLongPress } from '@/lib/useLongPress'
 import { bucketOf, formatDue } from '@/lib/taskFormat'
 import type { Task } from '@/queries/tasks'
 
@@ -46,6 +49,7 @@ export function MatterListRow({
   selectable = false,
   selected = false,
   onToggleSelect,
+  onLongPress,
   now,
 }: {
   task: Task
@@ -55,16 +59,27 @@ export function MatterListRow({
   selectable?: boolean
   selected?: boolean
   onToggleSelect?: (task: Task) => void
+  /** Press and hold to enter selection mode with this row already picked. */
+  onLongPress?: (task: Task) => void
   now?: Date
 }) {
   const reduced = useReducedMotion()
+  // On the OUTER card, not the inner button: a hold anywhere on the row should
+  // work, including the padding and the space under the completion ring. Every
+  // inner control then has to consume the release-click, or lifting the finger
+  // after a hold would also tick the ring / open the sheet behind the selection
+  // UI that just appeared.
+  const press = useLongPress(onLongPress ? () => onLongPress(task) : undefined, selectable)
   const done = task.status === 'done'
+  const t = useTranslations('matters')
+  const tag = useIntlTag()
   const overdue = !done && bucketOf(task, now) === 'overdue'
   const priority = PRIORITY_PILL[task.priority]
   const openSubtasks = task.subtasks.filter((s) => !s.done).length
 
   return (
     <div
+      {...press.handlers}
       className={cn(
         'relative flex select-none items-center gap-3.5 rounded-2xl bg-surface px-4 py-3.5 shadow-card',
         // The whole card is one press target now, so it gets the card-level
@@ -76,7 +91,10 @@ export function MatterListRow({
       {selectable ? (
         <button
           type="button"
-          onClick={() => onToggleSelect?.(task)}
+          onClick={() => {
+            if (press.consumeClick()) return
+            onToggleSelect?.(task)
+          }}
           aria-label={selected ? `Deselect ${task.title}` : `Select ${task.title}`}
           aria-pressed={selected}
           className="relative z-10 shrink-0"
@@ -93,14 +111,17 @@ export function MatterListRow({
 
       <button
         type="button"
-        onClick={(e) =>
-          selectable
-            ? onToggleSelect?.(task)
-            : // Measure the whole row, not the label, so the morph starts from
-              // the full card edge the user actually sees.
-              onOpen(task, (e.currentTarget.parentElement ?? e.currentTarget).getBoundingClientRect())
-        }
-        className="flex min-w-0 flex-1 flex-col items-start text-left after:absolute after:inset-0 after:content-['']"
+        onClick={(e) => {
+          if (press.consumeClick()) return
+          if (selectable) {
+            onToggleSelect?.(task)
+            return
+          }
+          // Measure the whole row, not the label, so the morph starts from
+          // the full card edge the user actually sees.
+          onOpen(task, (e.currentTarget.parentElement ?? e.currentTarget).getBoundingClientRect())
+        }}
+        className="flex min-w-0 flex-1 flex-col items-start text-start after:absolute after:inset-0 after:content-['']"
       >
         <span
           className={cn(
@@ -122,7 +143,11 @@ export function MatterListRow({
               transition={
                 reduced ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 32 }
               }
-              className="pointer-events-none absolute inset-x-0 top-1/2 h-0.5 origin-left rounded-pill bg-current"
+              // The strike is drawn by animating scaleX from 0, so it has to
+              // grow from the edge the text starts at — otherwise in Arabic the
+              // line sweeps backwards across the title. Tailwind has no logical
+              // transform-origin, so the direction is named explicitly.
+              className="pointer-events-none absolute inset-x-0 top-1/2 h-0.5 origin-left rounded-pill bg-current rtl:origin-right"
             />
           </span>
         </span>
@@ -145,7 +170,7 @@ export function MatterListRow({
           <span
             className={cn('text-body-sm tabular', overdue ? 'font-bold text-accent' : 'text-ink-muted')}
           >
-            {formatDue(task.dueAt, now)}
+            {formatDue(task.dueAt, { t, tag, now })}
           </span>
           {openSubtasks > 0 ? (
             <span className="flex items-center gap-0.5 text-body-sm tabular text-ink-subtle">
@@ -164,7 +189,10 @@ export function MatterListRow({
       {!selectable ? (
         <CompletionRing
           checked={done}
-          onChange={() => onToggleDone(task)}
+          onChange={() => {
+            if (press.consumeClick()) return
+            onToggleDone(task)
+          }}
           label={done ? `Reopen ${task.title}` : `Complete ${task.title}`}
           className="relative z-10"
         />

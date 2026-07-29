@@ -15,6 +15,7 @@ import { documentScanLimiter } from '../middleware/rateLimit'
 import { logger } from '../logger'
 import { Notification } from '../models/Notification'
 import {
+  MAX_MANUAL_SCAN_RETRIES,
   SCANNED_DOCUMENT_SOURCES,
   ScannedDocument,
   type ExtractedTaskCandidate,
@@ -242,6 +243,63 @@ meDocumentScansRouter.delete(
     }
 
     res.status(204).end()
+  }),
+)
+
+// Re-run extraction on a document that failed, from the bytes already in
+// storage. The upload writes the file BEFORE the record (see the POST above),
+// so a processing failure never costs the user their capture — retrying is a
+// worker re-enqueue, not a second upload of a photo they'd have to retake.
+//
+// The monthly quota slot is deliberately NOT charged again, for the mirror of
+// the reason DELETE doesn't refund one: the slot belongs to the DOCUMENT, not
+// to an extraction attempt. Billing a retry would charge the user for our
+// failure. `manualRetries` is what bounds the cost instead — the worker's own
+// maxAttempts ladder guards transient errors, and this caps how many fresh
+// ladders a retry button can buy.
+meDocumentScansRouter.post(
+  '/me/document-scans/:id/reprocess',
+  requireAuth,
+  documentScanLimiter,
+  asyncHandler(async (req, res) => {
+    const auth = req.auth
+    if (!auth) throw Unauthorized()
+
+    const doc = await ScannedDocument.findOne({ _id: req.params.id, userId: auth.sub })
+    if (!doc) throw NotFound('scanned_document_not_found', 'Scanned document no longer exists.')
+
+    // Idempotent on any status that isn't actually failed. The client polls on
+    // a 4s interval, so a retry tapped in the window where the worker already
+    // recovered has to read as success — a 409 there would show the user an
+    // error about a document that is fine.
+    if (doc.status !== 'failed') {
+      res.status(200).json({ scannedDocument: doc.toJSON() })
+      return
+    }
+
+    if (doc.manualRetries >= MAX_MANUAL_SCAN_RETRIES) {
+      throw BadRequest(
+        'document_scan_retry_exhausted',
+        "This document has failed too many times to keep retrying. Try scanning it again.",
+      )
+    }
+
+    doc.manualRetries += 1
+    // `attempts` resets so the transient-error backoff ladder starts fresh. A
+    // document that exhausted maxAttempts during an outage an hour ago should
+    // get a full ladder now, not a single last try that spends the retry on
+    // whatever the first request happens to hit.
+    doc.attempts = 0
+    doc.status = 'pending'
+    doc.nextRunAt = new Date()
+    doc.lockedUntil = null
+    doc.lastError = undefined
+    doc.failureReason = undefined
+    await doc.save()
+
+    enqueueDocumentScan(doc.id)
+
+    res.status(202).json({ scannedDocument: doc.toJSON() })
   }),
 )
 

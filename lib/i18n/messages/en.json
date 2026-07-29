@@ -1,0 +1,149 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "done": "Done",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "retry": "Retry",
+    "delete": "Delete",
+    "edit": "Edit",
+    "confirm": "Confirm",
+    "continue": "Continue",
+    "skip": "Skip",
+    "loading": "Loading",
+    "search": "Search",
+    "clear": "Clear",
+    "selectAll": "Select all",
+    "matter": "matter",
+    "matters": "matters",
+    "matterCount": "{count, plural, =0 {No matters} one {# matter} other {# matters}}",
+    "cannotBeUndone": "This cannot be undone",
+    "canBeUndone": "This can be undone"
+  },
+  "nav": {
+    "home": "Home",
+    "matters": "Matters",
+    "record": "Record",
+    "documents": "Documents",
+    "profile": "Profile"
+  },
+  "errors": {
+    "generic": "Something went wrong. Try again in a moment.",
+    "network": "No connection. Check your network and try again.",
+    "server": "The service is unavailable. Try again in a moment.",
+    "byCode": {
+      "invalid_credentials": "Wrong email or password.",
+      "email_taken": "An account with this email already exists.",
+      "invalid_body": "Some of those details looked off. Check the fields and try again.",
+      "invalid_query": "That request could not be read.",
+      "rate_limited": "Too many attempts. Wait a moment and try again.",
+      "invalid_code": "That code is wrong or has expired. Send a new one.",
+      "email_send_failed": "We could not send that email. Try again in a moment.",
+      "no_pending_email": "There's no email change waiting.",
+      "email_unchanged": "That's already your email address.",
+      "missing_token": "Your session has expired. Sign in again.",
+      "invalid_token": "Your session has expired. Sign in again.",
+      "unauthorized": "Your session has expired. Sign in again.",
+      "no_password_set": "This account has no password to change.",
+      "password_required": "Enter your password to continue.",
+      "empty_body": "Nothing was received. Try again.",
+      "payload_too_large": "Recording exceeds 6MB. Try a shorter clip.",
+      "unsupported_media_type": "Only PDF, JPEG, PNG, HEIC, or WebP are supported.",
+      "invalid_pdf": "Could not read that PDF — it may be corrupt or password-protected.",
+      "invalid_metadata": "That upload was missing required details. Try again.",
+      "scan_not_ready": "This scan is not ready for review yet.",
+      "voice_note_not_ready": "Voice note transcript is not ready yet.",
+      "no_targets": "Nothing to categorise.",
+      "invalid_option": "That answer is no longer available.",
+      "invalid_answer": "That answer could not be read.",
+      "invalid_review": "That review could not be read.",
+      "invalid_feed": "Check the address, name and category.",
+      "clarification_not_found": "That question is no longer here.",
+      "feed_not_found": "That calendar is not connected.",
+      "not_connected": "No Google account is connected.",
+      "pending_call_not_found": "This confirmation has expired.",
+      "proposal_not_found": "That suggestion has expired.",
+      "scanned_document_not_found": "Scanned document no longer exists.",
+      "session_not_found": "That session is no longer active.",
+      "subtask_not_found": "Subtask no longer exists.",
+      "task_not_found": "Matter no longer exists.",
+      "user_not_found": "Account no longer exists.",
+      "voice_note_not_found": "Voice note no longer exists.",
+      "cross_user_confirm": "That confirmation belongs to another account.",
+      "invalid_reset_token": "Account not found.",
+      "invalid_verification_token": "Account not found."
+    }
+  },
+  "notifications": {
+    "actionDone": "Done",
+    "actionSnooze": "Later today",
+    "bodyLead": "Coming up.",
+    "bodyDue": "Due now."
+  },
+  "language": {
+    "title": "Language",
+    "eyebrow": "Choose how Kitto speaks to you",
+    "description": "Changes the whole app, including what Kitto writes back.",
+    "systemDefault": "Match device"
+  },
+  "matters": {
+    "bucket": {
+      "overdue": "Overdue",
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "thisWeek": "This week",
+      "later": "Later",
+      "undated": "No date",
+      "done": "Done"
+    },
+    "priority": {
+      "urgent": "Urgent",
+      "high": "High",
+      "normal": "Normal",
+      "low": "Low"
+    },
+    "due": {
+      "noDate": "No date",
+      "today": "Today, {time}",
+      "todayOverdue": "Today, {time} · overdue",
+      "tomorrow": "Tomorrow, {time}",
+      "yesterday": "Yesterday, {time}",
+      "daysOverdue": "{count, plural, one {# day overdue} other {# days overdue}}",
+      "overdueSince": "Overdue since {date}"
+    },
+    "range": {
+      "between": "{from} – {to}",
+      "after": "from {date}",
+      "before": "up to {date}",
+      "allTime": "all time",
+      "preset": {
+        "today": "Today",
+        "thisWeek": "This week",
+        "thisMonth": "This month",
+        "nextMonth": "Next month"
+      }
+    },
+    "snooze": {
+      "laterToday": "Later today",
+      "tomorrow": "Tomorrow",
+      "nextWeek": "Next week",
+      "nextMonth": "Next month"
+    },
+    "group": {
+      "allMatters": "All matters"
+    },
+    "summary": {
+      "rangeClear": "{range} is clear."
+    }
+  },
+  "domain": {
+    "health": "Health",
+    "home": "Home",
+    "car": "Car",
+    "finance": "Finance",
+    "family": "Family",
+    "pets": "Pets"
+  }
+}

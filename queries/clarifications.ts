@@ -7,7 +7,10 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api/client'
+import { toast } from '@/lib/toast'
+import { translateBackendError } from '@/lib/translateBackendError'
 import { queryKeys } from '@/queries/keys'
+import { adjustNeedsInput, type TaskCounts } from '@/queries/tasks'
 
 export interface ClarificationOption {
   label: string
@@ -63,11 +66,15 @@ export function useResolveClarification() {
         body: { answer: vars.answer, timezone: vars.timezone },
       }),
     onMutate: (vars) => removeOptimistically(queryClient, vars.id),
-    onError: (_e, _v, ctx) => restore(queryClient, ctx),
+    onError: (err, _v, ctx) => {
+      restore(queryClient, ctx)
+      reportFailure(err)
+    },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.clarifications })
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all })
       void queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.digestAll })
     },
   })
 }
@@ -83,8 +90,14 @@ export function useDeferClarification() {
     mutationFn: (id: string) =>
       api<{ clarification: Clarification }>(`/me/clarifications/${id}/defer`, { method: 'POST' }),
     onMutate: (id) => removeOptimistically(queryClient, id),
-    onError: (_e, _v, ctx) => restore(queryClient, ctx),
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.clarifications }),
+    onError: (err, _v, ctx) => {
+      restore(queryClient, ctx)
+      reportFailure(err)
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.clarifications })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.digestAll })
+    },
   })
 }
 
@@ -94,23 +107,65 @@ export function useDropClarification() {
     mutationFn: (id: string) =>
       api<{ clarification: Clarification }>(`/me/clarifications/${id}/drop`, { method: 'POST' }),
     onMutate: (id) => removeOptimistically(queryClient, id),
-    onError: (_e, _v, ctx) => restore(queryClient, ctx),
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: queryKeys.clarifications }),
+    onError: (err, _v, ctx) => {
+      restore(queryClient, ctx)
+      reportFailure(err)
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.clarifications })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.digestAll })
+    },
+  })
+}
+
+// The card stack advances the instant you answer — it never waits for the
+// round trip, which is what makes it feel fast. The cost is that a failed
+// answer used to be invisible: the card moved on, the stack reached "All
+// clear.", and nothing had been written. Say so instead, and name the item so
+// the user knows WHICH answer to give again.
+function reportFailure(err: unknown): void {
+  toast.error('That answer did not save.', {
+    description: translateBackendError(err, 'It is still waiting for you — try again in a moment.'),
   })
 }
 
 interface RemoveCtx {
   prev?: ListResponse
+  prevCounts?: TaskCounts
 }
-function removeOptimistically(queryClient: QueryClient, id: string): RemoveCtx {
+
+// Drop a question from the stack AND from the home count, before the server has
+// agreed. Both have to move together: the card advancing while "A few guesses to
+// confirm" still sits on the dashboard behind it is the same state described two
+// different ways.
+async function removeOptimistically(
+  queryClient: QueryClient,
+  id: string,
+): Promise<RemoveCtx> {
+  // Cancel first. A read that was already in flight when the user tapped will
+  // resolve with the pre-tap list and put the answered question straight back.
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: queryKeys.clarifications }),
+    queryClient.cancelQueries({ queryKey: queryKeys.tasks.counts() }),
+  ])
+
   const prev = queryClient.getQueryData<ListResponse>(queryKeys.clarifications)
+  const prevCounts = queryClient.getQueryData<TaskCounts>(queryKeys.tasks.counts())
+
   if (prev) {
+    // Spread rather than rebuild: hasMore/nextCursor belong to this page and
+    // dropping them would silently end the pagination.
     queryClient.setQueryData<ListResponse>(queryKeys.clarifications, {
+      ...prev,
       clarifications: prev.clarifications.filter((c) => c.id !== id),
     })
   }
-  return { prev }
+  adjustNeedsInput(queryClient, -1)
+
+  return { prev, prevCounts }
 }
+
 function restore(queryClient: QueryClient, ctx: RemoveCtx | undefined): void {
   if (ctx?.prev) queryClient.setQueryData(queryKeys.clarifications, ctx.prev)
+  if (ctx?.prevCounts) queryClient.setQueryData(queryKeys.tasks.counts(), ctx.prevCounts)
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { CategorizeDiffRow } from '@/components/matters/CategorizeDiffRow'
 import { SketchEmptyTrayGlyph } from '@/components/icons/sketch/flowGlyphs'
@@ -24,12 +24,20 @@ import {
 
 export function CategorizeSheet({
   open,
+  loading,
+  failed,
+  selectedCount,
   proposal,
   trigger,
   onClose,
   onApplied,
 }: {
   open: boolean
+  /** The model is still thinking. The sheet opens BEFORE this resolves. */
+  loading: boolean
+  failed: boolean
+  /** How many matters were handed over — the loading copy needs a number. */
+  selectedCount: number
   proposal: Proposal | null
   trigger: DOMRect | null
   onClose: () => void
@@ -47,18 +55,28 @@ export function CategorizeSheet({
   // "medium" that arrives pre-ticked gets applied by anyone who taps Apply
   // without reading, which would make the confidence field decorative. The
   // user opts IN to the guesses.
-  const [checked, setChecked] = useState<Set<string>>(new Set())
-  useEffect(() => {
-    setChecked(new Set(changes.filter((c) => c.confidence === 'high').map((c) => c.taskId)))
-  }, [changes])
+  //
+  // Held against the proposal id and reconciled DURING RENDER rather than in an
+  // effect — the same trick the Matters list uses for its held rows. Resetting
+  // from an effect would tick the boxes one render after the rows appear, so a
+  // fast tap on Apply could commit an empty set.
+  const opId = proposal?.opId ?? ''
+  const [ticked, setTicked] = useState<{ opId: string; ids: Set<string> }>({
+    opId: '',
+    ids: new Set(),
+  })
+  const checked =
+    ticked.opId === opId
+      ? ticked.ids
+      : new Set(changes.filter((c) => c.confidence === 'high').map((c) => c.taskId))
+
+  const replace = (ids: Set<string>) => setTicked({ opId, ids })
 
   const toggle = (taskId: string) => {
-    setChecked((prev) => {
-      const next = new Set(prev)
-      if (next.has(taskId)) next.delete(taskId)
-      else next.add(taskId)
-      return next
-    })
+    const next = new Set(checked)
+    if (next.has(taskId)) next.delete(taskId)
+    else next.add(taskId)
+    replace(next)
   }
 
   const allChecked = changes.length > 0 && checked.size === changes.length
@@ -94,15 +112,15 @@ export function CategorizeSheet({
       open={open}
       onClose={onClose}
       trigger={trigger}
-      title="Suggested filing"
+      title={loading ? 'Reading your matters' : 'Where these belong'}
       eyebrow={
-        changes.length > 0
-          ? `${changes.length} ${changes.length === 1 ? 'matter' : 'matters'} · nothing changed yet`
+        changes.length > 0 && !loading
+          ? `${changes.length} ${changes.length === 1 ? 'suggestion' : 'suggestions'} · nothing changed yet`
           : undefined
       }
       height={560}
       footer={
-        changes.length > 0 ? (
+        changes.length > 0 && !loading ? (
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -124,20 +142,68 @@ export function CategorizeSheet({
         ) : null
       }
     >
-      {changes.length === 0 ? (
+      {loading ? (
+        // The wait is a Gemini round trip — seconds, not milliseconds. This
+        // panel exists because the alternative was a dead app: the sheet used
+        // to open only once the answer landed, so tapping the button looked
+        // like it had done nothing at all.
+        //
+        // It also does the explaining. Nowhere else in the flow said what this
+        // feature actually does, and the moment the user is waiting is exactly
+        // when they are willing to read it.
+        <div className="flex flex-col gap-4">
+          <p className="text-body text-ink-muted">
+            Kitto is re-reading{' '}
+            <span className="font-bold text-ink tabular">{selectedCount}</span>{' '}
+            {selectedCount === 1 ? 'matter' : 'matters'} to work out which area each one
+            really belongs to, and what to tag it.
+          </p>
+          <p className="rounded-2xl bg-surface-field px-4 py-3 text-body-sm text-ink-muted">
+            Nothing changes yet. You will see every suggestion first and choose which to
+            keep.
+          </p>
+          <ul className="flex flex-col gap-2" aria-hidden>
+            {[0, 1, 2].map((i) => (
+              <li key={i} className="flex items-start gap-3 rounded-2xl bg-surface-field px-3 py-3">
+                <div className="mt-0.5 size-5 shrink-0 animate-pulse rounded-md bg-surface-sunken" />
+                <div className="flex flex-1 flex-col gap-2">
+                  <div className="h-4 w-2/3 animate-pulse rounded-pill bg-surface-sunken" />
+                  <div className="h-3 w-1/2 animate-pulse rounded-pill bg-surface-sunken" />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : failed ? (
+        <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
+          <SketchEmptyTrayGlyph />
+          <p className="mt-2 font-display text-heading-serif text-ink">That didn’t go through.</p>
+          <p className="max-w-[32ch] text-body text-ink-muted">
+            Nothing was changed. Close this and try again.
+          </p>
+        </div>
+      ) : changes.length === 0 ? (
         <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
           <SketchEmptyTrayGlyph />
           <p className="mt-2 font-display text-heading-serif text-ink">Already filed right.</p>
-          <p className="max-w-[30ch] text-body text-ink-muted">
-            Nothing worth moving in what you picked.
+          <p className="max-w-[32ch] text-body text-ink-muted">
+            Kitto read {selectedCount === 1 ? 'it' : `all ${selectedCount}`} and would not move
+            anything. Nothing changed.
           </p>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
+          {/* Restates the deal at the moment of decision. The loading panel
+              said it too, but that panel is gone by the time anyone is
+              actually looking at a checkbox. */}
+          <p className="text-body-sm text-ink-muted">
+            Ticked rows move to the area on the right. Kitto’s confident guesses are
+            already ticked — untick anything you disagree with.
+          </p>
           <button
             type="button"
             onClick={() =>
-              setChecked(allChecked ? new Set() : new Set(changes.map((c) => c.taskId)))
+              replace(allChecked ? new Set() : new Set(changes.map((c) => c.taskId)))
             }
             className={cn(
               'self-start rounded-pill px-3 py-1.5 text-body-sm font-bold transition-colors',

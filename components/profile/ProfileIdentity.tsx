@@ -35,13 +35,16 @@ export function ProfileIdentity({
 
   return (
     <section className="flex flex-col items-center gap-2 text-center">
+      {/* Sized to the art's own 566×468 ratio rather than boxed into a square —
+          object-contain in a square leaves dead space above and below, which
+          reads as a broken image with a gap under the header. */}
       <Image
         src={ghostPose}
         alt=""
-        width={112}
+        width={136}
         height={112}
         priority
-        className="size-28 select-none object-contain"
+        className="h-28 w-auto select-none"
       />
 
       {user.displayName ? (
@@ -65,7 +68,7 @@ export function ProfileIdentity({
         <button
           type="button"
           onClick={(e) => onConfirmEmail(e.currentTarget.getBoundingClientRect())}
-          className="mt-1 flex w-full items-center gap-3.5 rounded-2xl bg-accent-soft px-4 py-3.5 text-left transition-transform active:scale-[0.99]"
+          className="mt-1 flex w-full items-center gap-3.5 rounded-2xl bg-accent-soft px-4 py-3.5 text-start transition-transform active:scale-[0.99]"
         >
           <span className="min-w-0 flex-1 text-body text-ink">
             Confirm your email so we can reach you about your matters.

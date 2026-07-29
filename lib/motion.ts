@@ -90,6 +90,35 @@ export const LIST_ITEM_VARIANTS: Variants = {
 }
 
 /**
+ * Step rows inside the matter editor.
+ *
+ * Deliberately quicker and shorter-travelled than LIST_ITEM_VARIANTS: a step is
+ * a line inside a sheet, not a card in a page-length list, and it is added and
+ * ticked in a burst. A new step rises from the field that created it; a removed
+ * one shrinks away in place.
+ *
+ * Pair with `AnimatePresence mode="popLayout"`: the leaving row drops out of the
+ * flow on its first exit frame, so the rows under it close the gap through their
+ * own `layout` transition instead of waiting out the fade.
+ */
+export const STEP_SPRING: Transition = {
+  type: 'spring',
+  stiffness: 520,
+  damping: 40,
+  mass: 0.6,
+}
+
+export const STEP_ITEM_VARIANTS: Variants = {
+  initial: { opacity: 0, y: 8, scale: 0.98 },
+  animate: { opacity: 1, y: 0, scale: 1, transition: STEP_SPRING },
+  exit: {
+    opacity: 0,
+    scale: 0.96,
+    transition: { duration: 0.14, ease: [0.4, 0, 1, 1] },
+  },
+}
+
+/**
  * Page-transition enter — the route content "expands in" with the same spring
  * family (fade + a whisper of scale/lift, no delay). App Router does enter
  * transitions cleanly via `app/template.tsx`; exit needs a frozen-router lift

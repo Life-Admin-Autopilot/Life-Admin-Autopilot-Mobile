@@ -84,11 +84,23 @@ const UpdateMeSchema = z.object({
     .object({ analytics: z.boolean(), crashReports: z.boolean() })
     .partial()
     .optional(),
+  // When an imported obligation carries a date but no time — Google Tasks and
+  // all-day calendar events both do — this is the time we apply. Validated
+  // strictly because a malformed value falling back to midnight would nudge
+  // people at 00:00, which they do not report; they just mute notifications.
+  imports: z
+    .object({
+      defaultTimeOfDay: z
+        .string()
+        .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: 'Use a 24-hour time like 09:00.' }),
+    })
+    .partial()
+    .optional(),
 })
 
 type UpdateMe = z.infer<typeof UpdateMeSchema>
 
-const NESTED_KEYS = ['mic', 'notifications', 'privacy'] as const
+const NESTED_KEYS = ['mic', 'notifications', 'privacy', 'imports'] as const
 
 // Flatten nested preference patches into dot-notation `$set` keys so updating
 // one field (e.g. notifications.push) doesn't overwrite its siblings.

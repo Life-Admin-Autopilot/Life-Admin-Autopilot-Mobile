@@ -29,7 +29,7 @@ export function ChatbotPopup() {
       onClick={open ? undefined : () => setOpen(true)}
       role={open ? 'dialog' : 'button'}
       aria-label={open ? 'Assistant' : 'Open assistant'}
-      className={`fixed bottom-24 right-5 z-40 ${open ? '' : 'cursor-pointer'}`}
+      className={`fixed bottom-24 end-5 z-40 ${open ? '' : 'cursor-pointer'}`}
     >
       {state === 'fab' ? (
         <div className="grid h-full w-full place-items-center">

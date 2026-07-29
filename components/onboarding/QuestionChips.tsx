@@ -47,7 +47,7 @@ export function DomainChip({
       onClick={onClick}
       aria-pressed={selected}
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-pill py-1.5 pl-1.5 pr-4 text-body-sm font-bold transition-colors active:scale-[0.98]',
+        'flex w-full items-center gap-2.5 rounded-pill py-1.5 ps-1.5 pe-4 text-body-sm font-bold transition-colors active:scale-[0.98]',
         selected ? 'bg-accent text-accent-ink' : 'bg-surface-field text-ink',
       )}
     >

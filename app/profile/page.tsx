@@ -5,7 +5,9 @@ import { useState } from 'react'
 import { useTheme } from 'next-themes'
 
 import { AppHeader } from '@/components/layout/AppHeader'
+import { CalendarFeedsSheet } from '@/components/profile/CalendarFeedsSheet'
 import { DeleteAccountSheet } from '@/components/profile/DeleteAccountSheet'
+import { GoogleAccountSheet } from '@/components/profile/GoogleAccountSheet'
 import { DevicesSheet } from '@/components/profile/DevicesSheet'
 import { EmailSheet, type EmailSheetMode } from '@/components/profile/EmailSheet'
 import { InvoicesSheet } from '@/components/profile/InvoicesSheet'
@@ -49,6 +51,8 @@ type SheetName =
   | 'email'
   | 'password'
   | 'timezone'
+  | 'calendars'
+  | 'google'
   | 'devices'
   | 'plan'
   | 'invoices'
@@ -205,6 +209,23 @@ export default function ProfilePage() {
           />
         </section>
 
+        <SettingGroup label="Connected">
+          <SettingRow
+            emoji="📅"
+            category="periwinkle"
+            title="Calendars"
+            value="School terms, bin days, fixtures"
+            onOpen={show('calendars')}
+          />
+          <SettingRow
+            emoji="🔗"
+            category="sky"
+            title="Google"
+            value="Calendar and tasks"
+            onOpen={show('google')}
+          />
+        </SettingGroup>
+
         <SettingGroup label="Your data">
           <SettingActionRow
             emoji="📦"
@@ -252,6 +273,8 @@ export default function ProfilePage() {
         user={user}
       />
       <PasswordSheet open={open === 'password'} onClose={close} trigger={rect} />
+      <CalendarFeedsSheet open={open === 'calendars'} onClose={close} trigger={rect} />
+      <GoogleAccountSheet open={open === 'google'} onClose={close} trigger={rect} />
       <TimezoneSheet
         open={open === 'timezone'}
         onClose={close}

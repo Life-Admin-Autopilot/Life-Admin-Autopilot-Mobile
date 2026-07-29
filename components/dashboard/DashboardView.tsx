@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 
 import { DayProgress } from '@/components/dashboard/DayProgress'
 import { FirstRunState } from '@/components/dashboard/FirstRunState'
@@ -9,6 +10,7 @@ import { MatterRow } from '@/components/dashboard/MatterRow'
 import { NeedsYouStrip } from '@/components/dashboard/NeedsYouStrip'
 import { RightNowCard } from '@/components/dashboard/RightNowCard'
 import { SectionHeaderChip } from '@/components/ui/SectionHeaderChip'
+import { useIntlTag } from '@/lib/i18n/localeStore'
 import { bucketOf, formatDue } from '@/lib/taskFormat'
 import { formatLoad, totalLoad } from '@/lib/taskEstimate'
 import type { DailyDigest } from '@/queries/digest'
@@ -43,6 +45,8 @@ export interface DashboardViewProps {
   needsInput: number
   scansAwaitingReview: number
   slipping: number
+  /** False while the counts are in flight — the strip shows placeholders. */
+  countsLoaded?: boolean
   digest?: DailyDigest
   busy?: boolean
   onComplete: (task: Task) => void
@@ -59,12 +63,15 @@ export function DashboardView({
   needsInput,
   scansAwaitingReview,
   slipping,
+  countsLoaded = true,
   digest,
   busy = false,
   onComplete,
   onCompleteSubtask,
   onPush,
 }: DashboardViewProps) {
+  const t = useTranslations('matters')
+  const tag = useIntlTag()
   // Today's plate is what is due today PLUS what already slipped — a matter
   // that was due yesterday is still today's problem, and hiding it under a
   // separate heading is how it stays unhandled.
@@ -93,8 +100,16 @@ export function DashboardView({
   // already accounts for it — and when a question was the ONLY thing on file,
   // gating on it used to keep a genuinely empty account out of its welcome
   // state forever, because nothing the user could do would ever clear it.
+  // Gated on countsLoaded for the same reason clearDay is gated on loaded: two
+  // of these three figures now arrive from the counts request, and a zero that
+  // only means "not back yet" would flash the brand-new-account welcome at
+  // someone with a full account.
   const firstRun =
-    clearDay && openTasks.length === 0 && completedToday === 0 && scansAwaitingReview === 0
+    countsLoaded &&
+    clearDay &&
+    openTasks.length === 0 &&
+    completedToday === 0 &&
+    scansAwaitingReview === 0
 
   // A clear day writes its own sentence into the digest's slot rather than
   // adding a second one below it. Two lines of reassurance stacked around a
@@ -139,7 +154,7 @@ export function DashboardView({
                   <MatterRow
                     domain={task.domain}
                     title={task.title}
-                    due={formatDue(task.dueAt, now)}
+                    due={formatDue(task.dueAt, { t, tag, now })}
                     overdue={bucketOf(task, now) === 'overdue'}
                   />
                 </Link>
@@ -162,6 +177,7 @@ export function DashboardView({
         needsInput={needsInput}
         scansAwaitingReview={scansAwaitingReview}
         slipping={slipping}
+        loaded={countsLoaded}
       />
     </div>
   )

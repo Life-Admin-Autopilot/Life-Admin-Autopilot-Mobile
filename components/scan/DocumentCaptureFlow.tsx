@@ -30,6 +30,7 @@ import { env } from '@/lib/env'
 import { useMorphColors } from '@/lib/motion-colors'
 import { MORPH_BACKDROP_FADE, MORPH_CONTENT_VARIANTS, MORPH_SPRING } from '@/lib/motion'
 import { useBodyScrollLock } from '@/lib/scrollLock'
+import { useReprocessScannedDocument } from '@/queries/documentScans'
 import type { ReviewScanResult, ScannedDocument } from '@/queries/documentScans'
 
 // `id` is the open's identity, not data — the host keys the flow by it so each
@@ -38,7 +39,20 @@ export type DocumentCaptureTrigger =
   | { id: number; rect: DOMRect; mode: 'capture'; originColor?: string }
   | { id: number; rect: DOMRect; mode: 'open'; documentId: string; originColor?: string }
 
-type Phase = 'choose' | 'uploading' | 'processing' | 'review' | 'filed' | 'success' | 'error'
+type Phase =
+  | 'choose'
+  | 'uploading'
+  | 'uploadFailed'
+  | 'processing'
+  | 'review'
+  | 'filed'
+  | 'success'
+  | 'error'
+
+// Phases that stay in the bottom sheet. Everything else goes fullscreen. Kept
+// as a list rather than a chain of `!==` so adding a phase can't silently
+// inherit the wrong shape.
+const SHEET_PHASES: readonly Phase[] = ['choose', 'uploading', 'uploadFailed']
 
 const SHEET_HEIGHT = 300
 const SHEET_MARGIN_BOTTOM = 20
@@ -108,12 +122,17 @@ export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureF
 
   const pendingCount = currentDoc ? currentDoc.candidates.filter((c) => !c.taskId).length : 0
 
+  // An upload that never landed has no document to key off, so it reads its
+  // phase from the capture hook instead: bytes still held + a message to show
+  // means the user can resend rather than re-capture.
   const phase: Phase = reviewResult
     ? 'success'
     : capture.busy
       ? 'uploading'
       : !currentDoc
-        ? 'choose'
+        ? capture.canRetry
+          ? 'uploadFailed'
+          : 'choose'
         : currentDoc.status === 'failed'
           ? 'error'
           : currentDoc.status === 'ready_for_review' && minDwellDone
@@ -122,7 +141,7 @@ export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureF
               : 'filed'
             : 'processing'
 
-  const isFullscreen = phase !== 'choose' && phase !== 'uploading'
+  const isFullscreen = !SHEET_PHASES.includes(phase)
 
   const sheetShape = {
     top: vp.h - SHEET_HEIGHT - SHEET_MARGIN_BOTTOM,
@@ -144,9 +163,15 @@ export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureF
 
   const targetShape = isFullscreen ? fullscreenShape : sheetShape
 
-  const retryAfterFailure = () => {
+  // Abandon this document and go back to capture. Distinct from the two RETRY
+  // paths — resending held bytes ('uploadFailed') and re-running extraction on
+  // stored bytes ('error') — which both keep the user's capture. This is the
+  // fallback for when the document itself is the problem: a blurry photo no
+  // number of re-reads will fix.
+  const startOver = () => {
     setActiveDocId(null)
     setReviewResult(null)
+    capture.dismissRetry()
   }
 
   return (
@@ -220,11 +245,9 @@ export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureF
         // mid-exit it is covering the flow that replaced it.
         className={cn('fixed z-50 overflow-hidden shadow-elevated', !isPresent && 'pointer-events-none')}
       >
-        {phase === 'choose' ||
-        phase === 'uploading' ||
-        phase === 'processing' ||
-        phase === 'review' ||
-        phase === 'filed' ? (
+        {/* The two terminal phases carry their own explicit exit button, so
+            the corner X would be a second, competing way out. */}
+        {phase !== 'success' && phase !== 'error' ? (
           <button
             type="button"
             onClick={onClose}
@@ -233,7 +256,7 @@ export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureF
             // is pushed past the top inset — the sheet phase never reaches
             // that high, so it keeps its plain 12px.
             style={{ top: isFullscreen ? CONTENT_INSET.top : 12 }}
-            className="absolute right-3 z-10 rounded-full p-1.5 text-ink-subtle transition-colors hover:bg-surface-sunken hover:text-ink"
+            className="absolute end-3 z-10 rounded-full p-1.5 text-ink-subtle transition-colors hover:bg-surface-sunken hover:text-ink"
           >
             <X size={18} />
           </button>
@@ -274,6 +297,12 @@ export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureF
                 <ChoosePhase capture={capture} fileInputRef={fileInputRef} disabled={!entrySettled} />
               ) : phase === 'uploading' ? (
                 <BusyPhase icon={<SketchUploadGlyph size={40} className="text-accent" />} label="Getting your document ready…" />
+              ) : phase === 'uploadFailed' ? (
+                <UploadFailedPhase
+                  message={capture.error ?? 'That upload did not go through.'}
+                  onRetry={() => void capture.retryUpload()}
+                  onStartOver={capture.dismissRetry}
+                />
               ) : phase === 'processing' ? (
                 <ProcessingPhase />
               ) : phase === 'review' && currentDoc ? (
@@ -282,12 +311,8 @@ export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureF
                 <TaskOverview doc={currentDoc} />
               ) : phase === 'success' && reviewResult ? (
                 <SuccessPhase result={reviewResult} onDone={onClose} />
-              ) : phase === 'error' ? (
-                <ErrorPhase
-                  message={currentDoc?.failureReason ?? "Couldn't process that scan. Try again."}
-                  onRetry={retryAfterFailure}
-                  onClose={onClose}
-                />
+              ) : phase === 'error' && currentDoc ? (
+                <ErrorPhase doc={currentDoc} onScanAgain={startOver} onClose={onClose} />
               ) : null}
             </motion.div>
           </AnimatePresence>
@@ -308,7 +333,7 @@ function ChoosePhase({
 }) {
   return (
     <div className="flex h-full flex-col gap-4">
-      <div className="pr-8">
+      <div className="pe-8">
         <span className="text-label uppercase text-accent">Scan a document</span>
         <h2 className="font-display text-heading-md text-ink">Add a bill, letter, or form</h2>
       </div>
@@ -350,7 +375,7 @@ function ChooseButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center gap-3.5 rounded-2xl bg-surface p-4 text-left shadow-card transition-colors hover:bg-surface-sunken disabled:opacity-50"
+      className="flex items-center gap-3.5 rounded-2xl bg-surface p-4 text-start shadow-card transition-colors hover:bg-surface-sunken disabled:opacity-50"
     >
       <span className="text-accent">{icon}</span>
       <span className="text-heading-sm text-ink">{label}</span>
@@ -411,17 +436,84 @@ function SuccessPhase({ result, onDone }: { result: ReviewScanResult; onDone: ()
   )
 }
 
-function ErrorPhase({ message, onRetry, onClose }: { message: string; onRetry: () => void; onClose: () => void }) {
+// Upload never landed. The bytes are still in memory, so the primary action
+// resends them — the user does not go back through capture, which for a camera
+// shot would mean finding and re-photographing the physical document.
+function UploadFailedPhase({
+  message,
+  onRetry,
+  onStartOver,
+}: {
+  message: string
+  onRetry: () => void
+  onStartOver: () => void
+}) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-      <p className="text-body text-ink">{message}</p>
-      <div className="flex gap-2">
-        <Button variant="outline" onClick={onRetry}>
+    <div className="flex h-full flex-col gap-4">
+      <div className="pe-8">
+        <span className="text-label uppercase text-danger">Didn&apos;t send</span>
+        <h2 className="font-display text-heading-md text-ink">Your document is still here</h2>
+      </div>
+
+      <div className="flex flex-1 flex-col justify-center gap-3">
+        <p className="text-body-sm text-ink-muted">{message}</p>
+        <Button variant="solid" onClick={onRetry}>
           Try again
         </Button>
-        <Button variant="ghost" onClick={onClose}>
-          Close
+        <Button variant="ghost" onClick={onStartOver}>
+          Pick a different document
         </Button>
+      </div>
+    </div>
+  )
+}
+
+// Upload landed, extraction failed. The original bytes are durable on the
+// server, so "Try again" re-runs the read rather than sending the user back to
+// capture — see POST /me/document-scans/:id/reprocess.
+function ErrorPhase({
+  doc,
+  onScanAgain,
+  onClose,
+}: {
+  doc: ScannedDocument
+  onScanAgain: () => void
+  onClose: () => void
+}) {
+  const reprocess = useReprocessScannedDocument()
+  const retryFailed = reprocess.error instanceof Error ? reprocess.error.message : null
+
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+      <p className="text-body text-ink">{doc.failureReason ?? "Couldn't read that document."}</p>
+
+      {doc.canRetry ? (
+        <p className="text-caption text-ink-muted">
+          Your scan is saved — we can read it again without you taking it again.
+        </p>
+      ) : null}
+
+      {retryFailed ? <p className="text-caption text-danger">{retryFailed}</p> : null}
+
+      <div className="flex flex-col items-center gap-2">
+        {doc.canRetry ? (
+          <Button
+            variant="solid"
+            className="w-full max-w-xs"
+            disabled={reprocess.isPending}
+            onClick={() => reprocess.mutate(doc.id)}
+          >
+            {reprocess.isPending ? 'Trying again…' : 'Try again'}
+          </Button>
+        ) : null}
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={onScanAgain}>
+            Scan again
+          </Button>
+          <Button variant="ghost" onClick={onClose}>
+            Close
+          </Button>
+        </div>
       </div>
     </div>
   )

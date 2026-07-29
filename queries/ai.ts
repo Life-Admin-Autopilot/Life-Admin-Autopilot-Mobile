@@ -5,14 +5,12 @@
 // draft, tool-call confirmation, retry, and clear. It owns a ref-tracked
 // AbortController so a fresh ask()/confirm() aborts any in-flight stream.
 //
-// Ported from v1 (hooks/useAskAi.ts), minus the task/clarification cache
-// patching — V2 has no tasks query yet (the dashboard matters are static). When
-// a /tasks query lands, re-introduce an applyToolResult patch + invalidation at
-// the marked seams.
+// A turn's tool calls mutate the very matters the rest of the app is showing,
+// so the turn is also a cache event: see invalidateAfterTools below.
 
 'use client'
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { askStream, confirmStream } from '@/lib/ai/stream'
@@ -21,7 +19,8 @@ import { ApiError } from '@/lib/api/client'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
 import { queryKeys } from '@/queries/keys'
-import type { AiMessage, AiQuotaRow, AiToolCall } from '@/lib/ai/types'
+import { adjustNeedsInput } from '@/queries/tasks'
+import type { AiMessage, AiQuotaRow, AiToolCall, AiToolName } from '@/lib/ai/types'
 
 export function useAiConversation() {
   return useQuery({
@@ -66,6 +65,39 @@ export interface UseAskAiResult {
 
 function emptyMessage(role: 'user' | 'assistant'): AiMessage {
   return { role, text: '', sources: [], toolCalls: [], createdAt: new Date().toISOString() }
+}
+
+// Tell the rest of the app what a chat turn just changed.
+//
+// The chat island floats OVER the current screen — the dashboard stays mounted
+// behind it — so a turn that files a matter or holds a question is editing a
+// surface the user is already looking at. Without this, "Needs you" kept its
+// pre-turn shape until the digest's 60s stale window lapsed, which read as the
+// app having ignored what was just said. No socket is involved on purpose: this
+// client made the change, so it already knows. A socket only earns its keep for
+// changes THIS client didn't make (the reminder worker firing, another device).
+//
+// Flushed once at the end of the turn rather than per tool_result: "break this
+// down" fires five addSubtask calls, and five digest refetches to render one
+// change is latency the user pays for nothing.
+async function invalidateAfterTools(
+  qc: QueryClient,
+  executed: ReadonlySet<AiToolName>,
+): Promise<void> {
+  // queryTasks reads; it never invalidates anything.
+  const mutating = [...executed].filter((name) => name !== 'queryTasks')
+  if (mutating.length === 0) return
+
+  const jobs = [
+    qc.invalidateQueries({ queryKey: queryKeys.tasks.all }),
+    // Every dashboard count (including the "Needs you" strip) is digest-derived.
+    qc.invalidateQueries({ queryKey: queryKeys.digestAll }),
+  ]
+  // holdForClarification adds a question; the bulk wipe drops every open one.
+  if (mutating.some((n) => n === 'holdForClarification' || n === 'deleteAllTasks')) {
+    jobs.push(qc.invalidateQueries({ queryKey: queryKeys.clarifications }))
+  }
+  await Promise.all(jobs)
 }
 
 // Drive a chat session — wraps the SSE iterator with React state.
@@ -135,6 +167,11 @@ export function useAskAi(): UseAskAiResult {
       setLocalMessages((prev) => [...prev, userMessage])
       setPending(draft)
 
+      // tool_result carries only a callId, so the name is captured here and
+      // resolved when the result lands. Only successful calls count.
+      const toolNameByCallId = new Map<string, AiToolName>()
+      const executed = new Set<AiToolName>()
+
       try {
         for await (const event of askStream({ question: trimmed, timezone, signal: controller.signal })) {
           if (event.type === 'sources') {
@@ -154,6 +191,7 @@ export function useAskAi(): UseAskAiResult {
               result: null,
               error: null,
             }
+            toolNameByCallId.set(event.callId, event.name)
             draft.toolCalls = [...draft.toolCalls, toolCall]
             setPending({ ...draft })
           } else if (event.type === 'tool_result') {
@@ -163,9 +201,14 @@ export function useAskAi(): UseAskAiResult {
                 : t,
             )
             setPending({ ...draft })
-            // TODO(tasks-query): when a /tasks query exists, patch its cache here
-            // from (call.name, event.result, call.args) so matter surfaces update
-            // the instant the tool runs.
+            const name = toolNameByCallId.get(event.callId)
+            if (name && !event.error) {
+              executed.add(name)
+              // Don't wait for the end of the turn to show this one. The turn
+              // may still be streaming prose for several seconds, and the home
+              // screen is visible behind the island the whole time.
+              if (name === 'holdForClarification') adjustNeedsInput(qc, 1)
+            }
           } else if (event.type === 'quota') {
             setQuotas(event.quotas)
           } else if (event.type === 'done') {
@@ -186,6 +229,7 @@ export function useAskAi(): UseAskAiResult {
         setPending(null)
         await qc.invalidateQueries({ queryKey: queryKeys.ai.conversation() })
         await qc.invalidateQueries({ queryKey: queryKeys.ai.quota() })
+        await invalidateAfterTools(qc, executed)
       } catch (err: unknown) {
         if (controller.signal.aborted) return
         const message =
@@ -193,6 +237,9 @@ export function useAskAi(): UseAskAiResult {
         setError(message)
         setStatus('error')
         setPending(null)
+        // A turn can die AFTER its tools ran (the model fails mid-prose), so the
+        // matters it already changed still have to reach the other surfaces.
+        void invalidateAfterTools(qc, executed)
         // Keep the question so the UI can offer a one-tap retry — the user's
         // bubble stays put in localMessages.
         setFailedQuestion(trimmed)
@@ -259,6 +306,9 @@ export function useAskAi(): UseAskAiResult {
       const draft: AiMessage = emptyMessage('assistant')
       setPending(draft)
 
+      const toolNameByCallId = new Map<string, AiToolName>()
+      const executed = new Set<AiToolName>()
+
       try {
         for await (const event of confirmStream(callId, action, controller.signal)) {
           if (event.type === 'sources') {
@@ -278,12 +328,20 @@ export function useAskAi(): UseAskAiResult {
               result: null,
               error: null,
             }
+            toolNameByCallId.set(event.callId, event.name)
             draft.toolCalls = [...draft.toolCalls, toolCall]
             setPending({ ...draft })
           } else if (event.type === 'tool_result') {
             // The first tool_result is the original deferred call — flip its
             // status on the EXISTING assistant message (not the new draft).
             const isOriginal = event.callId === callId
+            if (!event.error && action === 'confirm') {
+              // The original call was emitted in an EARLIER turn, so its name
+              // never arrived on this stream. Only one tool is ever confirmable
+              // (toolRunner.requiresConfirmation), so it can be named directly.
+              const name = isOriginal ? 'deleteAllTasks' : toolNameByCallId.get(event.callId)
+              if (name) executed.add(name)
+            }
             if (isOriginal) {
               setLocalMessages((prev) =>
                 prev.map((m) => ({
@@ -336,6 +394,7 @@ export function useAskAi(): UseAskAiResult {
         setPending(null)
         await qc.invalidateQueries({ queryKey: queryKeys.ai.conversation() })
         await qc.invalidateQueries({ queryKey: queryKeys.ai.quota() })
+        await invalidateAfterTools(qc, executed)
       } catch (err: unknown) {
         if (controller.signal.aborted) return
         const message =
@@ -343,6 +402,8 @@ export function useAskAi(): UseAskAiResult {
         setError(message)
         setStatus('error')
         setPending(null)
+        // The wipe may already have run before the continuation failed.
+        void invalidateAfterTools(qc, executed)
       } finally {
         setPendingConfirm(null)
         confirmInFlightRef.current = false

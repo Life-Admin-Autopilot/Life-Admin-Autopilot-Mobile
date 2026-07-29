@@ -124,7 +124,7 @@ export function ThemeChoice({
             >
               <Preview value={option.value} />
               {selected ? (
-                <span className="absolute bottom-1.5 right-1.5 grid size-5 place-items-center rounded-full bg-accent text-accent-ink">
+                <span className="absolute bottom-1.5 end-1.5 grid size-5 place-items-center rounded-full bg-accent text-accent-ink">
                   <Check size={12} strokeWidth={3} />
                 </span>
               ) : null}

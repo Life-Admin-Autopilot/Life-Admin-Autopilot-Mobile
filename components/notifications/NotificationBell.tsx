@@ -61,13 +61,13 @@ export function NotificationBell() {
       >
         <Bell size={20} strokeWidth={1.75} />
         {unread > 0 ? (
-          <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-micro text-accent-ink">
+          <span className="absolute end-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-micro text-accent-ink">
             {unread > 9 ? '9+' : unread}
           </span>
         ) : null}
       </button>
 
-      <div className="absolute right-0 top-full z-40 mt-2">
+      <div className="absolute end-0 top-full z-40 mt-2">
         <MorphPanel open={open} width={WIDTH} height={height} radius={24}>
           <div className="flex h-full flex-col" style={{ width: WIDTH }}>
             <header className="flex items-center justify-between px-5 pb-2 pt-4">
