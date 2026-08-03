@@ -6,6 +6,7 @@ import { env } from '../../env'
 import { Task } from '../../models/Task'
 import type { DailyDigestTheme } from '../../models/DailyDigest'
 import { getGeminiClient, isAiConfigured } from '../ai/provider/geminiClient'
+import { conversationLanguageRule, type AiLocale } from '../ai/promptLanguage'
 import { withGeminiRetry } from '../ai/voiceCore/geminiRetry'
 import { admitWithinQuota, releaseUsageSlot } from '../ai/quota'
 import { stripObjectIds } from './summarize'
@@ -49,7 +50,7 @@ const responseSchema = {
   propertyOrdering: ['headline', 'themes'],
 }
 
-const SYSTEM = `
+const SYSTEM_BASE = `
 You group a person's matters for today into themes and write one sentence about the day.
 
 You are given their live matters, each as:
@@ -83,6 +84,13 @@ HEADLINE
 Return ONLY the JSON object. No prose.
 `.trim()
 
+// The headline is the first thing on the home screen. Written in English under an
+// Arabic layout it is not a rough edge, it is the app dropping its own language
+// on the one surface nobody has to navigate to.
+function systemFor(locale: AiLocale): string {
+  return [SYSTEM_BASE, conversationLanguageRule(locale)].join('\n\n')
+}
+
 export interface DigestProse {
   headline: string | null
   themes: DailyDigestTheme[]
@@ -93,6 +101,7 @@ export async function writeDigestProse(args: {
   /** The matters the model may name. Raw rows, as read by the digest. */
   pool: Record<string, unknown>[]
   now: Date
+  locale: AiLocale
 }): Promise<DigestProse | null> {
   if (args.pool.length === 0) return null
   if (!isAiConfigured()) return null
@@ -135,7 +144,7 @@ export async function writeDigestProse(args: {
             },
           ],
           config: {
-            systemInstruction: SYSTEM,
+            systemInstruction: systemFor(args.locale),
             responseMimeType: 'application/json',
             responseSchema,
             temperature: 0.2,

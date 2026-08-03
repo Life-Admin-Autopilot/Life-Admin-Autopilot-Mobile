@@ -11,6 +11,7 @@
 // docs/CAPACITOR.md for the permission-string patch step that must be
 // reapplied after every `cap add`/`cap sync` regenerates ios/android.
 
+import { useTranslations } from 'next-intl'
 import { useRef, useState } from 'react'
 
 import { env } from '@/lib/env'
@@ -18,7 +19,6 @@ import { logger } from '@/lib/logger'
 import { useUploadScan, ApiError, isRetryableUploadError } from '@/lib/documentScan/uploadScan'
 import type { ScanSource, UploadScanArgs } from '@/lib/documentScan/uploadScan'
 import {
-  cameraDeniedMessage,
   ensureCameraAccess,
   isCameraUnavailable,
   isCancellation,
@@ -60,6 +60,10 @@ export function useCaptureSource(
   fileInputRef: React.RefObject<HTMLInputElement | null>,
   onUploaded?: (doc: ScannedDocument) => void,
 ): UseCaptureSourceResult {
+  // A hook, so it translates directly rather than taking a `Translate` argument
+  // — lib/i18n/translate.ts is for the pure modules beside it (cameraAccess),
+  // not for something already inside the React tree.
+  const t = useTranslations('scan')
   const [busy, setBusy] = useState(false)
   // Message and retryability are ONE piece of state, not two. Split, they can
   // contradict each other — "retry available" with no message to explain what
@@ -82,7 +86,7 @@ export function useCaptureSource(
   }
 
   const fail = (err: unknown, retryable: boolean) => {
-    const message = err instanceof ApiError ? err.message : 'Could not process that scan.'
+    const message = err instanceof ApiError ? err.message : t('capture.processFailed')
     logger.warn('captureSource:failed', err)
     setFailure({ message, retryable })
   }
@@ -143,7 +147,10 @@ export function useCaptureSource(
         if (access === 'denied') {
           // Not retryable: there are no bytes to resend, and the fix is in
           // Settings, not in tapping again.
-          setFailure({ message: cameraDeniedMessage(env.appName), retryable: false })
+          setFailure({
+            message: t('capture.cameraDenied', { appName: env.appName }),
+            retryable: false,
+          })
           setBusy(false)
           return
         }
@@ -163,10 +170,7 @@ export function useCaptureSource(
           }
           if (isCameraUnavailable(err)) {
             logger.warn('captureSource:camera-unavailable', err)
-            setFailure({
-              message: 'No camera available on this device. Choose a file instead.',
-              retryable: false,
-            })
+            setFailure({ message: t('capture.noCamera'), retryable: false })
             setBusy(false)
             return
           }

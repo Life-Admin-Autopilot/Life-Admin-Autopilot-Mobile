@@ -168,6 +168,18 @@ export function normalizeTag(raw: string): string | null {
   return cleaned.slice(0, MAX_TAG_LENGTH)
 }
 
+// A matter's text in one non-source language. Subtask text is keyed by the
+// subtask's own _id as a string, because subtasks are an ordered array whose
+// order changes — keying by index would silently reattach a translation to a
+// different step the first time one is inserted or removed.
+export interface TaskTranslation {
+  title?: string
+  notes?: string
+  subtasks?: Record<string, string>
+  /** When the translation was produced. Purely diagnostic. */
+  at?: Date
+}
+
 export interface TaskAttrs {
   userId: Types.ObjectId
   title: string
@@ -179,6 +191,21 @@ export interface TaskAttrs {
   tags: string[]
   dueAt?: Date
   notes?: string
+  /**
+   * The language `title`/`notes`/`subtasks[].text` above are written in. Those
+   * fields stay CANONICAL — they are what search, the reminder lead-time
+   * keyword table and every AI prompt read, and they are never overwritten by a
+   * translation. Absent on rows that predate the field; a backfill infers it
+   * from the script.
+   */
+  sourceLocale?: string
+  /**
+   * Read-only presentation copies, keyed by locale. Absent means "not
+   * translated" and the canonical text is shown. Deliberately NOT a second
+   * searchable copy: taskQuery's regex and semanticSearch both read canonical
+   * only, so a matter can never match twice or be returned as two results.
+   */
+  i18n?: Record<string, TaskTranslation>
   sourceVoiceNoteId?: Types.ObjectId
   sourceDocumentId?: Types.ObjectId
   // Stable per-(note,item) key for voice-extracted tasks. Powers idempotent
@@ -306,6 +333,12 @@ const TaskSchema = new Schema<TaskAttrs>(
     },
     dueAt: { type: Date },
     notes: { type: String, maxlength: 2000 },
+    sourceLocale: { type: String },
+    // Mixed rather than a typed sub-schema: the keys are locale tags, so a
+    // schema would have to enumerate them and adding a language would become a
+    // model migration. The shape is enforced where it is written, in the
+    // translate service, not here.
+    i18n: { type: Schema.Types.Mixed },
     sourceVoiceNoteId: { type: Schema.Types.ObjectId, ref: 'VoiceNote' },
     sourceDocumentId: { type: Schema.Types.ObjectId },
     sourceTaskKey: { type: String },

@@ -1,6 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
+import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -9,6 +10,7 @@ import { Pill } from '@/components/ui/Pill'
 import { Sheet } from '@/components/ui/Sheet'
 import { describeUserAgent } from '@/lib/device/describeUserAgent'
 import { LIST_ITEM_VARIANTS } from '@/lib/motion'
+import { useIntlTag } from '@/lib/i18n/localeStore'
 import { formatScanTime } from '@/lib/scanTime'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
@@ -33,6 +35,12 @@ export function DevicesSheet({
   onClose: () => void
   trigger?: DOMRect | null
 }) {
+  const t = useTranslations('profile.devices')
+  const tLib = useTranslations('lib')
+  const intlTag = useIntlTag()
+  const tCommon = useTranslations('common')
+  const tGroups = useTranslations('profile.groups')
+  const tProfile = useTranslations('profile')
   const { data, isPending, isError, refetch } = useSessions()
   const revoke = useRevokeSession()
   const revokeOthers = useRevokeOtherSessions()
@@ -47,17 +55,16 @@ export function DevicesSheet({
   const revokeOne = (session: AppSession) => {
     setBusyId(session.id)
     revoke.mutate(session.id, {
-      onSuccess: () => toast.success('Signed out.'),
-      onError: (err) => toast.error(translateBackendError(err, "That didn't sign out.")),
+      onSuccess: () => toast.success(tProfile('signedOut')),
+      onError: (err) => toast.error(translateBackendError(err, t('notSignedOut'))),
       onSettled: () => setBusyId(null),
     })
   }
 
   const revokeRest = () => {
     revokeOthers.mutate(undefined, {
-      onSuccess: () =>
-        toast.success(others === 1 ? 'Signed out 1 device.' : `Signed out ${others} devices.`),
-      onError: (err) => toast.error(translateBackendError(err, "That didn't sign out.")),
+      onSuccess: () => toast.success(t('signedOutCount', { count: others })),
+      onError: (err) => toast.error(translateBackendError(err, t('notSignedOut'))),
     })
   }
 
@@ -67,8 +74,8 @@ export function DevicesSheet({
       onClose={onClose}
       trigger={trigger}
       height={480}
-      eyebrow="Security"
-      title="Signed-in devices"
+      eyebrow={tGroups('security')}
+      title={t('title')}
       footer={
         others > 0 ? (
           <Button
@@ -77,7 +84,7 @@ export function DevicesSheet({
             disabled={revokeOthers.isPending}
             onClick={revokeRest}
           >
-            {revokeOthers.isPending ? 'Signing out…' : 'Sign out other devices'}
+            {revokeOthers.isPending ? t('signingOut') : t('signOutOthers')}
           </Button>
         ) : null
       }
@@ -97,13 +104,13 @@ export function DevicesSheet({
         </ul>
       ) : isError ? (
         <div className="flex flex-col items-center gap-3 py-10 text-center">
-          <p className="font-display text-heading-serif text-ink">Couldn&rsquo;t load your devices.</p>
+          <p className="font-display text-heading-serif text-ink">{t('loadFailed')}</p>
           <Button variant="secondary" size="pill" onClick={() => void refetch()}>
-            Try again
+            {tCommon('tryAgain')}
           </Button>
         </div>
       ) : ordered.length === 0 ? (
-        <p className="py-10 text-center text-body text-ink-muted">Only this device.</p>
+        <p className="py-10 text-center text-body text-ink-muted">{t('onlyThis')}</p>
       ) : (
         <ul className="flex flex-col gap-2.5">
           <AnimatePresence initial={false}>
@@ -124,12 +131,12 @@ export function DevicesSheet({
                     <span className="truncate text-heading-sm text-ink">{device.label}</span>
                     {session.lastUsedAt ? (
                       <span className="truncate text-body-sm text-ink-muted">
-                        Last active {formatScanTime(session.lastUsedAt)}
+                        {t('lastActive', { when: formatScanTime(session.lastUsedAt, { t: tLib, tag: intlTag }) })}
                       </span>
                     ) : null}
                   </div>
                   {session.current ? (
-                    <Pill tone="accent">This device</Pill>
+                    <Pill tone="accent">{t('thisDevice')}</Pill>
                   ) : (
                     <button
                       type="button"
@@ -137,7 +144,7 @@ export function DevicesSheet({
                       disabled={busyId === session.id}
                       className="shrink-0 rounded-pill px-3 py-1.5 text-caption text-accent transition-colors hover:bg-accent-soft disabled:opacity-50"
                     >
-                      {busyId === session.id ? 'Signing out…' : 'Sign out'}
+                      {busyId === session.id ? t('signingOut') : t('signOutOne')}
                     </button>
                   )}
                 </motion.li>

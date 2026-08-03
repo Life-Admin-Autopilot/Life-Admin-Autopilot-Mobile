@@ -1,14 +1,29 @@
-import { GhostLogo } from '@/components/ui/GhostLogo'
+'use client'
 
-function greeting(d: Date): string {
+import { useTranslations } from 'next-intl'
+
+import { GhostLogo } from '@/components/ui/GhostLogo'
+import { useIntlTag } from '@/lib/i18n/localeStore'
+
+// Both helpers stay module-level — they are pure formatting, and a component
+// that inlines them re-reads as layout rather than logic. Neither may call a
+// hook from out here, so the translator and the Intl tag are ARGUMENTS: the
+// same shape lib/i18n/translate.ts exists for, and the one
+// components/profile/CalendarFeedsSheet.tsx already uses.
+type HeroT = ReturnType<typeof useTranslations<'dashboard.hero'>>
+
+function greeting(d: Date, t: HeroT): string {
   const h = d.getHours()
-  if (h < 12) return 'Good morning'
-  if (h < 18) return 'Good afternoon'
-  return 'Good evening'
+  if (h < 12) return t('morning')
+  if (h < 18) return t('afternoon')
+  return t('evening')
 }
 
-function longDate(d: Date): string {
-  return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+// `tag`, never `undefined` — the ambient default is the device's language, and
+// this app's language is a setting the user owns. An Arabic reader on an English
+// phone must not get an English weekday under an Arabic greeting.
+function longDate(d: Date, tag: string): string {
+  return d.toLocaleDateString(tag, { weekday: 'long', month: 'long', day: 'numeric' })
 }
 
 // The hero greets and dates the day, and stops there.
@@ -39,9 +54,12 @@ export function HomeHero({
   summary?: string
   progress?: React.ReactNode
 }) {
+  const t = useTranslations('dashboard.hero')
+  const tag = useIntlTag()
+
   return (
     <section className="flex flex-col items-center text-center">
-      <GhostLogo size={116} priority label="Your companion, ready to help" />
+      <GhostLogo size={116} priority label={t('logoLabel')} />
 
       {/* The DAY is the headline, not the greeting. A greeting is charming the
           first time and furniture every time after; the date is useful on every
@@ -51,10 +69,13 @@ export function HomeHero({
         className="mt-2 font-display text-display-md text-balance text-ink"
         suppressHydrationWarning
       >
-        {longDate(now)}
+        {longDate(now, tag)}
       </h1>
+      {/* One sentence, one key. Composing "{greeting}, {name}." in JSX would
+          hard-code an English comma between two translated halves; Arabic wants
+          a vocative particle there instead. */}
       <p className="mt-1 text-body text-ink-muted" suppressHydrationWarning>
-        {greeting(now)}, {name}.
+        {t('greetingLine', { greeting: greeting(now, t), name })}
       </p>
 
       {/* Serif, because this is the one sentence the app writes rather than

@@ -2,12 +2,13 @@
 
 import { useEffect, useRef } from 'react'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { Button } from '@/components/ui/button'
 import { EmojiChip } from '@/components/ui/EmojiChip'
 import { Pill } from '@/components/ui/Pill'
 import { cn } from '@/lib/cn'
-import type { OnboardingStep } from '@/lib/onboarding/questions'
+import { questionKey, type OnboardingStep } from '@/lib/onboarding/questions'
 
 export type MeasureFn = (stepId: string, height: number) => void
 
@@ -74,18 +75,21 @@ export function StepHeader({
   canBack: boolean
   onBack: () => void
 }) {
+  const t = useTranslations('onboarding')
+  const tCommon = useTranslations('common')
+
   return (
     <header className="flex flex-col">
       <div className="flex h-8 items-center gap-2.5">
         <EmojiChip emoji={step.emoji} category={step.category} size={30} />
         <Pill tone="accent" uppercase>
-          Onboarding
+          {t('eyebrow')}
         </Pill>
         {canBack ? (
           <button
             type="button"
             onClick={onBack}
-            aria-label="Back"
+            aria-label={tCommon('back')}
             className="ms-auto grid size-8 shrink-0 place-items-center rounded-full text-ink-subtle outline-none transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:ring-3 focus-visible:ring-ring/40"
           >
             <ArrowLeft size={17} />
@@ -94,9 +98,9 @@ export function StepHeader({
       </div>
 
       <h2 id={headingId(step.id)} className="mt-3 text-pretty font-display text-heading-serif text-ink">
-        {step.question}
+        {t(questionKey(step.id))}
       </h2>
-      {step.hint ? <p className="mt-1 text-body-sm text-ink-muted">{step.hint}</p> : null}
+      {step.hintKey ? <p className="mt-1 text-body-sm text-ink-muted">{t(step.hintKey)}</p> : null}
     </header>
   )
 }

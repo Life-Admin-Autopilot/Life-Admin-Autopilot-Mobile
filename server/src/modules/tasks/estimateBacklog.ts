@@ -98,6 +98,12 @@ vague to judge, give a WIDE range rather than a confident narrow one.
 Return ONLY the JSON object. No prose.
 `.trim()
 
+// The ONLY generation prompt in the codebase with no language rule, and
+// deliberately so: every field it returns is a number drawn from ESTIMATE_BUCKETS.
+// There is no string here for a language to apply to, and adding the rule would
+// spend tokens on every batch to govern output that cannot contain a word. If a
+// text field is ever added to this schema, it needs conversationLanguageRule.
+
 export interface EstimateBacklogArgs {
   userId: string | Types.ObjectId
   limit?: number

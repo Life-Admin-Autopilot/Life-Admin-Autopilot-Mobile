@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 import { useTheme } from 'next-themes'
 
@@ -11,6 +12,7 @@ import { GoogleAccountSheet } from '@/components/profile/GoogleAccountSheet'
 import { DevicesSheet } from '@/components/profile/DevicesSheet'
 import { EmailSheet, type EmailSheetMode } from '@/components/profile/EmailSheet'
 import { InvoicesSheet } from '@/components/profile/InvoicesSheet'
+import { LanguageSheet } from '@/components/profile/LanguageSheet'
 import { NameSheet } from '@/components/profile/NameSheet'
 import { PasswordSheet } from '@/components/profile/PasswordSheet'
 import { PlanCard } from '@/components/profile/PlanCard'
@@ -26,6 +28,8 @@ import {
   SettingToggleRow,
 } from '@/components/ui/SettingRow'
 import { selectUser, useSessionStore, type Theme } from '@/lib/auth/sessionStore'
+import { LOCALE_META } from '@/lib/i18n/locales'
+import { useLocale } from '@/lib/i18n/localeStore'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
 import { useExportData } from '@/queries/account'
@@ -51,6 +55,7 @@ type SheetName =
   | 'email'
   | 'password'
   | 'timezone'
+  | 'language'
   | 'calendars'
   | 'google'
   | 'devices'
@@ -62,6 +67,12 @@ export default function ProfilePage() {
   const router = useRouter()
   const user = useSessionStore(selectUser)
   const { theme, setTheme } = useTheme()
+  const locale = useLocale()
+  const t = useTranslations('profile')
+  const tCommon = useTranslations('common')
+  // The language row reads from the picker's own namespace so the row and the
+  // sheet it opens can never drift apart.
+  const tLanguage = useTranslations('language')
 
   const [open, setOpen] = useState<SheetName | null>(null)
   const [rect, setRect] = useState<DOMRect | null>(null)
@@ -94,7 +105,7 @@ export default function ProfilePage() {
     // sent exactly once, which an effect could not promise.
     if (mode === 'verify' && !user.emailVerifiedAt) {
       sendVerificationCode.mutate(undefined, {
-        onError: (err) => toast.error(translateBackendError(err, 'We could not send that code.')),
+        onError: (err) => toast.error(translateBackendError(err, t('codeFailed'))),
       })
     }
   }
@@ -105,28 +116,28 @@ export default function ProfilePage() {
     setTheme(next)
     updateProfile.mutate(
       { theme: next },
-      { onError: (err) => toast.error(translateBackendError(err, "That didn't save.")) },
+      { onError: (err) => toast.error(translateBackendError(err, tCommon('notSaved'))) },
     )
   }
 
   const toggleReminders = (next: boolean) => {
     updateProfile.mutate(
       { notifications: { push: next } },
-      { onError: (err) => toast.error(translateBackendError(err, "That didn't save.")) },
+      { onError: (err) => toast.error(translateBackendError(err, tCommon('notSaved'))) },
     )
   }
 
   const runExport = () => {
     exportData.mutate(undefined, {
-      onSuccess: (destination) => toast.success(`Exported. ${destination.message}`),
-      onError: (err) => toast.error(translateBackendError(err, "That didn't export.")),
+      onSuccess: (destination) => toast.success(t('exported', { message: destination.message })),
+      onError: (err) => toast.error(translateBackendError(err, t('notExported'))),
     })
   }
 
   const endSession = () => {
     signOut.mutate(undefined, {
       onSuccess: () => {
-        toast.success('Signed out.')
+        toast.success(t('signedOut'))
         router.replace('/welcome')
       },
     })
@@ -137,103 +148,116 @@ export default function ProfilePage() {
 
   return (
     <main className="min-h-dvh pb-32">
-      <AppHeader title="Profile" />
+      <AppHeader title={t('title')} />
 
       <div className="flex flex-col gap-9 px-5 pt-4">
         <ProfileIdentity user={user} onConfirmEmail={openEmail('verify')} />
 
-        <SettingGroup label="Account">
+        <SettingGroup label={t('groups.account')}>
           <SettingRow
             emoji="😺"
             category="peach"
-            title="Name"
-            value={user.displayName ?? 'Not set'}
+            title={t('rows.name')}
+            value={user.displayName ?? t('rows.notSet')}
             onOpen={show('name')}
           />
           <SettingRow
             emoji="✉️"
             category="sky"
-            title="Email"
-            value={user.pendingEmail ? `${user.pendingEmail} — pending` : user.email}
+            title={t('rows.email')}
+            value={
+              user.pendingEmail
+                ? t('rows.emailPending', { email: user.pendingEmail })
+                : user.email
+            }
             onOpen={openEmail('change')}
           />
           <SettingRow
             emoji="🔑"
             category="yellow"
-            title="Password"
-            value="Change"
+            title={t('rows.password')}
+            value={t('rows.passwordAction')}
             onOpen={show('password')}
           />
           <SettingRow
             emoji="🌍"
             category="sage"
-            title="Time zone"
+            title={t('rows.timezone')}
             value={(user.timezone ?? detectedZone).replace(/_/g, ' ')}
             onOpen={show('timezone')}
           />
+          <SettingRow
+            emoji="🗣️"
+            category="lilac"
+            title={tLanguage('title')}
+            // The endonym, never a translated language name: "العربية" is
+            // legible to the person who would pick it, "Arabic" is not.
+            value={LOCALE_META[locale].endonym}
+            onOpen={show('language')}
+          />
         </SettingGroup>
 
-        <SettingGroup label="Security">
+        <SettingGroup label={t('groups.security')}>
           <SettingRow
             emoji="📱"
             category="periwinkle"
-            title="Signed-in devices"
+            title={t('rows.devices')}
             onOpen={show('devices')}
           />
         </SettingGroup>
 
-        <SettingGroup label="Notifications">
+        <SettingGroup label={t('groups.notifications')}>
           <SettingToggleRow
             emoji="🔔"
             category="blush"
-            title="Reminders"
-            meta="A nudge when a matter comes due"
+            title={t('rows.reminders')}
+            meta={t('rows.remindersMeta')}
             checked={remindersOn}
             onChange={toggleReminders}
           />
         </SettingGroup>
 
         <section className="flex flex-col gap-3">
-          <h2 className="text-label uppercase text-ink-muted">Appearance</h2>
+          <h2 className="text-label uppercase text-ink-muted">{t('groups.appearance')}</h2>
           <ThemeChoice value={(theme as Theme) ?? 'system'} onChange={pickTheme} />
         </section>
 
         <section className="flex flex-col gap-3">
-          <h2 className="text-label uppercase text-ink-muted">Plan</h2>
+          <h2 className="text-label uppercase text-ink-muted">{t('groups.plan')}</h2>
           <PlanCard onSeePro={show('plan')} />
           <SettingRow
             emoji="🧾"
             category="lilac"
-            title="Billing history"
+            title={t('rows.billing')}
             onOpen={show('invoices')}
           />
         </section>
 
-        <SettingGroup label="Connected">
+        <SettingGroup label={t('groups.connected')}>
           <SettingRow
             emoji="📅"
             category="periwinkle"
-            title="Calendars"
-            value="School terms, bin days, fixtures"
+            title={t('rows.calendars')}
+            value={t('rows.calendarsMeta')}
             onOpen={show('calendars')}
           />
           <SettingRow
             emoji="🔗"
             category="sky"
-            title="Google"
-            value="Calendar and tasks"
+            title={t('rows.google')}
+            value={t('rows.googleMeta')}
             onOpen={show('google')}
           />
         </SettingGroup>
 
-        <SettingGroup label="Your data">
+        <SettingGroup label={t('groups.yourData')}>
           <SettingActionRow
             emoji="📦"
             category="sage"
-            title="Export your data"
-            meta="Everything Kitto holds, as a file"
+            title={t('rows.export')}
+            meta={t('rows.exportMeta')}
             pending={exportData.isPending}
-            pendingTitle="Preparing…"
+            pendingTitle={t('rows.exportPending')}
             onAction={runExport}
           />
         </SettingGroup>
@@ -245,13 +269,13 @@ export default function ProfilePage() {
             disabled={signOut.isPending}
             onClick={endSession}
           >
-            {signOut.isPending ? 'Signing out…' : 'Sign out'}
+            {signOut.isPending ? t('signingOut') : t('signOut')}
           </Button>
 
           <SettingRow
             emoji="🗑️"
             category="pink"
-            title="Delete account"
+            title={t('rows.deleteAccount')}
             tone="danger"
             onOpen={show('delete')}
           />
@@ -281,6 +305,7 @@ export default function ProfilePage() {
         trigger={rect}
         currentZone={user.timezone}
       />
+      <LanguageSheet open={open === 'language'} onClose={close} trigger={rect} />
       <DevicesSheet open={open === 'devices'} onClose={close} trigger={rect} />
       <UpgradeSheet open={open === 'plan'} onClose={close} trigger={rect} />
       <InvoicesSheet open={open === 'invoices'} onClose={close} trigger={rect} />

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { EmojiChip, type CatColor } from '@/components/ui/EmojiChip'
 
@@ -46,6 +47,8 @@ export function NeedsYouStrip({
   /** False while the counts are still loading — renders placeholders. */
   loaded?: boolean
 }) {
+  const t = useTranslations('dashboard.needsYou')
+
   if (!loaded) return <NeedsYouSkeleton />
 
   const items: NeedsYouItem[] = []
@@ -60,8 +63,14 @@ export function NeedsYouStrip({
       // would be inventing an obligation that doesn't exist. A number here is
       // the thing that turns an optional tidy-up into a debt to clear, which
       // for this audience is what makes an app stop being opened at all.
-      title: needsInput === 1 ? 'A guess to confirm' : 'A few guesses to confirm',
-      body: 'I filed them already — correct me if I got one wrong.',
+      //
+      // Still an ICU plural, with no `#` in any of its bodies. `n === 1 ? … : …`
+      // is a two-way English test, and Arabic selects across six categories —
+      // the branch that reads "a few" has to be able to say "افتراضان" for two.
+      // The plural picks the wording; it is the `#` that would print the tally,
+      // and there deliberately isn't one.
+      title: t('guesses', { count: needsInput }),
+      body: t('guessesBody'),
       href: '/uncertainties',
     })
   }
@@ -71,8 +80,8 @@ export function NeedsYouStrip({
       key: 'scans',
       emoji: '📄',
       category: 'yellow',
-      title: `${scansAwaitingReview} ${scansAwaitingReview === 1 ? 'scan' : 'scans'} to confirm`,
-      body: 'Check what was pulled out before it lands.',
+      title: t('scans', { count: scansAwaitingReview }),
+      body: t('scansBody'),
       href: '/documents',
     })
   }
@@ -84,9 +93,10 @@ export function NeedsYouStrip({
       category: 'peach',
       // "Have slipped", never "overdue". The tint and the wording both stay
       // warm on purpose: a red count here is the single most reliable way to
-      // make someone stop opening the app.
-      title: `${slipping} ${slipping === 1 ? 'matter has' : 'matters have'} slipped`,
-      body: 'Sort them out when you have a moment.',
+      // make someone stop opening the app. The Arabic follows the same rule —
+      // "تأخّر", not "متأخر" as a verdict.
+      title: t('slipped', { count: slipping }),
+      body: t('slippedBody'),
       href: '/matters',
     })
   }
@@ -95,7 +105,7 @@ export function NeedsYouStrip({
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-label uppercase text-ink-muted">Needs you</h2>
+      <h2 className="text-label uppercase text-ink-muted">{t('title')}</h2>
 
       {items.map((item) => (
         <Link
@@ -121,9 +131,11 @@ export function NeedsYouStrip({
 // matches a real row so the common cases (one row, or none) settle without
 // moving the page.
 function NeedsYouSkeleton() {
+  const t = useTranslations('dashboard.needsYou')
+
   return (
     <section className="flex flex-col gap-3" aria-hidden>
-      <h2 className="text-label uppercase text-ink-muted">Needs you</h2>
+      <h2 className="text-label uppercase text-ink-muted">{t('title')}</h2>
       <div className="h-[68px] animate-pulse rounded-2xl bg-surface-sunken" />
     </section>
   )

@@ -1,6 +1,11 @@
+'use client'
+
 // Shared display bits for a scan candidate / filed task — used by both the
 // editable review list (ScanReviewCard) and the read-only summary
 // (TaskOverview) so the two stay visually consistent.
+
+import { useTranslations } from 'next-intl'
+import { useMemo } from 'react'
 
 import { cn } from '@/lib/cn'
 import type { ScanCandidateDomain, ScanCandidatePriority } from '@/queries/documentScans'
@@ -17,9 +22,14 @@ export function SummaryNote({ text, className }: { text: string; className?: str
 }
 
 export const DOMAINS: ScanCandidateDomain[] = ['health', 'home', 'car', 'finance', 'family', 'pets']
-export function formatDue(iso?: string): string | null {
+
+// `intlTag` rather than `undefined`: the browser's own locale is not the app's
+// — someone reading Arabic on an English phone must still get an Arabic month
+// name. Passed in because this is a plain function, not a hook; every caller
+// already reads useIntlTag() for its own formatting.
+export function formatDue(iso: string | undefined, intlTag: string): string | null {
   if (!iso) return null
-  return new Date(iso).toLocaleString(undefined, {
+  return new Date(iso).toLocaleString(intlTag, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
@@ -27,22 +37,41 @@ export function formatDue(iso?: string): string | null {
   })
 }
 
+/** The four priority names, for the chip rows in review and edit. */
+export function usePriorityLabels(): Record<ScanCandidatePriority, string> {
+  const t = useTranslations('scan')
+  return useMemo(
+    () => ({
+      low: t('priority.low'),
+      normal: t('priority.normal'),
+      high: t('priority.high'),
+      urgent: t('priority.urgent'),
+    }),
+    [t],
+  )
+}
+
 const PRIORITY_STYLE: Record<'urgent' | 'high' | 'low', string> = {
   urgent: 'bg-danger-soft text-danger',
   high: 'bg-warning-soft text-warning',
   low: 'bg-surface-sunken text-ink-subtle',
 }
-const PRIORITY_LABEL: Record<'urgent' | 'high' | 'low', string> = {
-  urgent: 'Urgent',
-  high: 'High priority',
-  low: 'Low priority',
-}
 
 export function PriorityPill({ priority }: { priority: ScanCandidatePriority }) {
+  const t = useTranslations('scan')
   if (priority === 'normal') return null
+  // Spelled out per case rather than built from a template so each label is a
+  // whole phrase in the catalogue — "high" and "priority" do not compose into
+  // an Arabic noun phrase in that order.
+  const label =
+    priority === 'urgent'
+      ? t('priorityPill.urgent')
+      : priority === 'high'
+        ? t('priorityPill.high')
+        : t('priorityPill.low')
   return (
     <span className={cn('shrink-0 rounded-pill px-2 py-0.5 text-xs uppercase', PRIORITY_STYLE[priority])}>
-      {PRIORITY_LABEL[priority]}
+      {label}
     </span>
   )
 }

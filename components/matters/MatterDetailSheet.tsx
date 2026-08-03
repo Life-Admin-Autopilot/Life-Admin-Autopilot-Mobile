@@ -35,12 +35,9 @@ import { ChipToggle, Sheet, SheetSection } from '@/components/ui/Sheet'
 // `updatedAt` on everything and — for dueAt — trip the reschedule counter that
 // the "what's slipping" signal depends on.
 
-const PRIORITY_LABEL: Record<TaskPriority, string> = {
-  low: 'Low',
-  normal: 'Normal',
-  high: 'High',
-  urgent: 'Urgent',
-}
+// The priority chips read `matters.priority.*`, the same four keys the filter
+// sheet and the list row read. A local Record here was a second English-only
+// copy of them, and one that could not call useTranslations besides.
 
 interface Draft {
   title: string
@@ -124,6 +121,7 @@ function Editor({
   onDeleted: (undoToken: string | null, title: string) => void
 }) {
   const t = useTranslations('matters')
+  const tCommon = useTranslations('common')
   const domainLabels = useDomainLabels()
   const [draft, setDraft] = useState<Draft>(() => draftFrom(task))
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -165,7 +163,7 @@ function Editor({
       onClose={onClose}
       trigger={trigger}
       height={620}
-      eyebrow="Matter"
+      eyebrow={t('detail.eyebrow')}
       title={task.title}
       footer={
         <div className="flex items-center justify-between gap-2">
@@ -184,7 +182,7 @@ function Editor({
             {/* One tap arms, the second commits — and the copy says what happens
                 next, because the delete is recoverable and saying so lowers the
                 stakes of an honest mistake. */}
-            {confirmDelete ? 'Tap again to delete' : 'Delete'}
+            {confirmDelete ? t('detail.confirmDelete') : tCommon('delete')}
           </button>
 
           <div className="flex items-center gap-2">
@@ -193,7 +191,7 @@ function Editor({
               onClick={onClose}
               className="rounded-pill px-3 py-1.5 text-caption text-ink-subtle hover:bg-surface-sunken hover:text-ink"
             >
-              Cancel
+              {tCommon('cancel')}
             </button>
             <Button
               className="h-8 gap-1 px-3 text-caption"
@@ -201,7 +199,7 @@ function Editor({
               onClick={save}
             >
               <Check size={14} />
-              {updateTask.isPending ? 'Saving…' : 'Save'}
+              {updateTask.isPending ? tCommon('saving') : tCommon('save')}
             </Button>
           </div>
         </div>
@@ -209,7 +207,7 @@ function Editor({
     >
    
 
-      <SheetSection label="Domain">
+      <SheetSection label={t('section.domain')}>
         <div className="flex flex-wrap gap-1.5">
           {TASK_DOMAINS.map((d) => (
             <ChipToggle key={d} selected={draft.domain === d} onClick={() => patch({ domain: d })}>
@@ -219,7 +217,7 @@ function Editor({
         </div>
       </SheetSection>
 
-      <SheetSection label="Priority">
+      <SheetSection label={t('section.priority')}>
         <div className="flex flex-wrap gap-1.5">
           {TASK_PRIORITIES.map((p) => (
             <ChipToggle
@@ -227,20 +225,20 @@ function Editor({
               selected={draft.priority === p}
               onClick={() => patch({ priority: p })}
             >
-              {PRIORITY_LABEL[p]}
+              {t(`priority.${p}`)}
             </ChipToggle>
           ))}
         </div>
       </SheetSection>
 
-      <SheetSection label="Due">
+      <SheetSection label={t('section.due')}>
         <TimeProvenance task={task} />
         <div className="flex items-center gap-2">
           <input
             type="datetime-local"
             value={toLocalInputValue(draft.dueAt)}
             onChange={(e) => patch({ dueAt: fromLocalInputValue(e.target.value) })}
-            aria-label="Due date"
+            aria-label={t('detail.dueLabel')}
             className="h-9 flex-1 rounded-md bg-surface-sunken px-3 text-body-sm text-ink outline-none"
           />
           {draft.dueAt ? (
@@ -249,7 +247,7 @@ function Editor({
               onClick={() => patch({ dueAt: undefined })}
               className="text-caption text-ink-subtle hover:text-ink"
             >
-              Clear
+              {tCommon('clear')}
             </button>
           ) : null}
         </div>
@@ -266,30 +264,36 @@ function Editor({
         </div>
       </SheetSection>
 
-      <SheetSection label={`Steps${task.subtasks.length > 0 ? ` · ${task.subtasks.length}` : ''}`}>
+      <SheetSection
+        label={
+          task.subtasks.length > 0
+            ? t('detail.stepsCount', { count: task.subtasks.length })
+            : t('section.steps')
+        }
+      >
         <MatterSteps task={task} />
       </SheetSection>
 
       {/* Everything below Steps rides its growth, so it slides rather than
           snapping to a new position each time a step is added or removed. */}
-      <SheetSection label="Notes" animateLayout>
+      <SheetSection label={t('section.notes')} animateLayout>
         <textarea
           value={draft.notes ?? ''}
           onChange={(e) => patch({ notes: e.target.value })}
           dir="auto"
-          aria-label="Notes"
+          aria-label={t('section.notes')}
           className="min-h-20 rounded-md bg-surface-sunken px-3 py-2 text-body-sm text-ink outline-none"
         />
       </SheetSection>
 
       {task.rescheduleCount >= 3 ? (
         <p className="rounded-xl bg-accent-soft px-3.5 py-2.5 text-body-sm text-ink-muted">
-          You&apos;ve moved this {task.rescheduleCount} times. Still worth keeping?
+          {t('detail.rescheduled', { count: task.rescheduleCount })}
         </p>
       ) : null}
 
       {updateTask.isError ? (
-        <p className="text-caption text-danger">Couldn&apos;t save that change. Try again.</p>
+        <p className="text-caption text-danger">{t('detail.saveFailed')}</p>
       ) : null}
     </Sheet>
   )

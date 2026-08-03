@@ -18,18 +18,36 @@
 // a flex row — without it the column refuses to shrink below its content.
 
 import { Loader2 } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { DocumentTypeIcon } from '@/components/scan/DocumentTypeIcon'
 import { SelectionCheck } from '@/components/ui/CompletionRing'
 import { cn } from '@/lib/cn'
+import { useIntlTag } from '@/lib/i18n/localeStore'
 import { formatScanTime } from '@/lib/scanTime'
 import { useLongPress } from '@/lib/useLongPress'
 import type { ScannedDocument } from '@/queries/documentScans'
 
-function sourceLabel(doc: ScannedDocument): string {
-  if (doc.sourceType === 'pdf') return 'PDF'
-  if (doc.sourceType === 'gallery') return 'Photo'
-  return 'Scan'
+// These are plain functions, not hooks, so they take the translator as an
+// argument — the shape lib/i18n/translate.ts exists for, and the same idiom
+// CalendarFeedsSheet uses for its two copy builders.
+type ScanT = ReturnType<typeof useTranslations<'scan'>>
+
+// One WHOLE sentence per source, not a noun spliced into a frame. The old
+// `Reading your ${sourceLabel(doc).toLowerCase()}…` cannot survive translation:
+// Arabic does not lowercase, "photo" takes a possessive suffix rather than a
+// separate pronoun, and "PDF" stays Latin inside an RTL sentence. Splitting the
+// frame per case is the only version a translator can actually write.
+function readingTitle(doc: ScannedDocument, t: ScanT): string {
+  if (doc.sourceType === 'pdf') return t('row.readingPdf')
+  if (doc.sourceType === 'gallery') return t('row.readingPhoto')
+  return t('row.readingScan')
+}
+
+function scanTitle(doc: ScannedDocument, t: ScanT): string {
+  if (doc.sourceType === 'pdf') return t('row.titlePdf')
+  if (doc.sourceType === 'gallery') return t('row.titlePhoto')
+  return t('row.titleScan')
 }
 
 // A document is unresolved while it is still being read, has failed, or holds
@@ -51,21 +69,21 @@ interface RowCopy {
 // Falls back through documentTitle -> documentSummary -> source label. The
 // middle rung is what every document scanned before the row-copy fields existed
 // lands on — a stale row shows a long summary rather than nothing at all.
-function resolveCopy(doc: ScannedDocument): RowCopy {
+function resolveCopy(doc: ScannedDocument, t: ScanT): RowCopy {
   const pending = doc.candidates.filter((c) => !c.taskId).length
 
   if (doc.status === 'pending' || doc.status === 'processing') {
     return {
-      title: `Reading your ${sourceLabel(doc).toLowerCase()}…`,
-      subtitle: 'This usually takes a moment.',
+      title: readingTitle(doc, t),
+      subtitle: t('row.readingSubtitle'),
       tone: 'muted',
     }
   }
 
   if (doc.status === 'failed') {
     return {
-      title: "Couldn't read this document",
-      subtitle: doc.failureReason ?? 'Tap to see what happened.',
+      title: t('row.failedTitle'),
+      subtitle: doc.failureReason ?? t('row.failedSubtitle'),
       tone: 'danger',
     }
   }
@@ -73,14 +91,14 @@ function resolveCopy(doc: ScannedDocument): RowCopy {
   const title =
     doc.documentTitle ??
     doc.documentSummary ??
-    (doc.candidates.length === 1 ? doc.candidates[0].title : `${sourceLabel(doc)} scan`)
+    (doc.candidates.length === 1 ? doc.candidates[0].title : scanTitle(doc, t))
 
   // The subtitle slot is the row's one line of detail, so what belongs there
   // depends on whether the user still owes the document something. An unhandled
   // candidate count outranks the document's own description — that is the whole
   // reason this row is worth tapping.
   if (pending > 0) {
-    const review = pending === 1 ? '1 to review' : `${pending} to review`
+    const review = t('row.toReview', { count: pending })
     return {
       title,
       subtitle: doc.issuer ? `${review} · ${doc.issuer}` : review,
@@ -94,14 +112,14 @@ function resolveCopy(doc: ScannedDocument): RowCopy {
   if (doc.candidates.length === 0) {
     return {
       title,
-      subtitle: doc.documentSubtitle ?? 'Nothing actionable found.',
+      subtitle: doc.documentSubtitle ?? t('row.nothingActionable'),
       tone: 'muted',
     }
   }
 
   return {
     title,
-    subtitle: doc.documentSubtitle ?? doc.issuer ?? 'Filed.',
+    subtitle: doc.documentSubtitle ?? doc.issuer ?? t('row.filed'),
     tone: 'normal',
   }
 }
@@ -128,9 +146,12 @@ export function DocumentRow({
   /** Enters selection mode with this row already picked. */
   onLongPress?: () => void
 }) {
+  const t = useTranslations('scan')
+  const tLib = useTranslations('lib')
+  const intlTag = useIntlTag()
   const busy = doc.status === 'pending' || doc.status === 'processing'
   const unresolved = isUnresolved(doc)
-  const { title, subtitle, tone } = resolveCopy(doc)
+  const { title, subtitle, tone } = resolveCopy(doc, t)
 
   // Press-and-hold is the only way into selection mode — the header has no
   // Select button. Pointer events (not touch) so it works with a mouse too.
@@ -183,7 +204,7 @@ export function DocumentRow({
             {title}
           </span>
           <span className="shrink-0 text-caption tabular text-ink-subtle">
-            {formatScanTime(doc.createdAt)}
+            {formatScanTime(doc.createdAt, { t: tLib, tag: intlTag })}
           </span>
         </span>
         <span className="flex items-center gap-1.5">

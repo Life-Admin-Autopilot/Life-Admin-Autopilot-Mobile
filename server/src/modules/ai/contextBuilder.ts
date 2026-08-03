@@ -2,6 +2,7 @@ import type { Content } from '@google/genai'
 
 import { Task, notDeleted } from '../../models/Task'
 import { VoiceNote } from '../../models/VoiceNote'
+import type { AiLocale } from './promptLanguage'
 import { getPrefillContents, getSystemPrompt } from './voice'
 
 // Three-tier router (Wiscord pattern):
@@ -69,6 +70,11 @@ interface BuildArgs {
   userId: string
   question: string
   timezone?: string
+  /**
+   * Required, not defaulted: a caller that forgot this should fail to compile
+   * rather than quietly answer an Arabic user in English.
+   */
+  locale: AiLocale
 }
 
 const TASK_CAP = 20
@@ -79,7 +85,7 @@ export async function buildPersonalContext(args: BuildArgs): Promise<PersonalCon
 
   if (mode !== 'grounded') {
     return {
-      system: getSystemPrompt(),
+      system: getSystemPrompt(args.locale),
       prefillContents: getPrefillContents(),
       user: args.question,
       sources: [],
@@ -167,7 +173,7 @@ export async function buildPersonalContext(args: BuildArgs): Promise<PersonalCon
   ].join('\n')
 
   return {
-    system: getSystemPrompt(),
+    system: getSystemPrompt(args.locale),
     prefillContents: getPrefillContents(),
     user,
     sources,

@@ -1,8 +1,11 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useEffect, useState } from 'react'
 
 import { cn } from '@/lib/cn'
+import { formatDuration, formatRelativeValue, timeDelta } from '@/lib/i18n/dateFormat'
+import { useIntlTag } from '@/lib/i18n/localeStore'
 
 // A deadline made SPATIAL.
 //
@@ -73,12 +76,23 @@ export function DeadlineMeter({
 }
 
 /**
- * "in 2 hours" / "in 3 days" / "17 days late".
+ * "in 2 hours" / "tomorrow" / "خلال ساعتين" / "17 days late".
  *
  * Companion to the meter for the one place a number is genuinely wanted. Kept
  * separate so a row can take the bar without the sentence, or the reverse.
+ *
+ * Neither direction is phrased here. Upcoming goes straight to
+ * `Intl.RelativeTimeFormat`, which already owns "in 2 hours", "غدًا" and the
+ * Arabic dual in every language it ships. Overdue is the one thing it cannot
+ * say: a missed deadline is not "2 hours ago" — that reads as when something
+ * happened, not that it is still waiting — so the span is formatted bare and
+ * dropped into one ICU message that supplies the word "late".
+ *
+ * This is a component, so it may hold the hooks the pure formatters cannot.
  */
 export function TimeUntil({ dueAt, className }: { dueAt: string | undefined; className?: string }) {
+  const t = useTranslations('ui')
+  const tag = useIntlTag()
   const [now, setNow] = useState<number | null>(null)
 
   useEffect(() => {
@@ -91,23 +105,15 @@ export function TimeUntil({ dueAt, className }: { dueAt: string | undefined; cla
   const due = new Date(dueAt).getTime()
   if (Number.isNaN(due)) return null
 
-  return <span className={className}>{phrase(due - now)}</span>
-}
+  const remaining = due - now
+  const { value, unit } = timeDelta(remaining)
 
-function phrase(remaining: number): string {
-  const late = remaining < 0
-  const ms = Math.abs(remaining)
-  const minutes = Math.round(ms / 60_000)
+  // `value === 0` is anything inside the last minute, either side of the
+  // deadline, and lands here as "now" rather than "0 minutes late".
+  const phrase =
+    value < 0
+      ? t('deadline.late', { duration: formatDuration(remaining, tag) })
+      : formatRelativeValue(value, unit, tag)
 
-  if (minutes < 1) return late ? 'just now' : 'now'
-  if (minutes < 60) return late ? `${minutes}m late` : `in ${minutes}m`
-
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) return late ? `${hours}h late` : `in ${hours}h`
-
-  const days = Math.round(hours / 24)
-  if (days < 30) return late ? `${days}d late` : `in ${days}d`
-
-  const months = Math.round(days / 30)
-  return late ? `${months}mo late` : `in ${months}mo`
+  return <span className={className}>{phrase}</span>
 }

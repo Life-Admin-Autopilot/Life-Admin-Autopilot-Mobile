@@ -13,6 +13,7 @@
 
 import { useState } from 'react'
 import { ChevronDown, Pencil } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { SketchDomainIcon } from '@/components/icons/sketch/domainGlyphs'
 import { CandidateEditSheet, type CandidateDraft } from '@/components/scan/CandidateEditSheet'
@@ -20,10 +21,13 @@ import { formatDue, PriorityPill, SummaryNote } from '@/components/scan/candidat
 import { OriginalDocumentPeek } from '@/components/scan/OriginalDocumentPeek'
 import { cn } from '@/lib/cn'
 import { env } from '@/lib/env'
+import { useIntlTag } from '@/lib/i18n/localeStore'
 import { useUpdateTask, type UpdateTaskBody } from '@/queries/tasks'
 import type { ScanCandidate, ScannedDocument } from '@/queries/documentScans'
 
 export function TaskOverview({ doc }: { doc: ScannedDocument }) {
+  const t = useTranslations('scan')
+  const intlTag = useIntlTag()
   const [expanded, setExpanded] = useState<string | null>(null)
   const [editing, setEditing] = useState<{ key: string; rect: DOMRect } | null>(null)
   const [overrides, setOverrides] = useState<Record<string, Partial<CandidateDraft>>>({})
@@ -32,8 +36,10 @@ export function TaskOverview({ doc }: { doc: ScannedDocument }) {
   if (doc.candidates.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-1 px-6 text-center">
-        <p className="text-body font-medium text-ink">Nothing was filed from this scan.</p>
-        <p className="text-caption text-ink-subtle">{env.appName} didn&apos;t find anything actionable here.</p>
+        <p className="text-body font-medium text-ink">{t('overview.emptyTitle')}</p>
+        <p className="text-caption text-ink-subtle">
+          {t('overview.emptyBody', { appName: env.appName })}
+        </p>
       </div>
     )
   }
@@ -79,7 +85,7 @@ export function TaskOverview({ doc }: { doc: ScannedDocument }) {
       <div className="flex shrink-0 flex-col gap-3">
         <div>
           <h2 className="font-display text-heading-xl text-ink">
-            {doc.candidates.length === 1 ? '1 matter filed' : `${doc.candidates.length} matters filed`}
+            {t('overview.filedCount', { count: doc.candidates.length })}
           </h2>
         </div>
         {doc.documentSummary ? <SummaryNote text={doc.documentSummary} /> : null}
@@ -94,7 +100,7 @@ export function TaskOverview({ doc }: { doc: ScannedDocument }) {
         <ul className="flex flex-col gap-2">
           {doc.candidates.map((c) => {
           const display = displayFor(c)
-          const due = formatDue(display.dueAt)
+          const due = formatDue(display.dueAt, intlTag)
           const isExpanded = expanded === c.key
 
           return (
@@ -108,7 +114,9 @@ export function TaskOverview({ doc }: { doc: ScannedDocument }) {
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-body-sm font-medium text-ink">{display.title}</span>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-caption tabular text-ink-muted">{due ?? 'No date set'}</span>
+                    <span className="text-caption tabular text-ink-muted">
+                      {due ?? t('overview.noDateSet')}
+                    </span>
                     <PriorityPill priority={display.priority} />
                   </div>
                 </div>
@@ -120,11 +128,17 @@ export function TaskOverview({ doc }: { doc: ScannedDocument }) {
 
               {isExpanded ? (
                 <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
-                  {c.sourcePage ? <span className="text-caption text-ink-muted">Found on page {c.sourcePage}</span> : null}
+                  {c.sourcePage ? (
+                    <span className="text-caption text-ink-muted">
+                      {t('overview.foundOnPage', { page: c.sourcePage })}
+                    </span>
+                  ) : null}
                   {display.notes ? (
                     <SummaryNote text={display.notes} />
                   ) : (
-                    <span className="text-caption text-ink-subtle">Nothing more {env.appName} found here.</span>
+                    <span className="text-caption text-ink-subtle">
+                      {t('overview.noDetail', { appName: env.appName })}
+                    </span>
                   )}
                   {c.taskId ? (
                     <button
@@ -135,7 +149,7 @@ export function TaskOverview({ doc }: { doc: ScannedDocument }) {
                       className="flex items-center gap-1.5 self-start text-caption font-medium text-accent hover:underline"
                     >
                       <Pencil size={13} />
-                      Edit
+                      {t('overview.edit')}
                     </button>
                   ) : null}
                 </div>

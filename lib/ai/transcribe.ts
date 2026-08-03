@@ -11,10 +11,15 @@
 // which sniffs the container itself.
 
 import { apiBinary, ApiError } from '@/lib/api/client'
+import { staticMessages } from '@/lib/i18n/staticMessages'
 
 export async function transcribeAudio(blob: Blob, signal?: AbortSignal): Promise<string> {
   const buffer = await blob.arrayBuffer()
-  if (signal?.aborted) throw new ApiError('aborted', 'Cancelled.', 0)
+  // Catalogue read rather than a translator argument: this is one plain
+  // sentence on a cancellation path, and threading `t` for it would put an i18n
+  // parameter on transcribeAudio for all three of its call sites. Lookup only,
+  // no ICU — the constraint lib/i18n/staticMessages.ts sets.
+  if (signal?.aborted) throw new ApiError('aborted', staticMessages().lib.transcribe.cancelled, 0)
 
   const res = await apiBinary<{ text: string }>('/ai/voice/transcribe', {
     method: 'POST',

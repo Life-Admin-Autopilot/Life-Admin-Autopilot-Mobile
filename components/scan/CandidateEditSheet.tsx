@@ -16,8 +16,9 @@
 
 import { useState } from 'react'
 import { Check, X } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
-import { DOMAINS } from '@/components/scan/candidateDisplay'
+import { DOMAINS, usePriorityLabels } from '@/components/scan/candidateDisplay'
 import { useDomainLabels } from '@/hooks/useDomainLabels'
 import { Button } from '@/components/ui/button'
 import { Sheet } from '@/components/ui/Sheet'
@@ -34,12 +35,6 @@ export interface CandidateDraft {
 }
 
 const PRIORITIES: ScanCandidatePriority[] = ['low', 'normal', 'high', 'urgent']
-const PRIORITY_CHIP_LABEL: Record<ScanCandidatePriority, string> = {
-  low: 'Low',
-  normal: 'Normal',
-  high: 'High',
-  urgent: 'Urgent',
-}
 
 export function CandidateEditSheet({
   open,
@@ -61,7 +56,10 @@ export function CandidateEditSheet({
   onSave: (draft: CandidateDraft) => void
   onClose: () => void
 }) {
+  const t = useTranslations('scan')
+  const tCommon = useTranslations('common')
   const domainLabels = useDomainLabels()
+  const priorityLabels = usePriorityLabels()
   const [draft, setDraft] = useState<CandidateDraft | null>(initial)
   // Reseed on open, and whenever a DIFFERENT candidate is opened. Doing it in
   // render rather than an effect means the sheet never paints one frame of the
@@ -81,8 +79,8 @@ export function CandidateEditSheet({
       onClose={onClose}
       trigger={trigger}
       height={560}
-      eyebrow="Edit matter"
-      title={draft?.title.trim() || 'Untitled matter'}
+      eyebrow={t('edit.eyebrow')}
+      title={draft?.title.trim() || t('edit.untitled')}
       footer={
         <div className="flex items-center justify-end gap-2">
           <button
@@ -92,7 +90,7 @@ export function CandidateEditSheet({
             className="flex items-center gap-1 rounded-pill px-3 py-1.5 text-caption text-ink-subtle hover:bg-surface-sunken hover:text-ink disabled:opacity-50"
           >
             <X size={14} />
-            Cancel
+            {tCommon('cancel')}
           </button>
           <Button
             variant="default"
@@ -101,14 +99,14 @@ export function CandidateEditSheet({
             onClick={() => draft && onSave(draft)}
           >
             <Check size={14} />
-            {pending ? 'Saving…' : 'Save'}
+            {pending ? tCommon('saving') : tCommon('save')}
           </Button>
         </div>
       }
     >
       {draft ? (
         <div className="flex flex-col gap-4 pt-1">
-          <Field label="Title">
+          <Field label={t('fields.title')}>
             <input
               value={draft.title}
               onChange={(e) => patch({ title: e.target.value })}
@@ -117,7 +115,7 @@ export function CandidateEditSheet({
             />
           </Field>
 
-          <Field label="Domain">
+          <Field label={t('fields.domain')}>
             <div className="flex flex-wrap gap-1.5">
               {DOMAINS.map((d) => (
                 <Chip key={d} active={draft.domain === d} onClick={() => patch({ domain: d })}>
@@ -127,17 +125,17 @@ export function CandidateEditSheet({
             </div>
           </Field>
 
-          <Field label="Priority">
+          <Field label={t('fields.priority')}>
             <div className="flex flex-wrap gap-1.5">
               {PRIORITIES.map((p) => (
                 <Chip key={p} active={draft.priority === p} onClick={() => patch({ priority: p })}>
-                  {PRIORITY_CHIP_LABEL[p]}
+                  {priorityLabels[p]}
                 </Chip>
               ))}
             </div>
           </Field>
 
-          <Field label="Due">
+          <Field label={t('fields.due')}>
             <div className="flex items-center gap-2">
               <input
                 type="datetime-local"
@@ -151,13 +149,13 @@ export function CandidateEditSheet({
                   onClick={() => patch({ dueAt: undefined })}
                   className="shrink-0 text-caption text-ink-subtle hover:text-ink"
                 >
-                  Clear
+                  {tCommon('clear')}
                 </button>
               ) : null}
             </div>
           </Field>
 
-          <Field label="Summary">
+          <Field label={t('fields.summary')}>
             <textarea
               value={draft.notes ?? ''}
               onChange={(e) => patch({ notes: e.target.value })}
@@ -166,9 +164,7 @@ export function CandidateEditSheet({
             />
           </Field>
 
-          {failed ? (
-            <p className="text-caption text-danger">Couldn&apos;t save that change. Try again.</p>
-          ) : null}
+          {failed ? <p className="text-caption text-danger">{t('edit.saveFailed')}</p> : null}
         </div>
       ) : null}
     </Sheet>

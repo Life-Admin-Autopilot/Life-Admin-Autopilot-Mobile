@@ -12,6 +12,7 @@ import {
 } from './conversationService'
 import { getGeminiClient } from './provider/geminiClient'
 import { streamPersonal } from './provider/streamPersonal'
+import { getUserAiLocale } from './userLocale'
 import { registerPendingCall } from './pendingToolStore'
 import {
   countTasksForBulkDelete,
@@ -106,6 +107,7 @@ export async function* ask(args: AskArgs): AsyncGenerator<AskEvent> {
     userId: args.userId,
     question: args.question,
     timezone: args.timezone,
+    locale: await getUserAiLocale(args.userId),
   })
 
   yield { kind: 'sources', sources: ctx.sources }
@@ -190,6 +192,7 @@ export async function* continueAfterConfirm(
     userId: args.userId,
     question,
     timezone: args.timezone,
+    locale: await getUserAiLocale(args.userId),
   })
 
   yield { kind: 'sources', sources: ctx.sources }

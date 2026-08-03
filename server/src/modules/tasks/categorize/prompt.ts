@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 import { CONFIDENCE_BUCKETS } from '../../../models/Task'
 import { DOMAINS } from '../../../models/User'
+import { languageName, languagePreserveRules, type AiLocale } from '../../ai/promptLanguage'
 
 // The model half of the categorize pass: what it is asked, and the shape it
 // must answer in.
@@ -94,7 +95,7 @@ const DOMAIN_GUIDE = `
   pets     — the animal: food, vet, grooming, boarding.
 `.trim()
 
-export const SYSTEM = `
+const SYSTEM_BASE = `
 You file a person's to-dos into the right area of life, and suggest a few tags.
 
 You are given matters, one per line, as:
@@ -146,3 +147,33 @@ Never invent an id. Never return an id you were not given.
 
 Return ONLY the JSON object. No prose.
 `.trim()
+
+// Categorisation is the one prompt where "write everything in the user's
+// language" would do damage, so it says which field is which instead:
+//
+//   reason      — prose, translated.
+//   domain      — a fixed key the client renders through its own catalogue
+//                 (messages/*.json → domain.*). Translating it here would send
+//                 back a value no lookup matches, and the row would come out
+//                 blank in both languages.
+//   confidence  — same, an enum the code branches on.
+//   tags        — the person's own words. Minting an Arabic synonym next to the
+//                 "insurance" tag they already use is exactly the duplication the
+//                 vocabulary block below exists to prevent.
+function languageSection(locale: AiLocale): string {
+  const name = languageName(locale)
+  return [
+    '--- language ---',
+    `Write \`reason\` in ${name}. It is read by the person whose list it is.`,
+    '`domain` and `confidence` are fixed keywords from the lists above — return them',
+    'exactly as written there, never translated.',
+    'Tags follow the vocabulary the person already has, in whatever language that',
+    `vocabulary is in. Use ${name} for a new tag only when it adds nothing that`,
+    'already exists.',
+    languagePreserveRules(locale),
+  ].join('\n')
+}
+
+export function systemFor(locale: AiLocale): string {
+  return [SYSTEM_BASE, languageSection(locale)].join('\n\n')
+}

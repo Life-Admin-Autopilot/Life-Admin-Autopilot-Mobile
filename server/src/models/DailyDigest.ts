@@ -56,6 +56,13 @@ export interface DailyDigestAttrs {
   localDate: string
   /** Fingerprint of the matter state the payload was computed from. */
   sourceHash: string
+  /**
+   * The language the prose in `payload` is written in. Part of the row rather
+   * than only the hash because the themes are deliberately carried forward
+   * between builds — and a carried Arabic label under a freshly English headline
+   * is the one stale state that looks like a bug rather than like wording.
+   */
+  locale?: string
   generatedAt: Date
   payload: DailyDigestPayload
 }
@@ -125,6 +132,7 @@ const DailyDigestSchema = new Schema<DailyDigestAttrs>(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     localDate: { type: String, required: true },
     sourceHash: { type: String, required: true },
+    locale: { type: String },
     // TTL: a digest is worthless the day after it describes. Expiring the rows
     // keeps this collection bounded to roughly one row per active user without
     // anyone having to remember to sweep it.

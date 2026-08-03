@@ -1,5 +1,6 @@
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { Capacitor } from '@capacitor/core'
+import { staticMessages } from '@/lib/i18n/staticMessages'
 
 // The buttons that appear ON the notification itself.
 //
@@ -22,6 +23,7 @@ export const REMINDER_ACTIONS = {
 
 export async function registerNotificationActions(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return
+  const copy = staticMessages().notifications
   await LocalNotifications.registerActionTypes({
     types: [
       {
@@ -29,8 +31,8 @@ export async function registerNotificationActions(): Promise<void> {
         actions: [
           // Neither is `foreground`, so tapping them does NOT open the app —
           // iOS wakes it in the background to run the handler and that's it.
-          { id: REMINDER_ACTIONS.done, title: 'Done' },
-          { id: REMINDER_ACTIONS.snooze, title: 'Later today' },
+          { id: REMINDER_ACTIONS.done, title: copy.actionDone },
+          { id: REMINDER_ACTIONS.snooze, title: copy.actionSnooze },
         ],
       },
     ],

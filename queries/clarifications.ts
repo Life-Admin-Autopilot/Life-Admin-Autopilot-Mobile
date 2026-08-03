@@ -7,6 +7,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api/client'
+import { staticMessages } from '@/lib/i18n/staticMessages'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
 import { queryKeys } from '@/queries/keys'
@@ -121,11 +122,16 @@ export function useDropClarification() {
 // The card stack advances the instant you answer — it never waits for the
 // round trip, which is what makes it feel fast. The cost is that a failed
 // answer used to be invisible: the card moved on, the stack reached "All
-// clear.", and nothing had been written. Say so instead, and name the item so
-// the user knows WHICH answer to give again.
+// clear.", and nothing had been written. Say so instead.
+//
+// A mutation callback, so the title is read from the catalogue rather than
+// taken as a translator argument — the case lib/i18n/staticMessages.ts covers.
+// The description carries no fallback of its own on purpose: translateBackendError
+// already defaults to `errors.generic` in the reader's language, and a fallback
+// here would be a second English sentence to keep in step with it.
 function reportFailure(err: unknown): void {
-  toast.error('That answer did not save.', {
-    description: translateBackendError(err, 'It is still waiting for you — try again in a moment.'),
+  toast.error(staticMessages().lib.clarifications.answerNotSaved, {
+    description: translateBackendError(err),
   })
 }
 

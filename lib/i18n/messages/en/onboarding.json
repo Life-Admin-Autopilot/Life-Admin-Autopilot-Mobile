@@ -1,0 +1,39 @@
+{
+  "eyebrow": "Onboarding",
+  "yourName": "Your name",
+  "enter": "Enter",
+  "oneMoment": "One moment…",
+  "progress": "Step {current} of {total}",
+  "steps": {
+    "name": "What should I call you?",
+    "focus": "What weighs on you most?",
+    "pace": "How full is your week?",
+    "tone": "How should I speak to you?",
+    "domains": "Which areas need watching?",
+    "done": "All good to go."
+  },
+  "hints": {
+    "name": "A first name is enough.",
+    "domains": "Pick any. Change them later."
+  },
+  "options": {
+    "renewals": "Renewals & bills",
+    "appointments": "Appointments",
+    "documents": "Documents & admin",
+    "family": "Family & school",
+    "packed": "Packed",
+    "steady": "Steady",
+    "light": "Light",
+    "brief": "Briefly",
+    "detailed": "With detail"
+  },
+  "ready": {
+    "withName": "I'll keep your file in order, {name}.",
+    "withoutName": "I'll keep your file in order."
+  },
+  "handoff": {
+    "withName": "Good to see you, {name}.",
+    "withoutName": "Good to see you.",
+    "subtitle": "Order, restored."
+  }
+}

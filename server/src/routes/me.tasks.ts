@@ -38,6 +38,16 @@ import {
   getPendingProposal,
 } from '../modules/tasks/categorize/apply'
 import { computeTaskCounts } from '../modules/tasks/taskCounts'
+import { presentMatter, presentMatters } from '../modules/tasks/matterLocale'
+import { getUserAiLocale } from '../modules/ai/userLocale'
+import { AI_LOCALES, resolveAiLocale } from '../modules/ai/promptLanguage'
+import {
+  admitTranslateRun,
+  readTranslateQuota,
+  releaseTranslateRun,
+} from '../modules/tasks/translateQuota'
+import { countTranslatable, translateBacklog } from '../modules/tasks/translateMatters/run'
+import { MAX_TRANSLATE_TARGETS } from '../modules/tasks/translateMatters/prompt'
 import {
   DEFAULT_TASK_SORT,
   TASK_SORTS,
@@ -148,8 +158,16 @@ meTasksRouter.get(
       cursor,
     })
 
+    // Overlaid on the way out, and nowhere earlier: listTasks' filter and sort
+    // ran against the canonical text, so the rows the user asked for are the
+    // rows they get — only the words change.
+    const locale = await getUserAiLocale(auth.sub)
+
     res.status(200).json({
-      tasks: tasks.map((t) => t.toJSON()),
+      tasks: presentMatters(
+        tasks.map((t) => t.toJSON()),
+        locale,
+      ),
       total,
       nextCursor,
     })
@@ -552,7 +570,8 @@ meTasksRouter.get(
     }
     const task = await Task.findOne({ _id: id, userId: auth.sub, ...notDeleted() })
     if (!task) throw NotFound('task_not_found', 'Task no longer exists.')
-    res.status(200).json({ task: task.toJSON() })
+    const locale = await getUserAiLocale(auth.sub)
+    res.status(200).json({ task: presentMatter(task.toJSON(), locale) })
   }),
 )
 
@@ -765,5 +784,88 @@ meTasksRouter.delete(
       throw NotFound('task_not_found', 'Task no longer exists.')
     }
     res.status(200).json({ undoToken: result.undoToken })
+  }),
+)
+
+// ---- Translating the backlog ----
+//
+// Offered when someone switches language: the matters they already have were
+// written in the old one, and everything filed AFTER the switch is already in
+// the new one (the extraction prompts are locale-aware). So this is a one-off
+// sweep of the backlog, not an ongoing sync.
+//
+// Charged once per language per month and NOT refunded on undo — see the header
+// of modules/tasks/translateQuota.ts. The count endpoint exists so the sheet can
+// show what a selection would cost before the user spends the month on it.
+
+const TranslateSelectionSchema = z.object({
+  locale: z.enum(AI_LOCALES),
+  ids: z.array(z.string()).max(MAX_TRANSLATE_TARGETS).optional(),
+  preset: z.enum(['thisWeek', 'thisMonth', 'all']).optional(),
+})
+
+meTasksRouter.get(
+  '/me/tasks/translate/quota',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const auth = req.auth
+    if (!auth) throw Unauthorized()
+
+    const locale = resolveAiLocale(
+      typeof req.query.locale === 'string' ? req.query.locale : undefined,
+    )
+    const [quota, thisWeek, thisMonth, all] = await Promise.all([
+      readTranslateQuota({ userId: auth.sub, locale }),
+      countTranslatable({ userId: auth.sub, targetLocale: locale, selection: { preset: 'thisWeek' } }),
+      countTranslatable({ userId: auth.sub, targetLocale: locale, selection: { preset: 'thisMonth' } }),
+      countTranslatable({ userId: auth.sub, targetLocale: locale, selection: { preset: 'all' } }),
+    ])
+
+    res.status(200).json({ quota, counts: { thisWeek, thisMonth, all }, max: MAX_TRANSLATE_TARGETS })
+  }),
+)
+
+meTasksRouter.post(
+  '/me/tasks/translate',
+  requireAuth,
+  taskSummaryLimiter,
+  asyncHandler(async (req, res) => {
+    const auth = req.auth
+    if (!auth) throw Unauthorized()
+
+    const parsed = TranslateSelectionSchema.safeParse(req.body ?? {})
+    if (!parsed.success) {
+      throw BadRequest('invalid_body', 'Invalid translate request.', parsed.error.flatten())
+    }
+    if (!isAiConfigured()) {
+      throw new AppError(503, 'ai_not_configured', 'Translating is unavailable right now.')
+    }
+
+    const { locale, ids, preset } = parsed.data
+
+    // Claimed BEFORE the run, so two taps cannot both start a sweep. The month
+    // is handed back below only when the run produced nothing at all.
+    await admitTranslateRun({ userId: auth.sub, locale })
+
+    let result
+    try {
+      result = await translateBacklog({
+        userId: auth.sub,
+        targetLocale: locale,
+        selection: { ids, preset },
+      })
+    } catch (err: unknown) {
+      await releaseTranslateRun({ userId: auth.sub, locale }).catch(() => {})
+      throw err
+    }
+
+    // Nothing written means the user spent a month and got no new text —
+    // whether because everything was already translated or because every batch
+    // failed. Either way it is not a run worth charging for.
+    if (result.translated === 0) {
+      await releaseTranslateRun({ userId: auth.sub, locale }).catch(() => {})
+    }
+
+    res.status(200).json(result)
   }),
 )

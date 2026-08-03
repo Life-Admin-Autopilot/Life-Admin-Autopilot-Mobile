@@ -30,8 +30,22 @@ export const LOCALE_STORAGE_KEY = 'kitto.locale'
 
 interface LocaleState {
   locale: Locale
+  /**
+   * Whether `locale` is a choice someone made — in the picker or on another
+   * device — rather than one read off this device's settings. The picker needs
+   * the distinction: on an English phone "Match device" and "English" resolve
+   * to the same locale, and a picker that cannot tell them apart would move the
+   * tick off the row the user actually chose.
+   */
+  isExplicit: boolean
   /** Applies immediately and persists. Backend sync is the caller's job. */
   setLocale: (locale: Locale) => void
+  /**
+   * Drops the stored choice and follows this device again. Backend sync is the
+   * caller's job — clearing here without clearing `User.locale` would have
+   * adoptUserLocale put the old choice straight back on the next boot.
+   */
+  followDevice: () => void
 }
 
 // localStorage is absent during the static-export prerender and can throw in
@@ -43,6 +57,15 @@ function readStoredLocale(): Locale | null {
     return raw ? resolveLocale(raw) : null
   } catch {
     return null
+  }
+}
+
+function clearStoredLocale(): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(LOCALE_STORAGE_KEY)
+  } catch {
+    /* disabled storage — nothing was stored to begin with */
   }
 }
 
@@ -73,16 +96,24 @@ function readDeviceLocale(): Locale | null {
  * pre-paint script in the document head has already set <html> to the real
  * value by the time React hydrates, and useApplyDocumentLocale re-asserts it.
  */
-function initialLocale(): Locale {
-  return readStoredLocale() ?? readDeviceLocale() ?? DEFAULT_LOCALE
+function initialLocale(): Pick<LocaleState, 'locale' | 'isExplicit'> {
+  const stored = readStoredLocale()
+  if (stored) return { locale: stored, isExplicit: true }
+  return { locale: readDeviceLocale() ?? DEFAULT_LOCALE, isExplicit: false }
 }
 
 export const useLocaleStore = create<LocaleState>((set) => ({
-  locale: initialLocale(),
+  ...initialLocale(),
   setLocale: (locale) => {
     writeStoredLocale(locale)
     applyDocumentLocale(locale)
-    set({ locale })
+    set({ locale, isExplicit: true })
+  },
+  followDevice: () => {
+    clearStoredLocale()
+    const locale = readDeviceLocale() ?? DEFAULT_LOCALE
+    applyDocumentLocale(locale)
+    set({ locale, isExplicit: false })
   },
 }))
 
@@ -101,9 +132,24 @@ export const useIntlTag = (): string => useLocaleStore((s) => intlTagOf(s.locale
 export const useSetLocale = (): ((locale: Locale) => void) =>
   useLocaleStore((s) => s.setLocale)
 
+export const useFollowDevice = (): (() => void) => useLocaleStore((s) => s.followDevice)
+
+/** True when the active locale was chosen, not inferred from the device. */
+export const useIsExplicitLocale = (): boolean => useLocaleStore((s) => s.isExplicit)
+
 /** Non-hook read, for modules outside the React tree (lib/toast.ts, notifications). */
 export function currentLocale(): Locale {
   return useLocaleStore.getState().locale
+}
+
+/**
+ * What this device's settings resolve to. Exported so the picker can tell the
+ * account which language "follow the device" actually landed on — the server
+ * writes the digest and both extractions with no device in reach, so "follow the
+ * device" has to be resolved here or it means nothing there.
+ */
+export function deviceLocale(): Locale {
+  return readDeviceLocale() ?? DEFAULT_LOCALE
 }
 
 /**
@@ -127,6 +173,10 @@ export function applyDocumentLocale(locale: Locale): void {
 export function adoptUserLocale(tag: string | null | undefined): void {
   if (!tag) return
   const resolved = resolveLocale(tag)
-  if (resolved === useLocaleStore.getState().locale) return
+  const { locale, isExplicit } = useLocaleStore.getState()
+  // Also runs when the locale already matches but was only inferred from the
+  // device: the account says this was chosen, and the picker must show it on the
+  // language row rather than on "Match device".
+  if (isExplicit && resolved === locale) return
   useLocaleStore.getState().setLocale(resolved)
 }

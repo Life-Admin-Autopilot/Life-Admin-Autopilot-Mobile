@@ -1,4 +1,7 @@
+'use client'
+
 import { ChevronRight } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { DomainIcon, type Domain } from '@/components/icons/DomainIcon'
 import { Pill } from '@/components/ui/Pill'
@@ -19,6 +22,8 @@ export function MatterRow({
   overdue?: boolean
   icon?: React.ReactNode
 }) {
+  const t = useTranslations('dashboard.row')
+
   return (
     <TaskRow
       leading={<DomainIcon domain={domain} />}
@@ -27,7 +32,7 @@ export function MatterRow({
       trailing={
         overdue ? (
           <Pill tone="high" uppercase>
-            Overdue
+            {t('overdue')}
           </Pill>
         ) : (
           (icon ?? <ChevronRight size={18} className="shrink-0 text-ink-subtle" />)

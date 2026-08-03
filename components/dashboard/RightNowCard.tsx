@@ -1,6 +1,7 @@
 'use client'
 
 import { Check, Clock } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { DomainIcon } from '@/components/icons/DomainIcon'
 import { Button } from '@/components/ui/button'
@@ -36,6 +37,7 @@ export function RightNowCard({
   onComplete,
   onCompleteSubtask,
   onPush,
+  onOpen,
   busy = false,
 }: {
   task: Task
@@ -43,15 +45,31 @@ export function RightNowCard({
   onCompleteSubtask: (task: Task, subtask: Subtask) => void
   /** Move it out of today. Recovery is a feature, not a failure path. */
   onPush: (task: Task) => void
+  /**
+   * Open the full matter. Scoped to the identity block, NOT the whole card —
+   * Done and "Not today" sit inside it, and a card-wide tap target would either
+   * nest buttons (invalid) or make every completion a coin flip between
+   * finishing the thing and opening a sheet about it.
+   */
+  onOpen?: (task: Task, rect: DOMRect) => void
   busy?: boolean
 }) {
-  const estimate = formatEstimate(estimateOf(task))
+  const t = useTranslations('dashboard.rightNow')
+  const tLib = useTranslations('lib')
+  const estimate = formatEstimate(estimateOf(task), tLib)
   const nextStep = task.subtasks.find((subtask) => !subtask.done)
   const doneCount = task.subtasks.filter((subtask) => subtask.done).length
 
   return (
     <section className="flex flex-col gap-4 rounded-2xl bg-surface p-5 shadow-card">
-      <div className="flex items-start gap-3.5">
+      <Identity
+        onOpen={onOpen}
+        // The sheet morphs out of the card, so it needs the CARD's rect, not the
+        // inner block's — measuring the button would start the expansion from a
+        // box that is visibly smaller than what the user tapped.
+        rectOf={(el) => (el.closest('section') ?? el).getBoundingClientRect()}
+        task={task}
+      >
         <DomainIcon domain={task.domain} />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           {nextStep ? (
@@ -76,7 +94,7 @@ export function RightNowCard({
             ) : null}
           </div>
         </div>
-      </div>
+      </Identity>
 
       <DeadlineMeter dueAt={task.dueAt} />
 
@@ -88,12 +106,44 @@ export function RightNowCard({
           onClick={() => (nextStep ? onCompleteSubtask(task, nextStep) : onComplete(task))}
         >
           <Check />
-          Done
+          {t('done')}
         </Button>
         <Button variant="secondary" disabled={busy} onClick={() => onPush(task)}>
-          Not today
+          {t('notToday')}
         </Button>
       </div>
     </section>
+  )
+}
+
+/**
+ * Wraps the identity block in a button only when there is somewhere to go.
+ * Without `onOpen` it stays a plain div — a focusable element that does nothing
+ * is worse for keyboard and screen-reader users than no affordance at all.
+ */
+function Identity({
+  task,
+  onOpen,
+  rectOf,
+  children,
+}: {
+  task: Task
+  onOpen?: (task: Task, rect: DOMRect) => void
+  rectOf: (el: HTMLElement) => DOMRect
+  children: React.ReactNode
+}) {
+  const t = useTranslations('dashboard.rightNow')
+
+  if (!onOpen) return <div className="flex items-start gap-3.5">{children}</div>
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => onOpen(task, rectOf(e.currentTarget))}
+      aria-label={t('open', { title: task.title })}
+      className="-m-1 flex items-start gap-3.5 rounded-xl p-1 text-start transition-colors hover:bg-surface-sunken"
+    >
+      {children}
+    </button>
   )
 }

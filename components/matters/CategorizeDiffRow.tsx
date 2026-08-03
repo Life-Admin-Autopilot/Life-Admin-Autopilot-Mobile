@@ -1,6 +1,7 @@
 'use client'
 
 import { ArrowRight, Check } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { EmojiChip } from '@/components/ui/EmojiChip'
 import { domainCategory, domainEmoji } from '@/components/icons/DomainIcon'
@@ -19,10 +20,14 @@ import type { Confidence, ProposedChange } from '@/queries/categorize'
 // Low confidence is called out; high is not. A badge on every row is a badge
 // on no row — the useful signal is "this one is a guess", and the checkbox
 // already starts unticked to say so.
-const CONFIDENCE_COPY: Record<Confidence, string | null> = {
+//
+// Keyed rather than mapped to copy: a module-level Record cannot call
+// useTranslations, so the level names the catalogue key and the component
+// resolves it.
+const CONFIDENCE_KEY: Record<Confidence, 'medium' | 'low' | null> = {
   high: null,
-  medium: 'fairly sure',
-  low: 'a guess',
+  medium: 'medium',
+  low: 'low',
 }
 
 export function CategorizeDiffRow({
@@ -34,9 +39,11 @@ export function CategorizeDiffRow({
   checked: boolean
   onToggle: () => void
 }) {
+  const t = useTranslations('matters')
   const domainLabels = useDomainLabels()
   const moved = change.fromDomain !== change.toDomain
-  const note = CONFIDENCE_COPY[change.confidence]
+  const confidence = CONFIDENCE_KEY[change.confidence]
+  const note = confidence ? t(`confidence.${confidence}`) : null
 
   return (
     <li>

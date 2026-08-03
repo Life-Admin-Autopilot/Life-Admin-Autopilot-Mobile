@@ -6,6 +6,8 @@ import { logger } from '../../logger'
 import { env } from '../../env'
 import { Task, notDeleted, type TaskDoc } from '../../models/Task'
 import { getGeminiClient } from '../ai/provider/geminiClient'
+import { conversationLanguageRule, type AiLocale } from '../ai/promptLanguage'
+import { getUserAiLocale } from '../ai/userLocale'
 import { withGeminiRetry } from '../ai/voiceCore/geminiRetry'
 import { formatTaskLine } from './taskLine'
 import { toUserObjectId } from './taskQuery'
@@ -119,7 +121,7 @@ const responseSchema = {
   propertyOrdering: ['headline', 'themes', 'question'],
 }
 
-const SYSTEM = `
+const SYSTEM_BASE = `
 You group a person's reminders into themes and notice the one thing worth asking about.
 
 You are given their matters for a date range, each as:
@@ -157,6 +159,10 @@ QUESTION
 
 Return ONLY the JSON object. No prose.
 `.trim()
+
+function systemFor(locale: AiLocale): string {
+  return [SYSTEM_BASE, conversationLanguageRule(locale)].join('\n\n')
+}
 
 // A prompt rule is not an enforcement mechanism. The model was told never to
 // put an id in prose; this is what happens when it does anyway.
@@ -316,6 +322,10 @@ export async function summarizeRange(args: SummarizeArgs): Promise<TaskSummary> 
     .filter((s) => byId.has(s.taskId))
     .map((s) => `[${s.taskId}] "${s.title}" — ${s.reason}`)
 
+  // Resolved outside the retry thunk: it is the same for every attempt, and a
+  // DB read inside a retry loop would run again on each one.
+  const locale = await getUserAiLocale(String(uid))
+
   let response
   try {
     response = await withGeminiRetry(
@@ -343,7 +353,7 @@ export async function summarizeRange(args: SummarizeArgs): Promise<TaskSummary> 
             },
           ],
           config: {
-            systemInstruction: SYSTEM,
+            systemInstruction: systemFor(locale),
             responseMimeType: 'application/json',
             responseSchema,
             temperature: 0.2,

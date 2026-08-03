@@ -1,6 +1,7 @@
 'use client'
 
 import { ArrowRight, Loader2, Mic, Search, Square, X } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
 import { cn } from '@/lib/cn'
@@ -38,6 +39,15 @@ export function MattersSearchBar({
   searching: boolean
   hasResults: boolean
 }) {
+  const t = useTranslations('matters')
+  const tCommon = useTranslations('common')
+  // The three recorder outcomes below are the mic's, not this screen's — the
+  // voice island says exactly the same three things. Reading them from `voice`
+  // keeps one wording for "nothing was captured" everywhere it can happen.
+  const tVoice = useTranslations('voice')
+  // micFailureMessage is a pure lib function — it takes the translator rather
+  // than reaching for one. See lib/i18n/translate.ts.
+  const tLib = useTranslations('lib')
   const search = useSearchMatters()
   const recorder = useVoiceRecorder()
   const [transcribing, setTranscribing] = useState(false)
@@ -50,7 +60,7 @@ export function MattersSearchBar({
     if (!q) return
     search.mutate(q, {
       onSuccess: (res) => onSearched(res),
-      onError: (err) => toast.error(translateBackendError(err, "Couldn't run that search.")),
+      onError: (err) => toast.error(translateBackendError(err, t('search.failed'))),
     })
   }
 
@@ -59,19 +69,19 @@ export function MattersSearchBar({
       // Without this the mic button just does nothing when access is
       // unavailable — no prompt, no error, no recording.
       const failure = await recorder.start()
-      if (failure) toast.error(micFailureMessage(failure, env.appName))
+      if (failure) toast.error(micFailureMessage(failure, env.appName, tLib))
       return
     }
     const blob = await recorder.stop()
     if (!blob) {
-      toast.info('Too short — nothing captured.')
+      toast.info(tVoice('tooShort'))
       return
     }
     setTranscribing(true)
     try {
       const text = await transcribeAudio(blob)
       if (!text.trim()) {
-        toast.info('Nothing was captured.')
+        toast.info(tVoice('nothingCaptured'))
         return
       }
       // Show what was heard before answering it — a wrong transcription is
@@ -79,7 +89,7 @@ export function MattersSearchBar({
       onValueChange(text)
       run(text)
     } catch (err: unknown) {
-      toast.error(translateBackendError(err, 'Could not transcribe that.'))
+      toast.error(translateBackendError(err, tVoice('transcribeFailed')))
     } finally {
       setTranscribing(false)
     }
@@ -105,9 +115,9 @@ export function MattersSearchBar({
       <input
         value={value}
         onChange={(e) => onValueChange(e.target.value)}
-        placeholder={recording ? 'Listening…' : 'Describe what you’re looking for'}
+        placeholder={recording ? t('search.listening') : t('search.placeholder')}
         dir="auto"
-        aria-label="Search matters"
+        aria-label={t('search.label')}
         enterKeyHint="search"
         disabled={recording}
         className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-muted"
@@ -120,7 +130,7 @@ export function MattersSearchBar({
             onValueChange('')
             onClear()
           }}
-          aria-label="Clear search"
+          aria-label={t('search.clear')}
         >
           <X size={15} className="text-ink-subtle" />
         </button>
@@ -133,7 +143,7 @@ export function MattersSearchBar({
         <button
           type="submit"
           disabled={busy}
-          aria-label="Search"
+          aria-label={tCommon('search')}
           className="shrink-0 rounded-full bg-accent p-1 text-accent-ink transition-opacity disabled:opacity-40"
         >
           <ArrowRight size={16} />
@@ -143,7 +153,7 @@ export function MattersSearchBar({
           type="button"
           onClick={toggleMic}
           disabled={busy && !recording}
-          aria-label={recording ? 'Stop and search' : 'Search by voice'}
+          aria-label={recording ? t('search.stop') : t('search.byVoice')}
           className={cn(
             'shrink-0 rounded-full p-1 transition-colors disabled:opacity-40',
             recording ? 'bg-accent text-accent-ink' : 'text-accent hover:bg-accent-soft',

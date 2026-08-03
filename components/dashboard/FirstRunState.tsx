@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { EmojiChip, type CatColor } from '@/components/ui/EmojiChip'
 import { useVoiceCapture } from '@/lib/voice/captureStore'
@@ -28,38 +29,49 @@ interface StartRoute {
   body: string
 }
 
-const ROUTES: StartRoute[] = [
-  {
-    key: 'speak',
-    emoji: '🎙️',
-    category: 'blush',
-    title: 'Say what’s on your mind',
-    body: '“The car insurance is up next month.”',
-  },
-  {
-    key: 'scan',
-    emoji: '📄',
-    category: 'yellow',
-    title: 'Scan a bill or letter',
-    body: 'I’ll pull out the dates and amounts.',
-  },
-  {
-    key: 'browse',
-    emoji: '🗂️',
-    category: 'periwinkle',
-    title: 'Add one by hand',
-    body: 'Anything you already know is coming.',
-  },
-]
+// A FUNCTION, not a const. The list used to be a module-level literal, which
+// is exactly the shape that cannot be translated: a `const` evaluates once at
+// import time, before any provider exists, and a hook cannot be called from out
+// here to reach one. Taking the translator as an argument keeps the list where
+// it reads best — beside the type it satisfies — and still resolves per render,
+// so switching language in Settings re-renders these three rows.
+type FirstRunT = ReturnType<typeof useTranslations<'dashboard.firstRun'>>
+
+function routes(t: FirstRunT): StartRoute[] {
+  return [
+    {
+      key: 'speak',
+      emoji: '🎙️',
+      category: 'blush',
+      title: t('speakTitle'),
+      body: t('speakBody'),
+    },
+    {
+      key: 'scan',
+      emoji: '📄',
+      category: 'yellow',
+      title: t('scanTitle'),
+      body: t('scanBody'),
+    },
+    {
+      key: 'browse',
+      emoji: '🗂️',
+      category: 'periwinkle',
+      title: t('manualTitle'),
+      body: t('manualBody'),
+    },
+  ]
+}
 
 export function FirstRunState() {
+  const t = useTranslations('dashboard.firstRun')
   const openCapture = useVoiceCapture((s) => s.openCapture)
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-label uppercase text-ink-muted">Start anywhere</h2>
+      <h2 className="text-label uppercase text-ink-muted">{t('title')}</h2>
 
-      {ROUTES.map((route) => {
+      {routes(t).map((route) => {
         const content = (
           <>
             <EmojiChip emoji={route.emoji} category={route.category} size={40} />

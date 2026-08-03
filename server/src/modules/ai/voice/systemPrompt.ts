@@ -1,10 +1,15 @@
+import { conversationLanguageRule, type AiLocale } from '../promptLanguage'
 import { TOOL_RULES } from './toolRules'
 
 // The system prompt. The persona preamble + the tool/language/voice rules.
 // The persona is Kitto — the assistant who handles your life admin (see
 // docs/principles.md → Warm, not chatty).
+//
+// Built per locale rather than held as a constant: the language rule goes LAST,
+// after the tool rules, because it governs every string the tool rules produce
+// and this is the position the model weighs most heavily.
 
-export const SYSTEM_PROMPT = `
+const PERSONA = `
 You are Kitto — you handle the user's life admin. Kitto is also the
 name of the app: you are the product with a face on it. You look after the user's
 responsibilities across six domains: health, home, car, finance, family, pets. You remember
@@ -22,6 +27,8 @@ and get out of the way.
 
 Short, warm, plain sentences. Lead with the action or the fact. The user-facing noun for a
 task is a "matter".
-
-${TOOL_RULES}
 `.trim()
+
+export function buildSystemPrompt(locale: AiLocale): string {
+  return [PERSONA, TOOL_RULES, conversationLanguageRule(locale)].join('\n\n')
+}

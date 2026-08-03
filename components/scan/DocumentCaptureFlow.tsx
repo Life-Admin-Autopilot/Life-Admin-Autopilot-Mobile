@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'framer-motion'
 import { X } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { SketchCameraGlyph, SketchCheckGlyph, SketchUploadGlyph } from '@/components/icons/sketch/flowGlyphs'
 import { ScanningDocumentGlyph } from '@/components/icons/sketch/ScanningDocumentGlyph'
@@ -74,6 +75,8 @@ interface DocumentCaptureFlowProps {
 }
 
 export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureFlowProps) {
+  const t = useTranslations('scan')
+  const tCommon = useTranslations('common')
   const reduced = useReducedMotion()
   // The parent's AnimatePresence flips this to false the moment a dismissal
   // starts. The backdrop needs it explicitly: a nested AnimatePresence
@@ -212,7 +215,7 @@ export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureF
           instead of flushing to the purple origin color mid-collapse. */}
       <motion.div
         role="dialog"
-        aria-label="Scan a document"
+        aria-label={t('header.scan')}
         initial={{
           top: originShape.top,
           left: originShape.left,
@@ -251,7 +254,7 @@ export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureF
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={tCommon('close')}
             // Fullscreen, this sits in the notch/Dynamic Island band unless it
             // is pushed past the top inset — the sheet phase never reaches
             // that high, so it keeps its plain 12px.
@@ -296,10 +299,13 @@ export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureF
               {phase === 'choose' ? (
                 <ChoosePhase capture={capture} fileInputRef={fileInputRef} disabled={!entrySettled} />
               ) : phase === 'uploading' ? (
-                <BusyPhase icon={<SketchUploadGlyph size={40} className="text-accent" />} label="Getting your document ready…" />
+                <BusyPhase
+                  icon={<SketchUploadGlyph size={40} className="text-accent" />}
+                  label={t('capture.uploading')}
+                />
               ) : phase === 'uploadFailed' ? (
                 <UploadFailedPhase
-                  message={capture.error ?? 'That upload did not go through.'}
+                  message={capture.error ?? t('capture.uploadFailed.fallback')}
                   onRetry={() => void capture.retryUpload()}
                   onStartOver={capture.dismissRetry}
                 />
@@ -331,23 +337,25 @@ function ChoosePhase({
   fileInputRef: React.RefObject<HTMLInputElement | null>
   disabled: boolean
 }) {
+  const t = useTranslations('scan')
+
   return (
     <div className="flex h-full flex-col gap-4">
       <div className="pe-8">
-        <span className="text-label uppercase text-accent">Scan a document</span>
-        <h2 className="font-display text-heading-md text-ink">Add a bill, letter, or form</h2>
+        <span className="text-label uppercase text-accent">{t('header.scan')}</span>
+        <h2 className="font-display text-heading-md text-ink">{t('capture.chooseTitle')}</h2>
       </div>
 
       <div className="flex flex-1 flex-col justify-center gap-3">
         <ChooseButton
           icon={<SketchCameraGlyph size={30} />}
-          label="Take a photo"
+          label={t('capture.takePhoto')}
           disabled={disabled || capture.busy}
           onClick={() => void capture.captureCamera()}
         />
         <ChooseButton
           icon={<SketchUploadGlyph size={30} />}
-          label="Choose a file"
+          label={t('capture.chooseFile')}
           disabled={disabled || capture.busy}
           onClick={capture.captureFile}
         />
@@ -392,24 +400,35 @@ function BusyPhase({ icon, label }: { icon: React.ReactNode; label: string }) {
   )
 }
 
-const PROCESSING_LINES = ['Reading your document…', 'Finding what matters…', 'Almost done…']
-
+// Built per render rather than hoisted to a module const — a const outside the
+// component cannot call a hook, and three reassuring lines that stay English
+// while the rest of the screen turns over is the most conspicuous place to miss.
 function ProcessingPhase() {
+  const t = useTranslations('scan')
+  const lines = [
+    t('capture.processing.reading'),
+    t('capture.processing.finding'),
+    t('capture.processing.almost'),
+  ]
   const [i, setI] = useState(0)
   useEffect(() => {
-    if (i >= PROCESSING_LINES.length - 1) return
+    if (i >= lines.length - 1) return
     const id = setTimeout(() => setI((n) => n + 1), 1800)
     return () => clearTimeout(id)
-  }, [i])
+    // `lines.length` is a constant 3; depending on the array itself would
+    // restart the timer on every render.
+  }, [i, lines.length])
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
       <ScanningDocumentGlyph size={80} className="text-accent" />
-      <p className="text-body text-ink-muted">{PROCESSING_LINES[i]}</p>
+      <p className="text-body text-ink-muted">{lines[i]}</p>
     </div>
   )
 }
 
 function SuccessPhase({ result, onDone }: { result: ReviewScanResult; onDone: () => void }) {
+  const t = useTranslations('scan')
+  const tCommon = useTranslations('common')
   const reduced = useReducedMotion()
   const count = result.tasks.length
   return (
@@ -423,14 +442,16 @@ function SuccessPhase({ result, onDone }: { result: ReviewScanResult; onDone: ()
       </motion.div>
       <div>
         <h2 className="font-display text-display-md text-ink">
-          {count === 0 ? 'All set.' : count === 1 ? '1 matter filed.' : `${count} matters filed.`}
+          {t('capture.success.title', { count })}
         </h2>
         <p className="mt-1 text-body text-ink-muted">
-          {count === 0 ? 'Nothing was kept from this scan.' : `${env.appName} will remind you when it counts.`}
+          {count === 0
+            ? t('capture.success.bodyEmpty')
+            : t('capture.success.body', { appName: env.appName })}
         </p>
       </div>
       <Button variant="solid" className="w-full max-w-xs" onClick={onDone}>
-        Done
+        {tCommon('done')}
       </Button>
     </div>
   )
@@ -448,20 +469,23 @@ function UploadFailedPhase({
   onRetry: () => void
   onStartOver: () => void
 }) {
+  const t = useTranslations('scan')
+  const tCommon = useTranslations('common')
+
   return (
     <div className="flex h-full flex-col gap-4">
       <div className="pe-8">
-        <span className="text-label uppercase text-danger">Didn&apos;t send</span>
-        <h2 className="font-display text-heading-md text-ink">Your document is still here</h2>
+        <span className="text-label uppercase text-danger">{t('capture.uploadFailed.eyebrow')}</span>
+        <h2 className="font-display text-heading-md text-ink">{t('capture.uploadFailed.title')}</h2>
       </div>
 
       <div className="flex flex-1 flex-col justify-center gap-3">
         <p className="text-body-sm text-ink-muted">{message}</p>
         <Button variant="solid" onClick={onRetry}>
-          Try again
+          {tCommon('tryAgain')}
         </Button>
         <Button variant="ghost" onClick={onStartOver}>
-          Pick a different document
+          {t('capture.uploadFailed.startOver')}
         </Button>
       </div>
     </div>
@@ -480,17 +504,17 @@ function ErrorPhase({
   onScanAgain: () => void
   onClose: () => void
 }) {
+  const t = useTranslations('scan')
+  const tCommon = useTranslations('common')
   const reprocess = useReprocessScannedDocument()
   const retryFailed = reprocess.error instanceof Error ? reprocess.error.message : null
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-      <p className="text-body text-ink">{doc.failureReason ?? "Couldn't read that document."}</p>
+      <p className="text-body text-ink">{doc.failureReason ?? t('capture.error.fallback')}</p>
 
       {doc.canRetry ? (
-        <p className="text-caption text-ink-muted">
-          Your scan is saved — we can read it again without you taking it again.
-        </p>
+        <p className="text-caption text-ink-muted">{t('capture.error.savedNote')}</p>
       ) : null}
 
       {retryFailed ? <p className="text-caption text-danger">{retryFailed}</p> : null}
@@ -503,15 +527,15 @@ function ErrorPhase({
             disabled={reprocess.isPending}
             onClick={() => reprocess.mutate(doc.id)}
           >
-            {reprocess.isPending ? 'Trying again…' : 'Try again'}
+            {reprocess.isPending ? t('capture.error.retrying') : tCommon('tryAgain')}
           </Button>
         ) : null}
         <div className="flex gap-2">
           <Button variant="outline" onClick={onScanAgain}>
-            Scan again
+            {t('capture.error.scanAgain')}
           </Button>
           <Button variant="ghost" onClick={onClose}>
-            Close
+            {tCommon('close')}
           </Button>
         </div>
       </div>

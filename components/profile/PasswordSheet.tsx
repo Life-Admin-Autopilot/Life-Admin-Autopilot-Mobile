@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -8,7 +9,7 @@ import { PasswordInput } from '@/components/ui/PasswordInput'
 import { Sheet } from '@/components/ui/Sheet'
 import { useResetOnOpen } from '@/hooks/useResetOnOpen'
 import { toast } from '@/lib/toast'
-import { REAUTH_MESSAGES, translateBackendError } from '@/lib/translateBackendError'
+import { reauthMessages, translateBackendError } from '@/lib/translateBackendError'
 import { useChangePassword } from '@/queries/security'
 
 const MIN_LENGTH = 8
@@ -22,6 +23,9 @@ export function PasswordSheet({
   onClose: () => void
   trigger?: DOMRect | null
 }) {
+  const t = useTranslations('profile.password')
+  const tCommon = useTranslations('common')
+  const tGroups = useTranslations('profile.groups')
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -48,11 +52,11 @@ export function PasswordSheet({
       { currentPassword: current, newPassword: next },
       {
         onSuccess: () => {
-          toast.success('Password changed.')
+          toast.success(t('saved'))
           onClose()
         },
         onError: (err) =>
-          toast.error(translateBackendError(err, "That didn't save.", REAUTH_MESSAGES)),
+          toast.error(translateBackendError(err, tCommon('notSaved'), reauthMessages())),
       },
     )
   }
@@ -63,8 +67,8 @@ export function PasswordSheet({
       onClose={onClose}
       trigger={trigger}
       height={520}
-      eyebrow="Security"
-      title="Change password"
+      eyebrow={tGroups('security')}
+      title={t('title')}
       footer={
         <Button
           variant="solid"
@@ -72,47 +76,44 @@ export function PasswordSheet({
           disabled={!ready || changePassword.isPending}
           onClick={submit}
         >
-          {changePassword.isPending ? 'Saving…' : 'Change password'}
+          {changePassword.isPending ? tCommon('saving') : t('action')}
         </Button>
       }
     >
       <div className="flex flex-col gap-5">
-        <Field label="Current password">
+        <Field label={t('currentLabel')}>
           <PasswordInput
             autoComplete="current-password"
-            placeholder="Your current password"
+            placeholder={t('currentPlaceholder')}
             value={current}
             onChange={(e) => setCurrent(e.target.value)}
           />
         </Field>
 
         <Field
-          label="New password"
-          hint={`At least ${MIN_LENGTH} characters.`}
+          label={t('newLabel')}
+          hint={t('newHint', { min: MIN_LENGTH })}
           error={
             tooShort
-              ? `At least ${MIN_LENGTH} characters.`
+              ? t('newHint', { min: MIN_LENGTH })
               : sameAsOld
-                ? 'Pick something different from your current password.'
+                ? t('sameAsCurrent')
                 : undefined
           }
         >
           <PasswordInput
             autoComplete="new-password"
-            placeholder={`At least ${MIN_LENGTH} characters`}
+            placeholder={t('newPlaceholder', { min: MIN_LENGTH })}
             value={next}
             onChange={(e) => setNext(e.target.value)}
             aria-invalid={tooShort || sameAsOld || undefined}
           />
         </Field>
 
-        <Field
-          label="Confirm new password"
-          error={mismatch ? "Those don't match." : undefined}
-        >
+        <Field label={t('confirmLabel')} error={mismatch ? t('mismatch') : undefined}>
           <PasswordInput
             autoComplete="new-password"
-            placeholder="Type it again"
+            placeholder={t('confirmPlaceholder')}
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             aria-invalid={mismatch || undefined}

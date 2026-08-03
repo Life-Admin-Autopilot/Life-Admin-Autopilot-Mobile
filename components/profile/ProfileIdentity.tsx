@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { ArrowRight, BadgeCheck } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { Pill } from '@/components/ui/Pill'
 import ghostPose from '@/assets/ghost/logo-pose-2.png'
@@ -30,6 +31,7 @@ export function ProfileIdentity({
   /** Opens the email sheet on its code step. Receives the trigger's rect. */
   onConfirmEmail: (rect: DOMRect) => void
 }) {
+  const t = useTranslations('profile')
   const verified = Boolean(user.emailVerifiedAt)
   const pro = user.subscription?.tier === 'pro'
 
@@ -52,16 +54,16 @@ export function ProfileIdentity({
       ) : (
         // No name yet is a normal state, not a blank — say so plainly rather
         // than rendering an empty heading.
-        <h1 className="font-display text-display-md text-ink-muted">No name yet</h1>
+        <h1 className="font-display text-display-md text-ink-muted">{t('noName')}</h1>
       )}
 
       <div className="flex flex-wrap items-center justify-center gap-2">
         {verified ? (
           <Pill tone="success" icon={<BadgeCheck size={14} />}>
-            Verified
+            {t('verified')}
           </Pill>
         ) : null}
-        <Pill tone={pro ? 'accent' : 'field'}>{pro ? 'Pro' : 'Free plan'}</Pill>
+        <Pill tone={pro ? 'accent' : 'field'}>{pro ? t('planPro') : t('planFree')}</Pill>
       </div>
 
       {!verified ? (
@@ -70,16 +72,17 @@ export function ProfileIdentity({
           onClick={(e) => onConfirmEmail(e.currentTarget.getBoundingClientRect())}
           className="mt-1 flex w-full items-center gap-3.5 rounded-2xl bg-accent-soft px-4 py-3.5 text-start transition-transform active:scale-[0.99]"
         >
-          <span className="min-w-0 flex-1 text-body text-ink">
-            Confirm your email so we can reach you about your matters.
-          </span>
+          <span className="min-w-0 flex-1 text-body text-ink">{t('confirmEmailPrompt')}</span>
           <ArrowRight size={17} className="shrink-0 text-accent" />
         </button>
       ) : null}
 
       {user.pendingEmail ? (
         <p className="text-body-sm text-ink-muted">
-          Waiting on confirmation for <span className="text-ink">{user.pendingEmail}</span>.
+          {t.rich('pendingEmail', {
+            email: user.pendingEmail,
+            strong: (chunks: React.ReactNode) => <span className="text-ink">{chunks}</span>,
+          })}
         </p>
       ) : null}
     </section>

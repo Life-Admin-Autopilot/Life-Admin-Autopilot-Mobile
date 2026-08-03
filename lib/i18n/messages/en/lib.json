@@ -1,0 +1,35 @@
+{
+  "estimate": {
+    "minutes": "{count, plural, other {#m}}",
+    "hours": "{count, plural, other {#h}}",
+    "hoursAndMinutes": "{hours} {minutes}",
+    "approx": "≈{duration}",
+    "range": "{min}–{max}",
+    "about": "about {duration}"
+  },
+  "scanTime": {
+    "yesterday": "Yesterday"
+  },
+  "mic": {
+    "denied": "{app} needs microphone access. Enable it in Settings → Privacy & Security → Microphone.",
+    "noDevice": "No microphone found. Connect one and try again.",
+    "insecureContext": "Voice needs a secure connection. This dev build is served over plain http, so the browser blocks the microphone.",
+    "unsupported": "This device or browser cannot record audio.",
+    "unknown": "Could not start recording. Try again."
+  },
+  "transcribe": {
+    "cancelled": "Cancelled."
+  },
+  "export": {
+    "savedToFiles": "Saved to Files.",
+    "downloaded": "Downloaded."
+  },
+  "clarifications": {
+    "answerNotSaved": "That answer did not save."
+  },
+  "bell": {
+    "title": "Notifications",
+    "empty": "Nothing needs you right now.",
+    "unreadOverflow": "9+"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "title": "Language",
+  "eyebrow": "Choose how Kitto speaks to you",
+  "description": "Changes the whole app, including what Kitto writes back.",
+  "systemDefault": "Match device",
+  "onThisDevice": "Follow the device",
+  "available": "Languages",
+  "save": "Save language",
+  "saved": "Language saved."
+}

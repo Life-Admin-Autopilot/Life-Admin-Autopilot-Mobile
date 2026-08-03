@@ -1,0 +1,29 @@
+{
+  "selection": {
+    "prompt": "اختر {subject}",
+    "count": "{count, plural, zero {لم يتم تحديد شيء} one {تم تحديد واحد} two {تم تحديد اثنين} few {تم تحديد #} many {تم تحديد #} other {تم تحديد #}}",
+    "deselectAll": "إلغاء تحديد الكل"
+  },
+  "theme": {
+    "groupLabel": "المظهر",
+    "light": "فاتح",
+    "dark": "داكن",
+    "system": "حسب النظام",
+    "switchToLight": "التبديل إلى المظهر الفاتح",
+    "switchToDark": "التبديل إلى المظهر الداكن"
+  },
+  "password": {
+    "show": "إظهار كلمة المرور",
+    "hide": "إخفاء كلمة المرور"
+  },
+  "code": {
+    "groupLabel": "رمز التأكيد",
+    "digit": "الخانة {position}"
+  },
+  "settings": {
+    "working": "جارٍ العمل…"
+  },
+  "deadline": {
+    "late": "{duration} من التأخير"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "listening": "Listening",
+  "readyToSend": "Ready to send",
+  "transcribing": "Transcribing",
+  "transcribingEllipsis": "Transcribing…",
+  "orderFollows": "Order follows",
+  "somethingWrong": "Something went wrong",
+  "tooShort": "Too short — nothing captured.",
+  "nothingCaptured": "Nothing was captured.",
+  "transcribeFailed": "Could not transcribe that.",
+  "responds": "{app} responds"
+}

@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -12,7 +13,7 @@ import { useAutoFocus } from '@/hooks/useAutoFocus'
 import { useResetOnOpen } from '@/hooks/useResetOnOpen'
 import type { AuthUser } from '@/lib/auth/sessionStore'
 import { toast } from '@/lib/toast'
-import { REAUTH_MESSAGES, translateBackendError } from '@/lib/translateBackendError'
+import { reauthMessages, translateBackendError } from '@/lib/translateBackendError'
 import {
   useCancelEmailChange,
   useConfirmEmailChange,
@@ -46,6 +47,9 @@ export function EmailSheet({
   mode: EmailSheetMode
   user: AuthUser
 }) {
+  const t = useTranslations('profile.email')
+  const tProfile = useTranslations('profile')
+  const tGroups = useTranslations('profile.groups')
   const [step, setStep] = useState<Step>('form')
   const [newEmail, setNewEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -90,7 +94,7 @@ export function EmailSheet({
           setPassword('')
         },
         onError: (err) =>
-          toast.error(translateBackendError(err, "That didn't work.", REAUTH_MESSAGES)),
+          toast.error(translateBackendError(err, t('didntWork'), reauthMessages())),
       },
     )
   }
@@ -99,13 +103,13 @@ export function EmailSheet({
     if (value.length !== CODE_LENGTH) return
     const onError = (err: unknown) => {
       setCode('')
-      toast.error(translateBackendError(err, 'That code did not work.'))
+      toast.error(translateBackendError(err, t('codeRejected')))
     }
 
     if (mode === 'verify') {
       confirmVerification.mutate(value, {
         onSuccess: () => {
-          toast.success('Email confirmed.')
+          toast.success(t('confirmed'))
           onClose()
         },
         onError,
@@ -115,7 +119,7 @@ export function EmailSheet({
 
     confirmChange.mutate(value, {
       onSuccess: (data) => {
-        toast.success(`Email changed to ${data.user.email}.`)
+        toast.success(t('changed', { email: data.user.email }))
         onClose()
       },
       onError,
@@ -125,8 +129,8 @@ export function EmailSheet({
   const resend = () => {
     if (mode === 'verify') {
       sendVerification.mutate(undefined, {
-        onSuccess: () => toast.info('New code sent.'),
-        onError: (err) => toast.error(translateBackendError(err, 'We could not send that code.')),
+        onSuccess: () => toast.info(t('codeSent')),
+        onError: (err) => toast.error(translateBackendError(err, tProfile('codeFailed'))),
       })
       return
     }
@@ -137,9 +141,9 @@ export function EmailSheet({
     requestChange.mutate(
       { newEmail: address },
       {
-        onSuccess: () => toast.info('New code sent.'),
+        onSuccess: () => toast.info(t('codeSent')),
         onError: (err) =>
-          toast.error(translateBackendError(err, 'We could not send that code.', REAUTH_MESSAGES)),
+          toast.error(translateBackendError(err, tProfile('codeFailed'), reauthMessages())),
       },
     )
   }
@@ -147,10 +151,10 @@ export function EmailSheet({
   const abandon = () => {
     cancelChange.mutate(undefined, {
       onSuccess: () => {
-        toast.info('Email change cancelled.')
+        toast.info(t('cancelled'))
         onClose()
       },
-      onError: (err) => toast.error(translateBackendError(err, "That didn't cancel.")),
+      onError: (err) => toast.error(translateBackendError(err, t('notCancelled'))),
     })
   }
 
@@ -163,8 +167,8 @@ export function EmailSheet({
       onClose={onClose}
       trigger={trigger}
       height={step === 'code' ? 400 : 420}
-      eyebrow="Account"
-      title={mode === 'verify' ? 'Confirm your email' : 'Change your email'}
+      eyebrow={tGroups('account')}
+      title={mode === 'verify' ? t('verifyTitle') : t('changeTitle')}
       footer={
         step === 'form' ? (
           <Button
@@ -173,7 +177,7 @@ export function EmailSheet({
             disabled={!newEmail.trim() || (needsPassword && !password) || sending}
             onClick={submitForm}
           >
-            {sending ? 'Sending…' : 'Send code'}
+            {sending ? t('sending') : t('sendCode')}
           </Button>
         ) : (
           <div className="flex flex-col gap-2">
@@ -183,7 +187,7 @@ export function EmailSheet({
               disabled={code.length !== CODE_LENGTH || confirming}
               onClick={() => submitCode(code)}
             >
-              {confirming ? 'Checking…' : 'Confirm'}
+              {confirming ? t('checking') : t('confirm')}
             </Button>
             <div className="flex items-center justify-between">
               <button
@@ -192,7 +196,7 @@ export function EmailSheet({
                 disabled={sending}
                 className="rounded-pill px-3 py-1.5 text-caption text-accent hover:bg-accent-soft disabled:opacity-50"
               >
-                {sending ? 'Sending…' : 'Send a new code'}
+                {sending ? t('sending') : t('sendNewCode')}
               </button>
               {mode === 'change' && user.pendingEmail ? (
                 <button
@@ -211,7 +215,7 @@ export function EmailSheet({
     >
       {step === 'form' ? (
         <div className="flex flex-col gap-5">
-          <Field label="New email" hint={`You currently sign in as ${user.email}.`}>
+          <Field label={t('newLabel')} hint={t('currentHint', { email: user.email })}>
             <Input
               type="email"
               inputMode="email"
@@ -219,17 +223,17 @@ export function EmailSheet({
               // Not `autoFocus`: that scrolls the sheet's body to the input and
               // hides this field's own label. See useAutoFocus.
               ref={focusEmail}
-              placeholder="you@example.com"
+              placeholder={t('placeholder')}
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
             />
           </Field>
 
           {needsPassword ? (
-            <Field label="Password" hint="Confirms it's you before your sign-in address moves.">
+            <Field label={t('passwordLabel')} hint={t('passwordHint')}>
               <PasswordInput
                 autoComplete="current-password"
-                placeholder="Your password"
+                placeholder={t('passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />

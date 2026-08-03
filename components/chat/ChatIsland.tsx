@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
@@ -36,6 +37,7 @@ export function ChatIsland() {
 }
 
 function ChatIslandSurface() {
+  const t = useTranslations('chat')
   const [open, setOpen] = useState(false)
   const state: 'fab' | 'panel' = open ? 'panel' : 'fab'
   const { accent, surface } = useMorphColors()
@@ -76,7 +78,7 @@ function ChatIslandSurface() {
             onClick={() => setOpen(true)}
             className="rounded-pill bg-surface px-3.5 py-2 text-label uppercase text-ink shadow-elevated transition-colors hover:bg-surface-sunken"
           >
-            Ask {env.appName}
+            {t('ask', { app: env.appName })}
           </button>
         ) : null}
       <MorphSurface
@@ -84,7 +86,9 @@ function ChatIslandSurface() {
         shapes={shapes}
         onClick={open ? undefined : () => setOpen(true)}
         role={open ? 'dialog' : 'button'}
-        aria-label={open ? `${env.appName} assistant` : `Ask ${env.appName}`}
+        aria-label={
+          open ? t('assistant', { app: env.appName }) : t('ask', { app: env.appName })
+        }
         className={`shadow-2xl ${open ? '' : 'cursor-pointer ring-2 ring-accent/40'}`}
       >
         {state === 'fab' ? (
@@ -110,6 +114,9 @@ function ChatIslandSurface() {
 }
 
 function ChatPanel({ onClose }: { onClose: () => void }) {
+  const tLib = useTranslations('lib')
+  const tVoice = useTranslations('voice')
+  const tChat = useTranslations('chat')
   const {
     status,
     messages,
@@ -150,7 +157,7 @@ function ChatPanel({ onClose }: { onClose: () => void }) {
   // button looking like it simply did nothing.
   const startRecording = async () => {
     const failure = await recorder.start()
-    if (failure) toast.error(micFailureMessage(failure, env.appName))
+    if (failure) toast.error(micFailureMessage(failure, env.appName, tLib))
   }
 
   const stopAndSend = async () => {
@@ -160,9 +167,9 @@ function ChatPanel({ onClose }: { onClose: () => void }) {
     try {
       const text = await transcribeAudio(blob)
       if (text.trim()) void ask(text.trim(), timezone)
-      else toast.info('Nothing was captured.')
+      else toast.info(tVoice('nothingCaptured'))
     } catch (err) {
-      toast.error(translateBackendError(err, 'Could not transcribe that.'))
+      toast.error(translateBackendError(err, tVoice('transcribeFailed')))
     } finally {
       setTranscribing(false)
     }
@@ -180,14 +187,14 @@ function ChatPanel({ onClose }: { onClose: () => void }) {
         <div className="flex items-center gap-1">
           <button
             onClick={() => void clear()}
-            aria-label="Clear conversation"
+            aria-label={tChat('clearConversation')}
             className="grid size-7 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
           >
             <RotateCcw size={15} />
           </button>
           <button
             onClick={onClose}
-            aria-label="Close assistant"
+            aria-label={tChat('closeAssistant')}
             className="grid size-7 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
           >
             <X size={16} />

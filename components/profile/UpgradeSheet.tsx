@@ -1,6 +1,7 @@
 'use client'
 
 import { Check } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { Sheet } from '@/components/ui/Sheet'
 import { useAiQuota } from '@/queries/ai'
@@ -39,6 +40,8 @@ export function UpgradeSheet({
   onClose: () => void
   trigger?: DOMRect | null
 }) {
+  const t = useTranslations('profile.plan')
+  const tGroups = useTranslations('profile.groups')
   const aiQuota = useAiQuota()
   const scanQuota = useDocumentScanQuota()
 
@@ -51,29 +54,29 @@ export function UpgradeSheet({
       onClose={onClose}
       trigger={trigger}
       height={440}
-      eyebrow="Plan"
-      title="What Pro adds"
+      eyebrow={tGroups('plan')}
+      title={t('proTitle')}
     >
       <ul className="flex flex-col divide-y divide-border">
         <li className="flex items-center gap-3 pb-2">
           <span className="min-w-0 flex-1" />
-          <span className="w-16 shrink-0 text-end text-label uppercase text-ink-muted">Free</span>
+          <span className="w-16 shrink-0 text-end text-label uppercase text-ink-muted">{t('free')}</span>
           <span className="w-16 shrink-0 text-end text-label uppercase text-gold">Pro</span>
         </li>
         <Row
-          label="AI questions a day"
+          label={t('aiPerDay')}
           free={freeAi ? String(freeAi) : '—'}
           pro={String(PRO_AI_DAILY)}
         />
         <Row
-          label="Document scans a month"
+          label={t('scansPerMonth')}
           free={freeScans ? String(freeScans) : '—'}
           pro={String(PRO_SCANS_MONTHLY)}
         />
       </ul>
 
       <ul className="mt-4 flex flex-col gap-2">
-        {['Everything in Free', 'Longer voice notes', 'Priority document processing'].map((item) => (
+        {[t('perkEverything'), t('perkVoice'), t('perkPriority')].map((item) => (
           <li key={item} className="flex items-center gap-2 text-body-sm text-ink-muted">
             <Check size={15} className="shrink-0 text-gold" />
             {item}

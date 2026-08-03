@@ -1,0 +1,35 @@
+{
+  "estimate": {
+    "minutes": "{count, plural, zero {# دقيقة} one {دقيقة} two {دقيقتان} few {# دقائق} many {# دقيقة} other {# دقيقة}}",
+    "hours": "{count, plural, zero {# ساعة} one {ساعة} two {ساعتان} few {# ساعات} many {# ساعة} other {# ساعة}}",
+    "hoursAndMinutes": "{hours} و{minutes}",
+    "approx": "{duration} تقريبًا",
+    "range": "{min} – {max}",
+    "about": "{duration} تقريبًا"
+  },
+  "scanTime": {
+    "yesterday": "أمس"
+  },
+  "mic": {
+    "denied": "يحتاج {app} إلى إذن الميكروفون. فعّله من الإعدادات ← الخصوصية والأمان ← الميكروفون.",
+    "noDevice": "لا يوجد ميكروفون. وصّل واحدًا وحاول مرة أخرى.",
+    "insecureContext": "الصوت يحتاج إلى اتصال آمن. نسخة التطوير هذه تُقدَّم عبر http عادي، فيمنع المتصفّح الميكروفون.",
+    "unsupported": "هذا الجهاز أو المتصفّح لا يستطيع تسجيل الصوت.",
+    "unknown": "تعذّر بدء التسجيل. حاول مرة أخرى."
+  },
+  "transcribe": {
+    "cancelled": "أُلغي."
+  },
+  "export": {
+    "savedToFiles": "حُفظ في تطبيق الملفات.",
+    "downloaded": "تم التنزيل."
+  },
+  "clarifications": {
+    "answerNotSaved": "لم تُحفظ هذه الإجابة."
+  },
+  "bell": {
+    "title": "الإشعارات",
+    "empty": "لا شيء يحتاجك الآن.",
+    "unreadOverflow": "+9"
+  }
+}

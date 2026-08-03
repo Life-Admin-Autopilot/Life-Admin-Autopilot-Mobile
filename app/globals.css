@@ -24,54 +24,32 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * SF Arabic — Apple's system Arabic face, reached by local() only.
+ * SF Arabic is reached through `-apple-system`, NOT through local().
  *
- * Apple's font licence forbids redistributing SF as a webfont, so there is no
- * url() here and never can be. local() is legitimate: it asks for a font the
- * device already has and downloads nothing. When the device does not have it
- * (Android, every desktop browser that isn't Safari-on-macOS), all sources fail
- * to match, this @font-face resolves to nothing, and the character falls
- * through to IBM Plex Sans Arabic — which is why that OFL face must stay in
- * every stack.
+ * There used to be an @font-face here declaring an "SFArabic" family from
+ * local("SF Arabic") / local(".SFArabic-Regular") / local("Geeza Pro"). It did
+ * not work, and could not: WebKit restricts local() to a curated allowlist of
+ * web-exposed fonts, and Apple's system faces are deliberately not on it — the
+ * dot-prefixed PostScript names have been unreachable for even longer. Every SF
+ * source in that list silently failed to match.
  *
- * Several aliases because the name that resolves is not stable across OS
- * versions: "SF Arabic" is the human-readable family, ".SFArabic-Regular" the
- * dot-prefixed PostScript name iOS uses internally, and "Geeza Pro" the
- * pre-SF-Arabic system face still present on older iOS. WKWebView blocks
- * dot-prefixed lookups in some versions — hence the belt-and-braces list, and
- * hence this must be verified on a device rather than assumed.
+ * The one entry that DID match was `local("Geeza Pro")` — the pre-SF system
+ * Arabic face. So the effect of asking for SF Arabic the wrong way was to render
+ * Arabic in the old system font, which is exactly what it looked like.
  *
- * unicode-range confines the face to Arabic script. Without it the browser
- * would consider SF Arabic a candidate for Latin text too and quietly override
- * Nunito on iOS.
+ * The supported route is the system-font keyword. On iOS and macOS
+ * `-apple-system` resolves to San Francisco, and WebKit's own per-script
+ * fallback serves Arabic text from SF Arabic without it ever being named. So the
+ * keyword goes in the Arabic slot of each stack below, and this file declares no
+ * face at all. Apple's licence is still satisfied: nothing is redistributed and
+ * nothing is downloaded.
+ *
+ * One trade this makes, deliberately: the old @font-face was confined to Arabic
+ * by unicode-range, and a bare keyword cannot be. A Latin character missing from
+ * Fraunces/Nunito now falls to SF rather than to Georgia/ui-sans. That is a
+ * better fallback than the one it replaces, and it only applies to glyphs the
+ * subsetted Latin faces do not carry.
  */
-@font-face {
-  font-family: "SFArabic";
-  src:
-    local("SF Arabic"),
-    local("SFArabic-Regular"),
-    local(".SFArabic-Regular"),
-    local("Geeza Pro");
-  font-weight: 400 500;
-  font-style: normal;
-  font-display: swap;
-  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF,
-    U+10E60-10E7F, U+1EE00-1EEFF;
-}
-
-@font-face {
-  font-family: "SFArabic";
-  src:
-    local("SF Arabic Semibold"),
-    local("SFArabic-Semibold"),
-    local(".SFArabic-Semibold"),
-    local("Geeza Pro Bold");
-  font-weight: 600 800;
-  font-style: normal;
-  font-display: swap;
-  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF,
-    U+10E60-10E7F, U+1EE00-1EEFF;
-}
 
 @theme inline {
   /* shadcn semantic colors → Kitto CSS vars (defined in :root) */
@@ -100,24 +78,42 @@
    * Each stack is Latin-first, then Arabic. That ordering is the whole
    * mechanism: CSS font fallback runs PER CHARACTER, so a Latin letter is
    * served by Fraunces/Nunito (which have it) and an Arabic letter falls
-   * through to SFArabic → Plex Arabic (because Fraunces/Nunito have no Arabic
-   * glyphs at all). One stack renders a mixed "Renew جواز السفر" string
+   * through to -apple-system → Plex Arabic (because Fraunces/Nunito have no
+   * Arabic glyphs at all). One stack renders a mixed "Renew جواز السفر" string
    * correctly with no conditional CSS and no locale class on the root.
    *
-   * `SFArabic` is a local()-only face declared below — present on iOS/macOS,
-   * silently absent everywhere else.
+   * `-apple-system` is SF on Apple platforms, and WebKit serves Arabic from SF
+   * Arabic through it — see the note at the top of this file for why it is a
+   * keyword and not a named face. It resolves to nothing off Apple platforms, so
+   * Plex Arabic sits behind it and is what Android and Windows actually get;
+   * that OFL face has to stay in every stack.
+   *
+   * `system-ui` follows it for the same reason on macOS Chrome and any browser
+   * that honours the standard keyword but not Apple's prefixed one.
+   *
+   * THE LATIN FACES ARE NAMED LITERALLY, not read from their next/font variable,
+   * and that is deliberate. `var(--font-nunito)` expands to
+   * `"Nunito", "Nunito Fallback"`, where the fallback is `src: local(Arial)` —
+   * and Arial carries full Arabic on Apple platforms. Every Arabic character was
+   * being claimed there, two slots before anything Arabic-aware was consulted.
+   * `adjustFontFallback: false` is the documented way to drop it and Turbopack
+   * ignores it (Next 16.2.9), so the only reliable fix is to leave the fallback
+   * out of the stack by naming the family directly. next/font/google does not
+   * hash these names — the built CSS declares `font-family: Nunito` verbatim —
+   * and scripts/check-font-stacks.mjs fails the build if that ever changes.
    *
    * Note --font-display: Fraunces has no Arabic, so Arabic headlines render in
    * the same face as Arabic body text. The serif/sans pairing does not survive
    * translation; in Arabic the hierarchy is carried by scale and weight alone,
    * which docs/aesthetic.md already names as the primary device.
    */
-  --font-display: var(--font-fraunces), "SFArabic", var(--font-plex-arabic), ui-serif, Georgia,
+  --font-display: "Fraunces", -apple-system, system-ui, var(--font-plex-arabic), ui-serif, Georgia,
     serif;
-  --font-serif: var(--font-fraunces), "SFArabic", var(--font-plex-arabic), ui-serif, Georgia, serif;
-  --font-sans: var(--font-nunito), "SFArabic", var(--font-plex-arabic), ui-rounded, ui-sans-serif,
-    system-ui, sans-serif;
-  --font-wordmark: var(--font-nunito), "SFArabic", var(--font-plex-arabic), ui-rounded,
+  --font-serif: "Fraunces", -apple-system, system-ui, var(--font-plex-arabic), ui-serif, Georgia,
+    serif;
+  --font-sans: "Nunito", -apple-system, system-ui, var(--font-plex-arabic), ui-rounded,
+    ui-sans-serif, sans-serif;
+  --font-wordmark: "Nunito", -apple-system, system-ui, var(--font-plex-arabic), ui-rounded,
     ui-sans-serif, sans-serif;
 
   /* Radius — nothing sharp: everything is a pill or a large round */

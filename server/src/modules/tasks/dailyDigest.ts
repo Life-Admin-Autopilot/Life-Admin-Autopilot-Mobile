@@ -11,6 +11,8 @@ import {
   type DailyDigestCounts,
   type DailyDigestPayload,
 } from '../../models/DailyDigest'
+import type { AiLocale } from '../ai/promptLanguage'
+import { getUserAiLocale } from '../ai/userLocale'
 import { keepRealThemes, writeDigestProse } from './dailyDigestProse'
 import { findDuplicates } from './summarize'
 import { dayBoundaries, toUserObjectId } from './taskQuery'
@@ -123,6 +125,7 @@ async function readSourceState(
   uid: Types.ObjectId,
   localDate: string,
   now: Date,
+  locale: AiLocale,
 ): Promise<SourceState> {
   const [tasks, clarifications, scans] = await Promise.all([
     tally(Task, { userId: uid, ...notDeleted() }),
@@ -134,7 +137,10 @@ async function readSourceState(
     tally(ScannedDocument, { userId: uid, status: 'ready_for_review' }),
   ])
 
-  const parts = [localDate, tasks, clarifications, scans]
+  // The locale belongs in the fingerprint, not beside it: switching language
+  // changes what the row should say without touching a single matter, so nothing
+  // else here would move and the old sentence would be served all day.
+  const parts = [localDate, locale, tasks, clarifications, scans]
     .map((p) =>
       typeof p === 'string' ? p : `${p.n}:${p.updated ? p.updated.toISOString() : '-'}`,
     )
@@ -334,8 +340,10 @@ export async function buildDailyDigest(
   const uid = toUserObjectId(args.userId)
   const localDate = localDateKey(now, timezone)
 
+  const locale = await getUserAiLocale(String(uid))
+
   const [source, cached] = await Promise.all([
-    readSourceState(uid, localDate, now),
+    readSourceState(uid, localDate, now, locale),
     DailyDigest.findOne({ userId: uid, localDate }).lean(),
   ])
 
@@ -359,7 +367,12 @@ export async function buildDailyDigest(
   // carried: a sentence about yesterday presented as today is a lie, whereas a
   // plain count is merely plain.
   const poolIds = new Set(computed.pool.map((row) => String(row._id)))
-  const themes = keepRealThemes(cached?.payload.themes ?? [], poolIds)
+  // Carried forward only within one language. Themes survive a rebuild because
+  // stale wording beats an empty strip, but wording from the language the user
+  // just left is not stale — it is wrong, and it sits directly under a headline
+  // that already switched.
+  const carried = cached?.locale === locale ? (cached?.payload.themes ?? []) : []
+  const themes = keepRealThemes(carried, poolIds)
 
   const payload: DailyDigestPayload = {
     localDate,
@@ -375,7 +388,7 @@ export async function buildDailyDigest(
   try {
     await DailyDigest.findOneAndUpdate(
       { userId: uid, localDate },
-      { $set: { sourceHash: source.hash, generatedAt: now, payload } },
+      { $set: { sourceHash: source.hash, locale, generatedAt: now, payload } },
       { upsert: true },
     )
   } catch (err: unknown) {
@@ -385,7 +398,9 @@ export async function buildDailyDigest(
     logger.warn({ err }, 'daily-digest:cache-write-failed')
   }
 
-  trackProse(refineProse({ uid, localDate, sourceHash: source.hash, pool: computed.pool, now }))
+  trackProse(
+    refineProse({ uid, localDate, sourceHash: source.hash, pool: computed.pool, now, locale }),
+  )
 
   return payload
 }
@@ -424,10 +439,11 @@ async function refineProse(args: {
   sourceHash: string
   pool: Record<string, unknown>[]
   now: Date
+  locale: AiLocale
 }): Promise<void> {
-  const { uid, localDate, sourceHash, pool, now } = args
+  const { uid, localDate, sourceHash, pool, now, locale } = args
   try {
-    const prose = await writeDigestProse({ userId: String(uid), pool, now })
+    const prose = await writeDigestProse({ userId: String(uid), pool, now, locale })
     if (!prose) return
 
     const set: Record<string, unknown> = { 'payload.headline': prose.headline }

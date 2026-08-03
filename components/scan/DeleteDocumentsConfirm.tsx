@@ -1,10 +1,12 @@
 'use client'
 
 import { AlertTriangle } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Sheet } from '@/components/ui/Sheet'
+import { useIntlTag } from '@/lib/i18n/localeStore'
 import { formatScanTime } from '@/lib/scanTime'
 import type { ScannedDocument } from '@/queries/documentScans'
 
@@ -35,6 +37,10 @@ export function DeleteDocumentsConfirm({
   onConfirm: () => void
   onClose: () => void
 }) {
+  const t = useTranslations('scan')
+  const tCommon = useTranslations('common')
+  const tLib = useTranslations('lib')
+  const intlTag = useIntlTag()
   const [showAll, setShowAll] = useState(false)
 
   // The caller clears the selection on the same tick it closes this, so hold
@@ -58,9 +64,9 @@ export function DeleteDocumentsConfirm({
       onClose={onClose}
       trigger={trigger}
       height={showAll ? 540 : unreviewed > 0 ? 330 : 260}
-      eyebrow="This cannot be undone"
+      eyebrow={tCommon('cannotBeUndone')}
       eyebrowTone="danger"
-      title={count === 1 ? 'Delete 1 document?' : `Delete ${count} documents?`}
+      title={t('delete.title', { count })}
       footer={
         <div className="flex items-center justify-end gap-2">
           <button
@@ -68,39 +74,37 @@ export function DeleteDocumentsConfirm({
             onClick={onClose}
             className="rounded-pill px-3 py-1.5 text-caption text-ink-subtle hover:bg-surface-sunken hover:text-ink"
           >
-            Cancel
+            {tCommon('cancel')}
           </button>
           <Button
             className="h-8 gap-1 bg-danger px-4 text-caption text-accent-ink hover:bg-danger/90"
             disabled={pending || count === 0}
             onClick={onConfirm}
           >
-            {pending ? 'Deleting…' : `Delete ${count}`}
+            {pending ? t('delete.deleting') : t('delete.confirm', { count })}
           </Button>
         </div>
       }
     >
-      <p className="text-body-sm text-ink">
-        The original {count === 1 ? 'scan' : 'scans'} will be permanently removed.
-      </p>
+      <p className="text-body-sm text-ink">{t('delete.originals', { count })}</p>
 
+      {/* The counts used to be their own <span> so the digit could be bolder
+          than the sentence around it. They are inside the ICU message now —
+          Arabic puts the number in a different place in the sentence, and a
+          number lifted out of the message is a number the translator cannot
+          move. `tabular` moves to the whole line instead. */}
       {unreviewed > 0 ? (
         <ul className="mt-3 flex flex-col gap-1.5 rounded-md bg-warning-soft px-3 py-2.5">
           <li className="flex items-start gap-2 text-caption text-warning">
             <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-            <span>
-              <span className="tabular font-medium">{unreviewed}</span>{' '}
-              {unreviewed === 1 ? 'item has' : 'items have'} not been reviewed yet and will be lost.
-            </span>
+            <span className="tabular">{t('delete.unreviewed', { count: unreviewed })}</span>
           </li>
         </ul>
       ) : null}
 
       {filed > 0 ? (
-        <p className="mt-3 text-caption text-ink-subtle">
-          <span className="tabular">{filed}</span>{' '}
-          {filed === 1 ? 'matter' : 'matters'} already filed from{' '}
-          {count === 1 ? 'this document' : 'these documents'} will stay in your list.
+        <p className="mt-3 text-caption tabular text-ink-subtle">
+          {t('delete.filedStay', { filed, count })}
         </p>
       ) : null}
 
@@ -110,7 +114,7 @@ export function DeleteDocumentsConfirm({
           onClick={() => setShowAll((v) => !v)}
           className="text-caption text-accent"
         >
-          {showAll ? 'Hide' : `Preview ${count}`}
+          {showAll ? t('delete.hide') : t('delete.preview', { count })}
         </button>
         {showAll ? (
           <ul className="mt-2 max-h-52 overflow-y-auto rounded-xl bg-surface-sunken">
@@ -120,10 +124,10 @@ export function DeleteDocumentsConfirm({
                 className="flex items-center justify-between gap-3 border-b border-border px-3 py-2 last:border-b-0"
               >
                 <span className="truncate text-body-sm text-ink">
-                  {doc.documentTitle ?? doc.documentSummary ?? 'Untitled scan'}
+                  {doc.documentTitle ?? doc.documentSummary ?? t('delete.untitledScan')}
                 </span>
                 <span className="shrink-0 text-caption tabular text-ink-subtle">
-                  {formatScanTime(doc.createdAt)}
+                  {formatScanTime(doc.createdAt, { t: tLib, tag: intlTag })}
                 </span>
               </li>
             ))}

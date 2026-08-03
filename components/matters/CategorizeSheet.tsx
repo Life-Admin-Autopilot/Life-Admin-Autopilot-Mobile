@@ -1,11 +1,13 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useMemo, useState } from 'react'
 
 import { CategorizeDiffRow } from '@/components/matters/CategorizeDiffRow'
 import { SketchEmptyTrayGlyph } from '@/components/icons/sketch/flowGlyphs'
 import { Sheet } from '@/components/ui/Sheet'
 import { cn } from '@/lib/cn'
+import { env } from '@/lib/env'
 import { toast } from '@/lib/toast'
 import {
   useApplyProposal,
@@ -44,6 +46,8 @@ export function CategorizeSheet({
   /** Hands back the undo token so the caller can offer the change back. */
   onApplied: (applied: number, undoToken: string | null) => void
 }) {
+  const t = useTranslations('matters')
+  const tCommon = useTranslations('common')
   const apply = useApplyProposal()
   const discard = useDiscardProposal()
 
@@ -91,7 +95,7 @@ export function CategorizeSheet({
           onApplied(res.applied, res.undoToken)
           onClose()
         },
-        onError: () => toast.error('That did not go through. Try again.'),
+        onError: () => toast.error(t('toast.actionFailed')),
       },
     )
   }
@@ -100,10 +104,10 @@ export function CategorizeSheet({
     if (!proposal) return
     discard.mutate(proposal.opId, {
       onSuccess: () => {
-        toast.info('Suggestions dismissed.')
+        toast.info(t('categorize.dismissed'))
         onClose()
       },
-      onError: () => toast.error('Could not dismiss those.'),
+      onError: () => toast.error(t('categorize.dismissFailed')),
     })
   }
 
@@ -112,10 +116,10 @@ export function CategorizeSheet({
       open={open}
       onClose={onClose}
       trigger={trigger}
-      title={loading ? 'Reading your matters' : 'Where these belong'}
+      title={loading ? t('categorize.loadingTitle') : t('categorize.title')}
       eyebrow={
         changes.length > 0 && !loading
-          ? `${changes.length} ${changes.length === 1 ? 'suggestion' : 'suggestions'} · nothing changed yet`
+          ? t('categorize.eyebrow', { count: changes.length })
           : undefined
       }
       height={560}
@@ -128,7 +132,7 @@ export function CategorizeSheet({
               disabled={busy}
               className="rounded-pill px-4 py-3 text-body-sm font-bold text-ink-muted hover:text-ink disabled:opacity-50"
             >
-              Dismiss
+              {t('categorize.dismiss')}
             </button>
             <button
               type="button"
@@ -136,7 +140,9 @@ export function CategorizeSheet({
               disabled={busy || checked.size === 0}
               className="flex-1 rounded-pill bg-solid px-4 py-3 text-body-sm font-bold text-solid-ink transition-transform active:scale-[0.98] disabled:opacity-40"
             >
-              {checked.size === 0 ? 'Nothing selected' : `Apply ${checked.size}`}
+              {checked.size === 0
+                ? t('categorize.nothingSelected')
+                : t('categorize.apply', { count: checked.size })}
             </button>
           </div>
         ) : null
@@ -153,14 +159,16 @@ export function CategorizeSheet({
         // when they are willing to read it.
         <div className="flex flex-col gap-4">
           <p className="text-body text-ink-muted">
-            Kitto is re-reading{' '}
-            <span className="font-bold text-ink tabular">{selectedCount}</span>{' '}
-            {selectedCount === 1 ? 'matter' : 'matters'} to work out which area each one
-            really belongs to, and what to tag it.
+            {t.rich('categorize.loadingBody', {
+              count: selectedCount,
+              app: env.appName,
+              b: (chunks: React.ReactNode) => (
+                <span className="font-bold tabular text-ink">{chunks}</span>
+              ),
+            })}
           </p>
           <p className="rounded-2xl bg-surface-field px-4 py-3 text-body-sm text-ink-muted">
-            Nothing changes yet. You will see every suggestion first and choose which to
-            keep.
+            {t('categorize.loadingNote')}
           </p>
           <ul className="flex flex-col gap-2" aria-hidden>
             {[0, 1, 2].map((i) => (
@@ -177,18 +185,19 @@ export function CategorizeSheet({
       ) : failed ? (
         <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
           <SketchEmptyTrayGlyph />
-          <p className="mt-2 font-display text-heading-serif text-ink">That didn’t go through.</p>
-          <p className="max-w-[32ch] text-body text-ink-muted">
-            Nothing was changed. Close this and try again.
+          <p className="mt-2 font-display text-heading-serif text-ink">
+            {t('categorize.failedTitle')}
           </p>
+          <p className="max-w-[32ch] text-body text-ink-muted">{t('categorize.failedBody')}</p>
         </div>
       ) : changes.length === 0 ? (
         <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
           <SketchEmptyTrayGlyph />
-          <p className="mt-2 font-display text-heading-serif text-ink">Already filed right.</p>
+          <p className="mt-2 font-display text-heading-serif text-ink">
+            {t('categorize.cleanTitle')}
+          </p>
           <p className="max-w-[32ch] text-body text-ink-muted">
-            Kitto read {selectedCount === 1 ? 'it' : `all ${selectedCount}`} and would not move
-            anything. Nothing changed.
+            {t('categorize.cleanBody', { count: selectedCount, app: env.appName })}
           </p>
         </div>
       ) : (
@@ -196,9 +205,11 @@ export function CategorizeSheet({
           {/* Restates the deal at the moment of decision. The loading panel
               said it too, but that panel is gone by the time anyone is
               actually looking at a checkbox. */}
+          {/* "the area on the right" was the old wording. There is no right in
+              Arabic — the arrow in each row points the other way — so the copy
+              names the suggestion rather than a side of the screen. */}
           <p className="text-body-sm text-ink-muted">
-            Ticked rows move to the area on the right. Kitto’s confident guesses are
-            already ticked — untick anything you disagree with.
+            {t('categorize.explain', { app: env.appName })}
           </p>
           <button
             type="button"
@@ -210,7 +221,7 @@ export function CategorizeSheet({
               'bg-surface-field text-ink-muted hover:text-ink',
             )}
           >
-            {allChecked ? 'Select none' : 'Select all'}
+            {allChecked ? t('categorize.selectNone') : tCommon('selectAll')}
           </button>
 
           <ul className="flex flex-col gap-2">

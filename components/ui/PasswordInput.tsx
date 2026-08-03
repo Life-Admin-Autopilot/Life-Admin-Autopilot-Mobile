@@ -1,6 +1,7 @@
 'use client'
 
 import { Eye, EyeOff } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import * as React from 'react'
 
 import { Input } from '@/components/ui/input'
@@ -15,6 +16,7 @@ export const PasswordInput = React.forwardRef<
   HTMLInputElement,
   Omit<React.ComponentProps<'input'>, 'type'>
 >(function PasswordInput({ className, ...props }, ref) {
+  const t = useTranslations('ui.password')
   const [reveal, setReveal] = React.useState(false)
 
   return (
@@ -28,7 +30,7 @@ export const PasswordInput = React.forwardRef<
       <button
         type="button"
         onClick={() => setReveal((r) => !r)}
-        aria-label={reveal ? 'Hide password' : 'Show password'}
+        aria-label={reveal ? t('hide') : t('show')}
         className="absolute inset-y-0 end-0 grid w-12 place-items-center text-ink-muted transition-colors hover:text-ink"
       >
         {reveal ? <EyeOff size={18} /> : <Eye size={18} />}

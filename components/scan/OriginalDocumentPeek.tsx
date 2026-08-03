@@ -1,42 +1,55 @@
 'use client'
 
-// A plain attachment row for the original scanned file — real image
-// thumbnail when the scan is a photo, a file icon for PDFs (matching how
-// e.g. Mercury/GoPay's own attachment rows work — nobody renders a live PDF
-// page thumbnail for this). Fetches once and reuses the same object URL
-// everywhere it's needed — no second network round trip.
+// The attachment row for a scan's original file — a real image thumbnail for a
+// photo, a file icon for a PDF, matching how any bank or invoicing app renders
+// an attachment. Nobody draws a live PDF page thumbnail for this.
 //
-// Images open in an in-app popup (DocumentViewer-style <img>, looks like
-// part of the app). PDFs open in a new browser tab instead of an embedded
-// <embed>/<iframe> viewer — the browser's own PDF UI (toolbar, dark canvas)
-// doesn't fit inside a small in-app modal and reads as broken there; a full
-// tab is PDFs' normal, expected home.
+// Tapping opens DocumentViewer, on every platform and for both file types.
+// There is no longer a web/native seam here: the app renders documents itself
+// (pdf.js + lib/viewer) rather than delegating to the host, so there is nothing
+// left for a new browser tab or a WKWebView <iframe> to do better.
+//
+// The bytes are fetched ONCE, on mount, and the same Blob backs the thumbnail,
+// the viewer and pdf.js — no second round trip when the row is tapped.
 
-import { useEffect, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { ArrowUpRight, Eye, FileText, X } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { Eye, FileText, RotateCw } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
+import { DocumentViewer } from '@/components/scan/viewer/DocumentViewer'
 import { apiBlob, ApiError } from '@/lib/api/client'
-import { MORPH_BACKDROP_FADE } from '@/lib/motion'
 import type { ScannedDocument } from '@/queries/documentScans'
 
 interface LoadState {
-  docId: string
+  blob: Blob | null
   url: string | null
+  /**
+   * The backend's own words when it gave any, otherwise null — the generic
+   * line is resolved at RENDER time, not stored here, so the fetch effect
+   * never has to depend on the translator and re-download the file every time
+   * the language changes.
+   */
   error: string | null
+  failed: boolean
+  loading: boolean
 }
 
-function fileLabel(doc: ScannedDocument): string {
-  if (doc.mimeType === 'application/pdf') {
-    return doc.pageCount === 1 ? 'PDF · 1 page' : `PDF · ${doc.pageCount} pages`
-  }
-  return 'Photo'
+/** Tags a result with the fetch it came from, so a stale one is recognisable. */
+interface Resolved extends LoadState {
+  key: string
 }
+
+const LOADING: LoadState = { blob: null, url: null, error: null, failed: false, loading: true }
 
 export function OriginalDocumentPeek({ doc }: { doc: ScannedDocument }) {
+  const t = useTranslations('scan')
   const [open, setOpen] = useState(false)
-  const reduced = useReducedMotion()
-  const [state, setState] = useState<LoadState | null>(null)
+  // Bumped to re-run the fetch after a failure. A dead row with an error on it
+  // and no way to try again is the worst of both.
+  const [attempt, setAttempt] = useState(0)
+  const [resolved, setResolved] = useState<Resolved>({ ...LOADING, key: '' })
+
+  const key = `${doc.id}:${attempt}`
 
   useEffect(() => {
     let objectUrl: string | null = null
@@ -46,14 +59,17 @@ export function OriginalDocumentPeek({ doc }: { doc: ScannedDocument }) {
       .then((blob) => {
         if (cancelled) return
         objectUrl = URL.createObjectURL(blob)
-        setState({ docId: doc.id, url: objectUrl, error: null })
+        setResolved({ key, blob, url: objectUrl, error: null, failed: false, loading: false })
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        setState({
-          docId: doc.id,
+        setResolved({
+          key,
+          blob: null,
           url: null,
-          error: err instanceof ApiError ? err.message : 'Could not load the original scan.',
+          error: err instanceof ApiError ? err.message : null,
+          failed: true,
+          loading: false,
         })
       })
 
@@ -61,101 +77,67 @@ export function OriginalDocumentPeek({ doc }: { doc: ScannedDocument }) {
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [doc.id])
+  }, [doc.id, key])
 
-  const current = state?.docId === doc.id ? state : null
-  const url = current?.url ?? null
-  const isImage = doc.mimeType !== 'application/pdf'
+  // Derived rather than reset inside the effect: a fetch that has not reported
+  // back yet IS loading, and re-deriving here keeps the row from showing the
+  // previous document's thumbnail for a frame after a retry.
+  const state: LoadState = resolved.key === key ? resolved : LOADING
 
-  const handleTap = () => {
-    if (!url) return
-    if (isImage) {
-      setOpen(true)
-    } else {
-      window.open(url, '_blank', 'noopener,noreferrer')
+  const isPdf = doc.mimeType === 'application/pdf'
+  const failed = state.failed
+  const detail = failed
+    ? (state.error ?? t('peek.loadFailed'))
+    : state.loading
+      ? t('peek.loading')
+      : isPdf
+        ? t('peek.pdfPages', { count: doc.pageCount })
+        : t('peek.photo')
+
+  const handleTap = useCallback(() => {
+    if (failed) {
+      setAttempt((n) => n + 1)
+      return
     }
-  }
+    // Deliberately NOT gated on the bytes having landed. The viewer opens
+    // immediately and shows its own progress; a row that silently ignores taps
+    // while a slow file downloads is indistinguishable from a broken one.
+    setOpen(true)
+  }, [failed])
 
   return (
     <>
       <button
         type="button"
         onClick={handleTap}
-        disabled={!url}
-        className="flex w-full items-center gap-3 rounded-xl bg-surface-field px-3.5 py-3 text-start transition-colors hover:brightness-[0.97] disabled:opacity-60"
+        className="flex w-full items-center gap-3 rounded-xl bg-surface-field px-3.5 py-3 text-start transition-colors hover:brightness-[0.97]"
       >
-        {isImage && url ? (
+        {!isPdf && state.url ? (
           // eslint-disable-next-line @next/next/no-img-element -- blob object URL thumbnail, not an optimizable asset
-          <img src={url} alt="" className="size-10 shrink-0 rounded-md object-cover" />
+          <img src={state.url} alt="" className="size-10 shrink-0 rounded-md object-cover" />
         ) : (
           <span className="grid size-10 shrink-0 place-items-center rounded-md bg-surface-sunken">
             <FileText size={18} className="text-ink-subtle" />
           </span>
         )}
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-body-sm font-medium text-ink">Original document</span>
-          <span className="truncate text-caption text-ink-subtle">{current?.error ?? fileLabel(doc)}</span>
+          <span className="truncate text-body-sm font-medium text-ink">{t('peek.title')}</span>
+          <span className="truncate text-caption text-ink-subtle">{detail}</span>
         </div>
-        {isImage ? (
-          <Eye size={16} className="shrink-0 text-ink-subtle" />
+        {failed ? (
+          <RotateCw size={16} className="shrink-0 text-ink-subtle" />
         ) : (
-          <ArrowUpRight size={16} className="shrink-0 text-ink-subtle" />
+          <Eye size={16} className="shrink-0 text-ink-subtle" />
         )}
       </button>
 
-      {isImage ? (
-        <>
-          <AnimatePresence>
-            {open ? (
-              <motion.div
-                key="doc-peek-backdrop"
-                variants={MORPH_BACKDROP_FADE}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                onClick={() => setOpen(false)}
-                aria-hidden
-                className="fixed inset-0 z-[60] bg-ink/50 backdrop-blur-md"
-              />
-            ) : null}
-          </AnimatePresence>
-
-          <AnimatePresence>
-            {open ? (
-              <motion.div
-                key="doc-peek-panel"
-                role="dialog"
-                aria-label="Original document"
-                initial={reduced ? false : { opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.16 } }}
-                transition={reduced ? { duration: 0 } : { duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                className="inset-safe fixed z-[61] flex flex-col overflow-hidden rounded-xl bg-surface shadow-elevated"
-              >
-                <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
-                  <span className="text-body-sm font-medium text-ink">Original document</span>
-                  <button
-                    type="button"
-                    onClick={() => setOpen(false)}
-                    aria-label="Close"
-                    className="rounded-full p-1 text-ink-subtle transition-colors hover:bg-surface-sunken hover:text-ink"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-                <div className="flex flex-1 items-center justify-center overflow-hidden bg-surface-sunken p-3">
-                  {url ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- blob object URL, not an optimizable asset
-                    <img src={url} alt="Scanned document" className="max-h-full max-w-full object-contain" />
-                  ) : (
-                    <p className="text-body-sm text-ink-subtle">{current?.error ?? 'Loading…'}</p>
-                  )}
-                </div>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
-        </>
-      ) : null}
+      <DocumentViewer
+        open={open}
+        onClose={() => setOpen(false)}
+        blob={state.blob}
+        url={state.url}
+        isPdf={isPdf}
+      />
     </>
   )
 }

@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core'
 
 import { api } from '@/lib/api/client'
 import { REMINDER_ACTION_TYPE } from './actionTypes'
+import { staticMessages } from '@/lib/i18n/staticMessages'
 
 // Push the server's reminder schedule onto the DEVICE.
 //
@@ -55,6 +56,7 @@ export async function syncReminders(): Promise<{ scheduled: number } | null> {
     await LocalNotifications.cancel({ notifications: pending.notifications })
   }
 
+  const copy = staticMessages().notifications
   const now = Date.now()
   const due = reminders.filter((r) => new Date(r.at).getTime() > now)
   if (due.length === 0) return { scheduled: 0 }
@@ -63,7 +65,7 @@ export async function syncReminders(): Promise<{ scheduled: number } | null> {
     notifications: due.map((r) => ({
       id: stableId(r.id),
       title: r.title,
-      body: r.kind === 'lead' ? 'Coming up.' : 'Due now.',
+      body: r.kind === 'lead' ? copy.bodyLead : copy.bodyDue,
       schedule: { at: new Date(r.at), allowWhileIdle: true },
       actionTypeId: REMINDER_ACTION_TYPE,
       extra: { taskId: r.taskId },

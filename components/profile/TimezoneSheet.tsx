@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useMemo, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -57,6 +58,9 @@ export function TimezoneSheet({
   trigger?: DOMRect | null
   currentZone?: string
 }) {
+  const t = useTranslations('profile.timezone')
+  const tCommon = useTranslations('common')
+  const tGroups = useTranslations('profile.groups')
   const detected = detectedZone()
   const [selected, setSelected] = useState(currentZone ?? detected)
   const [query, setQuery] = useState('')
@@ -87,10 +91,10 @@ export function TimezoneSheet({
       { timezone: selected },
       {
         onSuccess: () => {
-          toast.success('Time zone saved.')
+          toast.success(t('saved'))
           onClose()
         },
-        onError: (err) => toast.error(translateBackendError(err, "That didn't save.")),
+        onError: (err) => toast.error(translateBackendError(err, tCommon('notSaved'))),
       },
     )
   }
@@ -101,8 +105,8 @@ export function TimezoneSheet({
       onClose={onClose}
       trigger={trigger}
       height={560}
-      eyebrow="Account"
-      title="Time zone"
+      eyebrow={tGroups('account')}
+      title={t('title')}
       footer={
         <Button
           variant="solid"
@@ -110,15 +114,13 @@ export function TimezoneSheet({
           disabled={update.isPending}
           onClick={save}
         >
-          {update.isPending ? 'Saving…' : 'Save time zone'}
+          {update.isPending ? tCommon('saving') : t('save')}
         </Button>
       }
     >
-      <p className="text-body-sm text-ink-muted">
-        Used for reminders and your daily summary, so they land on the right day.
-      </p>
+      <p className="text-body-sm text-ink-muted">{t('description')}</p>
 
-      <SheetSection label="On this device">
+      <SheetSection label={t('onThisDevice')}>
         <div className="flex flex-wrap gap-2">
           <ChipToggle selected={selected === detected} onClick={() => setSelected(detected)}>
             {detected} {offsetLabel(detected, now)}
@@ -126,12 +128,12 @@ export function TimezoneSheet({
         </div>
       </SheetSection>
 
-      <SheetSection label="All zones">
+      <SheetSection label={t('allZones')}>
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search — city or region"
-          aria-label="Search time zones"
+          placeholder={t('searchPlaceholder')}
+          aria-label={t('searchLabel')}
         />
         <ul className="mt-1 flex flex-col">
           {matches.map((zone) => (
@@ -162,9 +164,7 @@ export function TimezoneSheet({
             </li>
           ))}
           {matches.length === 0 ? (
-            <li className="px-3 py-6 text-center text-body-sm text-ink-muted">
-              No zone matches that.
-            </li>
+            <li className="px-3 py-6 text-center text-body-sm text-ink-muted">{t('noMatch')}</li>
           ) : null}
         </ul>
       </SheetSection>

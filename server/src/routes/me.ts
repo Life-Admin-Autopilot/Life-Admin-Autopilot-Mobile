@@ -67,12 +67,16 @@ const UpdateMeSchema = z.object({
     .max(64)
     .refine(isValidTimezone, { message: 'Not a recognised time zone.' })
     .optional(),
+  // The effective language, sent even when the user asked to follow their
+  // device — the digest and both extractors run with no device in reach and
+  // this is the only thing that tells them which language to write in.
   locale: z
     .string()
     .min(2)
     .max(35)
     .refine(isValidLocale, { message: 'Not a recognised locale.' })
     .optional(),
+  localeFollowsDevice: z.boolean().optional(),
   theme: z.enum(THEMES).optional(),
   textSize: z.enum(TEXT_SIZES).optional(),
   mic: z.object({ quality: z.enum(MIC_QUALITIES) }).partial().optional(),

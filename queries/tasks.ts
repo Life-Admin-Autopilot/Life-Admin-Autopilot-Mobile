@@ -105,14 +105,10 @@ export const TASK_SORTS = [
 ] as const
 export type TaskSort = (typeof TASK_SORTS)[number]
 
-export const SORT_LABEL: Record<TaskSort, string> = {
-  'due-asc': 'Due soonest',
-  'due-desc': 'Due latest',
-  'created-desc': 'Newest first',
-  'created-asc': 'Oldest first',
-  'priority-desc': 'Priority',
-  'title-asc': 'A–Z',
-}
+// The labels live in the catalogue under `matters.sortBy.<TaskSort>` — keyed by
+// the sort value itself, so SortSheet reads them straight off TASK_SORTS. A
+// Record here would have been a second, English-only source of truth for the
+// same six strings.
 
 // Mirrors the server's TaskFilterSchema. Arrays serialize to comma-separated
 // values; see toQuery.

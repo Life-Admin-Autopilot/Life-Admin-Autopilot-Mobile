@@ -279,7 +279,10 @@ export function useAskAi(): UseAskAiResult {
       await resetConversation()
       await qc.invalidateQueries({ queryKey: queryKeys.ai.conversation() })
     } catch (err: unknown) {
-      toast.error(translateBackendError(err, 'Could not clear the conversation.'))
+      // No fallback sentence: translateBackendError already resolves to
+      // `errors.generic` in the reader's language, and hardcoding one here
+      // would leak English into an Arabic toast.
+      toast.error(translateBackendError(err))
       await qc.invalidateQueries({ queryKey: queryKeys.ai.conversation() })
     } finally {
       setIsClearing(false)

@@ -79,7 +79,14 @@ export function useSummarize() {
 // Ranges the summary offers by default. "Next month" is the one the user asked
 // for by name; the others are the questions people actually ask next.
 export interface SummaryRange {
-  label: string
+  /** Catalogue key under `matters.range.preset`, not a display string.
+   *
+   *  Same reason as SnoozePreset.labelKey in lib/taskFormat.ts: this module is a
+   *  data layer and cannot call a hook, and naming the four keys as a literal
+   *  union is what makes `t(`range.preset.${labelKey}`)` resolve to a real key
+   *  at compile time. Three of the four already existed for the filter sheet's
+   *  due-range chips — this const reads them rather than restating them. */
+  labelKey: 'thisWeek' | 'thisMonth' | 'nextMonth' | 'lastMonth'
   range: (now: Date) => { from: string; to: string }
 }
 
@@ -97,7 +104,7 @@ function addMonths(at: Date, months: number): Date {
 
 export const SUMMARY_RANGES: SummaryRange[] = [
   {
-    label: 'This week',
+    labelKey: 'thisWeek',
     range: (n) => {
       const from = startOfDay(n)
       const to = new Date(from)
@@ -106,21 +113,21 @@ export const SUMMARY_RANGES: SummaryRange[] = [
     },
   },
   {
-    label: 'This month',
+    labelKey: 'thisMonth',
     range: (n) => ({
       from: startOfDay(n).toISOString(),
       to: addMonths(startOfDay(n), 1).toISOString(),
     }),
   },
   {
-    label: 'Next month',
+    labelKey: 'nextMonth',
     range: (n) => ({
       from: addMonths(startOfDay(n), 1).toISOString(),
       to: addMonths(startOfDay(n), 2).toISOString(),
     }),
   },
   {
-    label: 'Last month',
+    labelKey: 'lastMonth',
     range: (n) => ({
       from: addMonths(startOfDay(n), -1).toISOString(),
       to: startOfDay(n).toISOString(),

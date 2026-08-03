@@ -1,0 +1,149 @@
+{
+  "header": {
+    "title": "Documents",
+    "scan": "Scan a document",
+    "selectionSubject": "documents"
+  },
+  "list": {
+    "loadFailedTitle": "Couldn't load your documents.",
+    "loadFailedBody": "Check your connection and try again.",
+    "emptyTitle": "Nothing scanned yet",
+    "emptyBody": "Scan a bill, letter, or form and {appName} will pull out anything actionable."
+  },
+  "toast": {
+    "deleted": "{count, plural, =0 {Nothing was deleted.} one {Document deleted.} other {# documents deleted.}}",
+    "partial": "{deleted, plural, =0 {Nothing was deleted} one {1 document deleted} other {# documents deleted}}. {failed, plural, =0 {Nothing failed} one {1 could not be deleted} other {# could not be deleted}}.",
+    "deleteFailed": "Could not delete those. Try again."
+  },
+  "selection": {
+    "delete": "{count, plural, =0 {Delete} one {Delete 1 document} other {Delete # documents}}"
+  },
+  "docType": {
+    "bill": "Bill",
+    "statement": "Statement",
+    "receipt": "Receipt",
+    "tax": "Tax document",
+    "legal": "Legal document",
+    "insurance": "Insurance",
+    "identity": "Identity document",
+    "medical": "Medical document",
+    "letter": "Letter",
+    "form": "Form",
+    "other": "Document"
+  },
+  "priority": {
+    "low": "Low",
+    "normal": "Normal",
+    "high": "High",
+    "urgent": "Urgent"
+  },
+  "priorityPill": {
+    "low": "Low priority",
+    "high": "High priority",
+    "urgent": "Urgent"
+  },
+  "fields": {
+    "title": "Title",
+    "domain": "Domain",
+    "priority": "Priority",
+    "due": "Due",
+    "summary": "Summary"
+  },
+  "row": {
+    "readingPdf": "Reading your PDF…",
+    "readingPhoto": "Reading your photo…",
+    "readingScan": "Reading your scan…",
+    "readingSubtitle": "This usually takes a moment.",
+    "failedTitle": "Couldn't read this document",
+    "failedSubtitle": "Tap to see what happened.",
+    "titlePdf": "PDF scan",
+    "titlePhoto": "Photo scan",
+    "titleScan": "Scan",
+    "toReview": "{count, plural, =0 {Nothing to review} one {1 to review} other {# to review}}",
+    "nothingActionable": "Nothing actionable found.",
+    "filed": "Filed."
+  },
+  "capture": {
+    "chooseTitle": "Add a bill, letter, or form",
+    "takePhoto": "Take a photo",
+    "chooseFile": "Choose a file",
+    "uploading": "Getting your document ready…",
+    "processing": {
+      "reading": "Reading your document…",
+      "finding": "Finding what matters…",
+      "almost": "Almost done…"
+    },
+    "success": {
+      "title": "{count, plural, =0 {All set.} one {1 matter filed.} other {# matters filed.}}",
+      "bodyEmpty": "Nothing was kept from this scan.",
+      "body": "{appName} will remind you when it counts."
+    },
+    "uploadFailed": {
+      "eyebrow": "Didn't send",
+      "title": "Your document is still here",
+      "fallback": "That upload did not go through.",
+      "startOver": "Pick a different document"
+    },
+    "error": {
+      "fallback": "Couldn't read that document.",
+      "savedNote": "Your scan is saved — we can read it again without you taking it again.",
+      "retrying": "Trying again…",
+      "scanAgain": "Scan again"
+    },
+    "processFailed": "Could not process that scan.",
+    "noCamera": "No camera available on this device. Choose a file instead.",
+    "cameraDenied": "{appName} needs camera access to scan documents. Enable it in Settings → Privacy & Security → Camera."
+  },
+  "review": {
+    "eyebrow": "Review",
+    "itemsFound": "{count, plural, =0 {Nothing found} one {1 item found} other {# items found}}",
+    "noneLeftTitle": "Nothing left to review here.",
+    "noneLeftBody": "Every item from this scan has already been handled.",
+    "noDateFound": "No date found",
+    "doubleCheck": "{label} · double-check this one",
+    "collapseDetails": "Collapse details",
+    "editDetails": "Edit details",
+    "keepItem": "Keep this item",
+    "discardItem": "Discard this item",
+    "notesPlaceholder": "What {appName} found for this item…",
+    "discardAll": "Discard all"
+  },
+  "overview": {
+    "filedCount": "{count, plural, =0 {Nothing filed} one {1 matter filed} other {# matters filed}}",
+    "emptyTitle": "Nothing was filed from this scan.",
+    "emptyBody": "{appName} didn't find anything actionable here.",
+    "noDateSet": "No date set",
+    "foundOnPage": "Found on page {page}",
+    "noDetail": "Nothing more {appName} found here.",
+    "edit": "Edit"
+  },
+  "edit": {
+    "eyebrow": "Edit matter",
+    "untitled": "Untitled matter",
+    "saveFailed": "Couldn't save that change. Try again."
+  },
+  "delete": {
+    "title": "{count, plural, =0 {Delete these documents?} one {Delete 1 document?} other {Delete # documents?}}",
+    "confirm": "Delete {count}",
+    "deleting": "Deleting…",
+    "originals": "{count, plural, one {The original scan will be permanently removed.} other {The original scans will be permanently removed.}}",
+    "unreviewed": "{count, plural, one {1 item has not been reviewed yet and will be lost.} other {# items have not been reviewed yet and will be lost.}}",
+    "filedStay": "{filed, plural, one {1 matter} other {# matters}} already filed from {count, plural, one {this document} other {these documents}} will stay in your list.",
+    "preview": "Preview {count}",
+    "hide": "Hide",
+    "untitledScan": "Untitled scan"
+  },
+  "peek": {
+    "title": "Original document",
+    "loading": "Loading…",
+    "photo": "Photo",
+    "pdfPages": "{count, plural, =0 {PDF} one {PDF · 1 page} other {PDF · # pages}}",
+    "loadFailed": "Could not load the original scan."
+  },
+  "viewer": {
+    "opening": "Opening…",
+    "fitToScreen": "Fit to screen",
+    "imageAlt": "Scanned document",
+    "page": "Page {number}"
+  }
+}

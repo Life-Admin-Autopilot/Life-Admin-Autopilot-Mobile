@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useEffect, useState } from 'react'
 
 import { useDomainLabels } from '@/hooks/useDomainLabels'
@@ -13,6 +14,7 @@ import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
 import {
   TASK_DOMAINS,
+  TASK_PRIORITIES,
   useCreateTask,
   type TaskDomain,
   type TaskPriority,
@@ -33,20 +35,23 @@ import {
 // what tomorrow's number is, which is precisely the arithmetic a planner
 // exists to remove.
 
-const PRIORITIES: { value: TaskPriority; label: string }[] = [
-  { value: 'low', label: 'Low' },
-  { value: 'normal', label: 'Normal' },
-  { value: 'high', label: 'High' },
-  { value: 'urgent', label: 'Urgent' },
-]
+// The priority chips read TASK_PRIORITIES and `matters.priority.*` directly —
+// the four labels already exist for the filter sheet and the editor, and a
+// module-level Record here could not call useTranslations anyway.
 
-/** Relative offsets, resolved against `now` at save time. */
+/** Relative offsets, resolved against `now` at save time.
+ *
+ *  `labelKey` is a catalogue path, not a string: four of the five chips say
+ *  something the catalogue already says elsewhere (the undated label, two time
+ *  buckets, a snooze preset), so this points at them rather than adding five
+ *  more keys. Typed as a literal union so `t(labelKey)` resolves at compile
+ *  time — same reason as SnoozePreset.labelKey in lib/taskFormat.ts. */
 const WHEN = [
-  { key: 'none', label: 'No date' },
-  { key: 'today', label: 'Today' },
-  { key: 'tomorrow', label: 'Tomorrow' },
-  { key: 'week', label: 'Next week' },
-  { key: 'custom', label: 'Pick a date' },
+  { key: 'none', labelKey: 'due.noDate' },
+  { key: 'today', labelKey: 'bucket.today' },
+  { key: 'tomorrow', labelKey: 'bucket.tomorrow' },
+  { key: 'week', labelKey: 'snooze.nextWeek' },
+  { key: 'custom', labelKey: 'create.pickDate' },
 ] as const
 
 type WhenKey = (typeof WHEN)[number]['key']
@@ -77,6 +82,8 @@ export function CreateMatterSheet({
   trigger: DOMRect | null
   onClose: () => void
 }) {
+  const t = useTranslations('matters')
+  const tCommon = useTranslations('common')
   const domainLabels = useDomainLabels()
   const createTask = useCreateTask()
   const [title, setTitle] = useState('')
@@ -117,10 +124,10 @@ export function CreateMatterSheet({
       },
       {
         onSuccess: () => {
-          toast.success('Added.')
+          toast.success(t('create.added'))
           onClose()
         },
-        onError: (err) => toast.error(translateBackendError(err, "That didn't save.")),
+        onError: (err) => toast.error(translateBackendError(err, tCommon('notSaved'))),
       },
     )
   }
@@ -130,8 +137,8 @@ export function CreateMatterSheet({
       open={open}
       onClose={onClose}
       trigger={trigger}
-      title="New matter"
-      eyebrow="Add by hand"
+      title={t('create.title')}
+      eyebrow={t('create.eyebrow')}
       height={520}
       footer={
         <Button
@@ -140,7 +147,7 @@ export function CreateMatterSheet({
           disabled={!title.trim() || dueMissing || createTask.isPending}
           onClick={submit}
         >
-          {createTask.isPending ? 'Saving…' : 'Add matter'}
+          {createTask.isPending ? tCommon('saving') : t('create.submit')}
         </Button>
       }
     >
@@ -152,8 +159,8 @@ export function CreateMatterSheet({
             if (e.key === 'Enter') submit()
           }}
           autoFocus
-          placeholder="What needs doing?"
-          aria-label="Matter title"
+          placeholder={t('create.titlePlaceholder')}
+          aria-label={t('create.titleLabel')}
           enterKeyHint="done"
           // A matter title is prose, not a form field the browser has ever
           // seen before — offering saved addresses and card names over it is
@@ -163,7 +170,7 @@ export function CreateMatterSheet({
           spellCheck={false}
         />
 
-        <SheetSection label="Area">
+        <SheetSection label={t('section.area')}>
           <div className="flex flex-wrap gap-2">
             {TASK_DOMAINS.map((d) => (
               <button
@@ -183,7 +190,7 @@ export function CreateMatterSheet({
           </div>
         </SheetSection>
 
-        <SheetSection label="When">
+        <SheetSection label={t('section.when')}>
           <div className="flex flex-wrap gap-2">
             {WHEN.map((w) => (
               <button
@@ -196,7 +203,7 @@ export function CreateMatterSheet({
                   when === w.key ? 'bg-accent text-accent-ink' : 'bg-surface-field text-ink-muted',
                 )}
               >
-                {w.label}
+                {t(w.labelKey)}
               </button>
             ))}
           </div>
@@ -206,28 +213,26 @@ export function CreateMatterSheet({
               type="datetime-local"
               value={customAt}
               onChange={(e) => setCustomAt(e.target.value)}
-              aria-label="Due date and time"
+              aria-label={t('create.dueLabel')}
               className="mt-1"
             />
           ) : null}
         </SheetSection>
 
-        <SheetSection label="Priority">
+        <SheetSection label={t('section.priority')}>
           <div className="flex flex-wrap gap-2">
-            {PRIORITIES.map((p) => (
+            {TASK_PRIORITIES.map((p) => (
               <button
-                key={p.value}
+                key={p}
                 type="button"
-                onClick={() => setPriority(p.value)}
-                aria-pressed={priority === p.value}
+                onClick={() => setPriority(p)}
+                aria-pressed={priority === p}
                 className={cn(
                   'rounded-pill px-3.5 py-2 text-body-sm font-bold transition-colors',
-                  priority === p.value
-                    ? 'bg-accent text-accent-ink'
-                    : 'bg-surface-field text-ink-muted',
+                  priority === p ? 'bg-accent text-accent-ink' : 'bg-surface-field text-ink-muted',
                 )}
               >
-                {p.label}
+                {t(`priority.${p}`)}
               </button>
             ))}
           </div>

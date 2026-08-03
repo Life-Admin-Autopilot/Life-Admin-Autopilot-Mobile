@@ -1,3 +1,7 @@
+'use client'
+
+import { useTranslations } from 'next-intl'
+
 import { cn } from '@/lib/cn'
 import { EmojiChip, type CatColor } from '@/components/ui/EmojiChip'
 import type { ScanDocumentType } from '@/queries/documentScans'
@@ -13,18 +17,23 @@ import type { ScanDocumentType } from '@/queries/documentScans'
 // hues — a row of eleven unrelated colours would read as a toy. `other` stays
 // deliberately neutral: an unclassified document should not be handed a false
 // identity by colour.
-const MAP: Record<ScanDocumentType, { emoji: string; category: CatColor; label: string }> = {
-  bill: { emoji: '🧾', category: 'sky', label: 'Bill' },
-  statement: { emoji: '📊', category: 'sky', label: 'Statement' },
-  receipt: { emoji: '🧾', category: 'peach', label: 'Receipt' },
-  tax: { emoji: '🏛️', category: 'periwinkle', label: 'Tax document' },
-  legal: { emoji: '⚖️', category: 'periwinkle', label: 'Legal document' },
-  insurance: { emoji: '🛡️', category: 'lilac', label: 'Insurance' },
-  identity: { emoji: '🪪', category: 'lilac', label: 'Identity document' },
-  medical: { emoji: '🩺', category: 'sage', label: 'Medical document' },
-  letter: { emoji: '✉️', category: 'blush', label: 'Letter' },
-  form: { emoji: '📋', category: 'blush', label: 'Form' },
-  other: { emoji: '📄', category: 'yellow', label: 'Document' },
+//
+// The MAP carries only what is language-independent. The accessible NAME is
+// looked up per render instead — a module-level const cannot call a hook, and
+// baking eleven English labels in here is exactly how the tile ended up being
+// the one thing on the row that never translated.
+const MAP: Record<ScanDocumentType, { emoji: string; category: CatColor }> = {
+  bill: { emoji: '🧾', category: 'sky' },
+  statement: { emoji: '📊', category: 'sky' },
+  receipt: { emoji: '🧾', category: 'peach' },
+  tax: { emoji: '🏛️', category: 'periwinkle' },
+  legal: { emoji: '⚖️', category: 'periwinkle' },
+  insurance: { emoji: '🛡️', category: 'lilac' },
+  identity: { emoji: '🪪', category: 'lilac' },
+  medical: { emoji: '🩺', category: 'sage' },
+  letter: { emoji: '✉️', category: 'blush' },
+  form: { emoji: '📋', category: 'blush' },
+  other: { emoji: '📄', category: 'yellow' },
 }
 
 export function DocumentTypeIcon({
@@ -38,14 +47,16 @@ export function DocumentTypeIcon({
   size?: number
   className?: string
 }) {
-  const { emoji, category, label } = MAP[type ?? 'other']
+  const t = useTranslations('scan')
+  const resolved = type ?? 'other'
+  const { emoji, category } = MAP[resolved]
   return (
     <EmojiChip
       emoji={emoji}
       category={category}
       size={size}
       square
-      label={label}
+      label={t(`docType.${resolved}`)}
       className={cn(type === undefined || type === 'other' ? 'opacity-90' : undefined, className)}
     />
   )

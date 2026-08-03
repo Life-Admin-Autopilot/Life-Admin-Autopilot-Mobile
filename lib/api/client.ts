@@ -11,6 +11,7 @@
 // source, which is the web session store (see lib/auth/sessionStore.ts).
 
 import { resolveApiBaseUrl } from '@/lib/api/baseUrl'
+import { staticMessages } from '@/lib/i18n/staticMessages'
 import { logger } from '@/lib/logger'
 import { useSessionStore } from '@/lib/auth/sessionStore'
 
@@ -40,6 +41,20 @@ export interface ApiOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   body?: unknown
   authenticated?: boolean
+}
+
+// What an ApiError says when the server sent no message of its own.
+//
+// Read from the catalogue rather than taken as an argument: this is the
+// transport layer, called from query functions with no component anywhere on
+// the stack — the case lib/i18n/staticMessages.ts documents. Lookup only, no
+// ICU, which is the constraint that file imposes.
+//
+// It is the same sentence translateBackendError falls back to, deliberately: an
+// unmapped code reaches that function either way, and having the two disagree
+// would mean the language the user sees depends on which of them ran.
+function genericErrorMessage(): string {
+  return staticMessages().errors.generic
 }
 
 let refreshPromise: Promise<boolean> | null = null
@@ -136,7 +151,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     const err = (data as ErrorBody | null)?.error
     throw new ApiError(
       err?.code ?? 'unknown_error',
-      err?.message ?? 'Something went wrong. Try again.',
+      err?.message ?? genericErrorMessage(),
       res.status,
       err?.details,
     )
@@ -197,7 +212,7 @@ export async function apiBinary<T>(path: string, options: ApiBinaryOptions): Pro
     const err = (data as ErrorBody | null)?.error
     throw new ApiError(
       err?.code ?? 'unknown_error',
-      err?.message ?? 'Something went wrong. Try again.',
+      err?.message ?? genericErrorMessage(),
       res.status,
       err?.details,
     )
@@ -228,7 +243,7 @@ export async function apiBlob(path: string, signal?: AbortSignal): Promise<Blob>
     const err = data?.error
     throw new ApiError(
       err?.code ?? 'unknown_error',
-      err?.message ?? 'Could not load that file.',
+      err?.message ?? genericErrorMessage(),
       res.status,
       err?.details,
     )

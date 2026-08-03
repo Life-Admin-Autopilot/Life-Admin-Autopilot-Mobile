@@ -11,6 +11,7 @@ import {
   type TaskPriority,
 } from '../../../models/Task'
 import { getGeminiClient } from '../provider/geminiClient'
+import { extractionLanguageRule, type AiLocale } from '../promptLanguage'
 import { normalizeLocalIso, STRICT_DATETIME_RE } from '../timeNormalize'
 import { withGeminiRetry } from './geminiRetry'
 import { dedupeItems } from './dedupe'
@@ -37,7 +38,7 @@ import {
 // The model proposes; the SERVER decides what's reviewable (date resolution,
 // domain validation, dedupe) — verbalized LLM confidence alone is overconfident.
 
-const SYSTEM = `
+const SYSTEM_BASE = `
 You convert ONE spoken voice transcript into a list of structured tasks.
 
 EMIT ONE TASK PER DISCRETE INTENT
@@ -83,7 +84,7 @@ PER TASK, SET:
   Be honest: only mark 'clear' + 'high' when you'd stake your reputation on it.
 - reasons: 0-4 SHORT plain-language notes shown to the user verbatim, e.g.
   ["Couldn't tell the exact date", "Might be two separate tasks"]. Empty when clear.
-- notes: optional longer body (≤2000 chars) in the speaker's language, or null.
+- notes: optional longer body (≤2000 chars), or null. See LANGUAGE at the end.
 
 ASK INSTEAD OF GUESSING — set a clarification block on an item the user could answer
 with a quick tap, instead of silently picking a value. When you set it, the app turns the
@@ -95,8 +96,8 @@ item into a question card; do NOT also resolve a dueAt for it. Set it ONLY in th
      should I remind you?". clarifyKind 'date'.
   3. UNNAMEABLE — too vague to title ("email that guy about the thing"). clarifyKind 'detail'.
 Fields, when (and only when) you set a clarification:
-  - clarifyQuestion: the short, warm question in the speaker's language ("The 17th or the
-    19th?", "When should I remind you?"). Leave null otherwise.
+  - clarifyQuestion: the short, warm question ("The 17th or the 19th?", "When should I
+    remind you?"). Leave null otherwise. See LANGUAGE at the end.
   - clarifyKind: 'date' | 'detail' | 'choice'. Null otherwise.
   - clarifyCost: COST OF BEING WRONG if we act on your best guess before the user answers.
     'low'  — a wrong nudge time just gets rescheduled (a routine errand, "call the bank",
@@ -117,6 +118,14 @@ in a queue. Answering just corrects it.
 
 Return ONLY the JSON object matching the schema. No prose.
 `.trim()
+
+// The transcript is whatever the speaker said, in whatever language, and may mix
+// two in one breath — a family whose admin arrives in one language and whose
+// kitchen runs in another is the ordinary case. What comes back is written in the
+// language of the app they will read it in.
+function systemFor(locale: AiLocale): string {
+  return [SYSTEM_BASE, extractionLanguageRule(locale)].join('\n\n')
+}
 
 // responseSchema mirrors ModelExtractionSchema. Enum-constrained strings keep
 // the model on rails; the server still re-validates everything after.
@@ -202,6 +211,8 @@ export interface ExtractArgs {
   timezone?: string
   // Injectable clock for deterministic tests.
   now?: Date
+  /** Required so a new call site cannot silently extract into the wrong language. */
+  locale: AiLocale
 }
 
 export async function extractItems(args: ExtractArgs): Promise<DraftItem[]> {
@@ -224,7 +235,7 @@ export async function extractItems(args: ExtractArgs): Promise<DraftItem[]> {
         model: env().GEMINI_STRONG_MODEL,
         contents: [userTurn],
         config: {
-          systemInstruction: SYSTEM,
+          systemInstruction: systemFor(args.locale),
           responseMimeType: 'application/json',
           responseSchema,
           temperature: 0,

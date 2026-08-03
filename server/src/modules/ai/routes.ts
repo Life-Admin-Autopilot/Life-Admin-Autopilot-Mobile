@@ -2,6 +2,7 @@ import express, { Router } from 'express'
 
 import { asyncHandler, AppError, BadRequest, Forbidden, NotFound, Unauthorized } from '../../lib/errors'
 import { transcribeAudio } from './audioTranscriber'
+import { getUserAiLocale } from './userLocale'
 import { requireAuth } from '../../middleware/auth'
 import { utcDateBucket } from '../../models/AiUsageCounter'
 import {
@@ -402,7 +403,11 @@ aiRouter.post(
 
     let text: string
     try {
-      text = await transcribeAudio({ bytes, mimeType })
+      text = await transcribeAudio({
+        bytes,
+        mimeType,
+        locale: await getUserAiLocale(auth.sub),
+      })
     } catch (err: unknown) {
       await releaseUsageSlot({ userId: auth.sub, kind: 'message', today }).catch(() => {})
       throw err

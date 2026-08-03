@@ -2,22 +2,55 @@
 // the domain selection. The quick-pick answers are persisted as AI memory
 // (onboardingAnswers) for later personalization. Edit/extend this array freely —
 // the OnboardingIsland renders whatever steps are here.
+//
+// NO PROSE LIVES HERE. This module is plain data with no React on the stack, so
+// it cannot call `useTranslations`; every user-facing string is a key into the
+// `onboarding` namespace, resolved by the component that renders it. The keys
+// are DERIVED from the step id and the option value rather than stored
+// alongside them — `questionKey`/`optionKey` below return template-literal
+// types, so adding a step id without adding `steps.<id>` to both catalogues is
+// a compile error, not a raw key path rendered at a stranger's first contact
+// with the app.
 
 import type { CatColor } from '@/components/ui/EmojiChip'
 
 export type StepKind = 'name' | 'choice' | 'domains' | 'done'
 
-export interface ChoiceOption {
-  value: string
-  label: string
-}
+/** Every step in the flow. Also the message key under `onboarding.steps`. */
+export type StepId = 'name' | 'focus' | 'pace' | 'tone' | 'domains' | 'done'
+
+/** Steps that carry a line of guidance under the question. */
+export type HintId = Extract<StepId, 'name' | 'domains'>
+
+/**
+ * Quick-pick answer identities. Unique across every step on purpose: they are
+ * the stable ids persisted with the answer, and they key `onboarding.options`
+ * as one flat map rather than nesting per step.
+ */
+export type ChoiceValue =
+  | 'renewals'
+  | 'appointments'
+  | 'documents'
+  | 'family'
+  | 'packed'
+  | 'steady'
+  | 'light'
+  | 'brief'
+  | 'detailed'
+
+export type QuestionKey = `steps.${StepId}`
+export type HintKey = `hints.${HintId}`
+export type OptionKey = `options.${ChoiceValue}`
+
+export const questionKey = (id: StepId): QuestionKey => `steps.${id}`
+export const optionKey = (value: ChoiceValue): OptionKey => `options.${value}`
 
 export interface OnboardingStep {
-  id: string
+  id: StepId
   kind: StepKind
-  question: string
-  hint?: string
-  options?: ChoiceOption[]
+  /** Named rather than derived: most steps have no hint, and an absent key throws. */
+  hintKey?: HintKey
+  options?: ChoiceValue[]
   /** Identity glyph for the step — the signature emoji-in-a-pastel-circle. */
   emoji: string
   category: CatColor
@@ -27,6 +60,9 @@ export interface OnboardingStep {
    * CTA to the field the way a hardcoded height once did. Keep this in the
    * right ballpark anyway: it's the target the shell springs toward for the one
    * frame before the incoming pane reports its real height.
+   *
+   * It is also why translation cannot break the layout: Arabic runs longer than
+   * English on several of these questions, and the measured height absorbs it.
    */
   height: number
 }
@@ -37,8 +73,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'name',
     kind: 'name',
-    question: 'What should I call you?',
-    hint: 'A first name is enough.',
+    hintKey: 'hints.name',
     emoji: '👋',
     category: 'peach',
     height: 274,
@@ -46,47 +81,31 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'focus',
     kind: 'choice',
-    question: 'What weighs on you most?',
     emoji: '🧺',
     category: 'lilac',
-    options: [
-      { value: 'renewals', label: 'Renewals & bills' },
-      { value: 'appointments', label: 'Appointments' },
-      { value: 'documents', label: 'Documents & admin' },
-      { value: 'family', label: 'Family & school' },
-    ],
+    options: ['renewals', 'appointments', 'documents', 'family'],
     height: 306,
   },
   {
     id: 'pace',
     kind: 'choice',
-    question: 'How full is your week?',
     emoji: '🗓️',
     category: 'sky',
-    options: [
-      { value: 'packed', label: 'Packed' },
-      { value: 'steady', label: 'Steady' },
-      { value: 'light', label: 'Light' },
-    ],
+    options: ['packed', 'steady', 'light'],
     height: 210,
   },
   {
     id: 'tone',
     kind: 'choice',
-    question: 'How should I speak to you?',
     emoji: '💬',
     category: 'sage',
-    options: [
-      { value: 'brief', label: 'Briefly' },
-      { value: 'detailed', label: 'With detail' },
-    ],
+    options: ['brief', 'detailed'],
     height: 210,
   },
   {
     id: 'domains',
     kind: 'domains',
-    question: 'Which areas need watching?',
-    hint: 'Pick any. Change them later.',
+    hintKey: 'hints.domains',
     emoji: '🗂️',
     category: 'periwinkle',
     height: 416,
@@ -94,7 +113,6 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'done',
     kind: 'done',
-    question: 'All good to go.',
     emoji: '✨',
     category: 'yellow',
     height: 212,

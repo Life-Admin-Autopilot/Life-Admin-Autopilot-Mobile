@@ -1,0 +1,12 @@
+{
+  "loading": "جارٍ التحميل…",
+  "position": "{current} من {total}",
+  "filedWithGuess": "حُفظ بتخمين",
+  "answerPlaceholder": "اكتب إجابتك…",
+  "pickOption": "اختر من الخيارات",
+  "typeYourOwn": "اكتب إجابتك بنفسك",
+  "drop": "تجاهل",
+  "allClearTitle": "لم يبق شيء.",
+  "allClearBody": "كل شيء مرتّب كما أردت.",
+  "backToDashboard": "العودة إلى اللوحة"
+}

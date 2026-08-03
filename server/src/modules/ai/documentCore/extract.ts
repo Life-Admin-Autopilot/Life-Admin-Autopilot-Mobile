@@ -11,6 +11,7 @@ import {
   type TaskPriority,
 } from '../../../models/Task'
 import { getGeminiClient } from '../provider/geminiClient'
+import { extractionLanguageRule, type AiLocale } from '../promptLanguage'
 import { normalizeLocalIso, STRICT_DATETIME_RE } from '../timeNormalize'
 import { withGeminiRetry } from '../voiceCore/geminiRetry'
 import {
@@ -37,7 +38,7 @@ import {
 // No auto-save gate: every candidate returned here is held for user review by
 // product decision, so there is no confidence threshold to tune here.
 
-const SYSTEM = `
+const SYSTEM_BASE = `
 You read a scanned document (which may have multiple pages) and extract
 actionable to-do candidates a personal assistant app should offer the user — bills to pay,
 appointments to keep, renewals/expirations, deadlines, forms to submit. Ignore boilerplate,
@@ -49,8 +50,8 @@ date and a policy-renewal deadline) — emit each separately. If the document ha
 item, return an empty candidates array.
 
 PER CANDIDATE, SET:
-- title: short imperative title in the document's own language ("Pay electricity bill",
-  "Renew car insurance").
+- title: short imperative title ("Pay electricity bill", "Renew car insurance"). See LANGUAGE
+  at the end — this is written for the reader, not copied from the page.
 - domain: the single best of health, home, car, finance, family, pets.
 - priority: low | normal | high | urgent — from due-date proximity and stated urgency/penalty
   language ("final notice", "overdue" = urgent; a routine renewal months out = low).
@@ -68,8 +69,8 @@ PER CANDIDATE, SET:
   Low legibility, a partially obscured field, or genuine ambiguity about what's being asked
   should lower this. Confidence is shown to the user on the review card; it does not affect
   whether the item is saved (every candidate is reviewed by the user regardless).
-- notes: an "AI overview" of this specific item — ONE short natural-language SENTENCE in the
-  document's own language, prose, not a raw field dump. Weave in the key figures/reference
+- notes: an "AI overview" of this specific item — ONE short natural-language SENTENCE, prose,
+  not a raw field dump. Weave in the key figures/reference
   numbers/dates that matter, the way you'd explain it to someone out loud. Good:
   "Electricity bill for $142.37, account 88213-4471, due July 30." Bad: "Account Number:
   88213-4471, Amount Due: $142.37" (that's a label dump, not a sentence). ≤2000 chars, or null
@@ -84,8 +85,8 @@ are no candidates at all.
   what it asks of you — a bill you have already paid is still "bill", and a letter that happens
   to demand payment is still "letter" if it isn't itemized like an invoice. Use "other" honestly
   when nothing fits; a confidently wrong type is worse than a generic one.
-- documentTitle: a SHORT NOUN PHRASE naming the document, ≤${DOCUMENT_TITLE_MAX} characters, in
-  the document's own language. No sentence punctuation, no leading article, not a sentence.
+- documentTitle: a SHORT NOUN PHRASE naming the document, ≤${DOCUMENT_TITLE_MAX} characters.
+  No sentence punctuation, no leading article, not a sentence.
   Good: "Electricity bill". "Car insurance renewal". "Blood test results". Bad: "This is an
   electricity bill from City Power" (that's a sentence). Do NOT put the sender's name in here —
   it belongs in issuer.
@@ -105,6 +106,19 @@ are no candidates at all.
 
 Return ONLY the JSON object matching the schema. No prose.
 `.trim()
+
+// `issuer` is the one field the language rule must NOT touch: it is defined as
+// "verbatim as printed", and it is what the user matches against the letterhead
+// in front of them. The preserve clause inside the shared rule already protects
+// it (an organisation's name), and this repeats it because the field is the most
+// tempting one to translate — "City Power" reads like two ordinary words.
+function systemFor(locale: AiLocale): string {
+  return [
+    SYSTEM_BASE,
+    extractionLanguageRule(locale),
+    '`issuer` is copied from the page exactly as printed, never translated.',
+  ].join('\n\n')
+}
 
 const responseSchema = {
   type: Type.OBJECT,
@@ -163,6 +177,8 @@ export interface ExtractDocumentArgs {
   bytes: Buffer
   mimeType: string
   timezone?: string
+  /** Required so a new call site cannot silently extract into the wrong language. */
+  locale: AiLocale
 }
 
 export interface DocumentExtractionResult {
@@ -209,7 +225,7 @@ export async function extractDocumentCandidates(
         model: env().GEMINI_STRONG_MODEL,
         contents: [userTurn],
         config: {
-          systemInstruction: SYSTEM,
+          systemInstruction: systemFor(args.locale),
           responseMimeType: 'application/json',
           responseSchema,
           temperature: 0,

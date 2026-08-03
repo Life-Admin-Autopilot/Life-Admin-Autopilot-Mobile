@@ -10,6 +10,7 @@ import {
 } from '../models/VoiceNote'
 import type { TaskDoc } from '../models/Task'
 import { transcribeAudio } from '../modules/ai/audioTranscriber'
+import { getUserAiLocale } from '../modules/ai/userLocale'
 import { extractItems } from '../modules/ai/voiceCore/extract'
 import { gateAndKey } from '../modules/ai/voiceCore/gate'
 import { persistTasksFromItems } from '../modules/ai/voiceCore/persist'
@@ -131,7 +132,12 @@ export async function processVoiceNote(note: VoiceNoteDoc): Promise<void> {
       await note.save()
 
       const bytes = await getVoiceNoteStorage().get(note.storageKey)
-      const transcript = await transcribeAudio({ bytes, mimeType: note.mimeType ?? 'audio/m4a' })
+      const locale = await getUserAiLocale(String(note.userId))
+      const transcript = await transcribeAudio({
+        bytes,
+        mimeType: note.mimeType ?? 'audio/m4a',
+        locale,
+      })
       note.transcript = transcript
 
       note.status = 'extracting'
@@ -139,7 +145,7 @@ export async function processVoiceNote(note: VoiceNoteDoc): Promise<void> {
       await note.save()
 
       const drafts: DraftItem[] = transcript.trim()
-        ? await extractItems({ transcript, timezone: note.timezone })
+        ? await extractItems({ transcript, timezone: note.timezone, locale })
         : []
       const { autoSave, review, clarify } = gateAndKey(note.id, drafts)
       autoSaveItems = autoSave

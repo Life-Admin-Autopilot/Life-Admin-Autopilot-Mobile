@@ -1,3 +1,7 @@
+'use client'
+
+import { useTranslations } from 'next-intl'
+
 import { cn } from '@/lib/cn'
 
 /**
@@ -21,6 +25,8 @@ export function DayProgress({
   total: number
   className?: string
 }) {
+  const t = useTranslations('dashboard.progress')
+
   // Nothing scheduled means there is no progress to report — and a "0/0" pill
   // reads as failure when the truth is that the day is clear.
   if (total === 0) return null
@@ -44,8 +50,13 @@ export function DayProgress({
           🎉
         </span>
       ) : null}
-      <span className="text-body-sm font-bold text-ink">
-        <span className="tabular">{done}</span> of <span className="tabular">{total}</span> today
+      {/* ONE string, not three spans around two numbers. The English order
+          (number · "of" · number · "today") is not the Arabic order, and a
+          sentence assembled in JSX can only ever be reordered by rewriting the
+          JSX. `tabular` moves up to the whole label, which is a no-op for the
+          words — font-variant-numeric only touches digits. */}
+      <span className="text-body-sm font-bold tabular text-ink">
+        {t('todayCount', { done, total })}
       </span>
     </span>
   )

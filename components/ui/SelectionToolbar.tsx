@@ -1,5 +1,7 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
+
 import { cn } from '@/lib/cn'
 
 // Selection mode's header row, split the way iOS Mail / Files split it: Cancel
@@ -17,15 +19,31 @@ export function SelectionToolbar({
   allSelected,
   onSelectAll,
   onCancel,
-  subject,
+  subjectLabel,
 }: {
   count: number
   allSelected: boolean
   onSelectAll: () => void
   onCancel: () => void
-  /** Plural noun for the empty prompt — "matters", "documents". */
-  subject: string
+  /**
+   * The plural noun for the empty prompt, ALREADY TRANSLATED — pass
+   * `t('…')`, never a literal. A shared primitive cannot own its callers'
+   * nouns: /matters and /documents each know their own, and a `subject` union
+   * baked in here would have to grow a case for every screen that ever selects.
+   *
+   * Give it the form that reads after the verb in that language: "documents"
+   * in English, the definite plural ("المستندات") in Arabic, which is what
+   * "اختر" wants after it.
+   *
+   * Renamed from `subject` on purpose. The old prop took an English literal, and
+   * a same-named `string` prop would have gone on compiling while quietly
+   * shipping "documents" into an Arabic sentence.
+   */
+  subjectLabel: string
 }) {
+  const t = useTranslations('ui.selection')
+  const common = useTranslations('common')
+
   return (
     <div className="flex h-10 items-center justify-between gap-2">
       <button
@@ -33,7 +51,7 @@ export function SelectionToolbar({
         onClick={onCancel}
         className="shrink-0 rounded-pill px-2 py-1 text-body-sm font-bold text-accent hover:bg-accent-soft"
       >
-        Cancel
+        {common('cancel')}
       </button>
 
       {/* Reads as a sentence, not a badge: "Select documents" tells a user who
@@ -46,7 +64,7 @@ export function SelectionToolbar({
           count > 0 ? 'font-bold text-ink' : 'text-ink-muted',
         )}
       >
-        {count === 0 ? `Select ${subject}` : count === 1 ? '1 selected' : `${count} selected`}
+        {count === 0 ? t('prompt', { subject: subjectLabel }) : t('count', { count })}
       </span>
 
       <button
@@ -54,7 +72,7 @@ export function SelectionToolbar({
         onClick={onSelectAll}
         className="shrink-0 rounded-pill px-2 py-1 text-body-sm font-bold text-accent hover:bg-accent-soft"
       >
-        {allSelected ? 'Deselect all' : 'Select all'}
+        {allSelected ? t('deselectAll') : common('selectAll')}
       </button>
     </div>
   )

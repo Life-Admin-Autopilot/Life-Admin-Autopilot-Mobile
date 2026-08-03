@@ -44,6 +44,7 @@ export function BulkDeleteConfirm({
   onClose: () => void
 }) {
   const t = useTranslations('matters')
+  const tCommon = useTranslations('common')
   const tag = useIntlTag()
   const [showAll, setShowAll] = useState(false)
 
@@ -65,8 +66,8 @@ export function BulkDeleteConfirm({
       onClose={onClose}
       trigger={trigger}
       height={showAll ? 560 : 340}
-      eyebrow="This can be undone"
-      title={count === 1 ? 'Delete 1 matter?' : `Delete ${count} matters?`}
+      eyebrow={tCommon('canBeUndone')}
+      title={t('bulkDelete.title', { count })}
       footer={
         <div className="flex items-center justify-end gap-2">
           <button
@@ -74,14 +75,14 @@ export function BulkDeleteConfirm({
             onClick={onClose}
             className="rounded-pill px-3 py-1.5 text-caption text-ink-subtle hover:bg-surface-sunken hover:text-ink"
           >
-            Cancel
+            {tCommon('cancel')}
           </button>
           <Button
             className="h-8 gap-1 bg-danger px-4 text-caption text-accent-ink hover:bg-danger/90"
             disabled={pending || count === 0}
             onClick={onConfirm}
           >
-            {pending ? 'Deleting…' : `Delete ${count}`}
+            {pending ? t('bulkDelete.deleting') : t('bulkDelete.confirm', { count })}
           </Button>
         </div>
       }
@@ -91,7 +92,7 @@ export function BulkDeleteConfirm({
           <span className="tabular font-medium">
             {formatRange(filters?.dueAfter, filters?.dueBefore, { t, tag })}
           </span>
-          <span className="text-ink-subtle"> · resolved dates</span>
+          <span className="text-ink-subtle"> · {t('bulkDelete.resolvedDates')}</span>
         </p>
       ) : null}
 
@@ -101,8 +102,12 @@ export function BulkDeleteConfirm({
             <li className="flex items-start gap-2 text-caption text-warning">
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
               <span>
-                <span className="tabular font-medium">{warnings.fromDocuments}</span> came from
-                scanned documents.
+                {t.rich('bulkDelete.fromDocuments', {
+                  count: warnings.fromDocuments,
+                  b: (chunks: React.ReactNode) => (
+                    <span className="tabular font-medium">{chunks}</span>
+                  ),
+                })}
               </span>
             </li>
           ) : null}
@@ -110,8 +115,12 @@ export function BulkDeleteConfirm({
             <li className="flex items-start gap-2 text-caption text-warning">
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
               <span>
-                <span className="tabular font-medium">{warnings.remindersFired}</span> already
-                reminded you.
+                {t.rich('bulkDelete.remindersFired', {
+                  count: warnings.remindersFired,
+                  b: (chunks: React.ReactNode) => (
+                    <span className="tabular font-medium">{chunks}</span>
+                  ),
+                })}
               </span>
             </li>
           ) : null}
@@ -124,7 +133,9 @@ export function BulkDeleteConfirm({
           onClick={() => setShowAll((v) => !v)}
           className="text-caption text-accent"
         >
-          {showAll ? 'Hide' : `Preview ${Math.min(count, shown?.sample.length ?? 0)}`}
+          {showAll
+            ? t('bulkDelete.hide')
+            : t('bulkDelete.preview', { count: Math.min(count, shown?.sample.length ?? 0) })}
         </button>
         {showAll ? (
           <ul className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-border">
@@ -141,16 +152,14 @@ export function BulkDeleteConfirm({
             ))}
             {count > (shown?.sample.length ?? 0) ? (
               <li className="px-3 py-2 text-caption text-ink-subtle">
-                …and {count - (shown?.sample.length ?? 0)} more
+                {t('bulkDelete.andMore', { count: count - (shown?.sample.length ?? 0) })}
               </li>
             ) : null}
           </ul>
         ) : null}
       </div>
 
-      <p className="mt-4 text-caption text-ink-subtle">
-        Recoverable from Trash for 30 days.
-      </p>
+      <p className="mt-4 text-caption text-ink-subtle">{t('bulkDelete.recoverable')}</p>
     </Sheet>
   )
 }

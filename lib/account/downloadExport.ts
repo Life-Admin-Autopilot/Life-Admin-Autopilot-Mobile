@@ -10,6 +10,8 @@
 import { Capacitor } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 
+import { staticMessages } from '@/lib/i18n/staticMessages'
+
 export interface ExportDestination {
   /** Copy for the confirmation toast — where the file actually went. */
   message: string
@@ -19,8 +21,13 @@ function filenameFor(now: Date): string {
   return `kitto-export-${now.toISOString().slice(0, 10)}.json`
 }
 
+// Reads the catalogue rather than taking a translator. The only caller is the
+// `mutationFn` in queries/account.ts — there is no component in reach, and the
+// alternative is threading an i18n argument through a mutation whose whole job
+// is to move bytes. Lookup only, no ICU: both messages are plain sentences.
 export async function saveExport(json: string, now = new Date()): Promise<ExportDestination> {
   const filename = filenameFor(now)
+  const copy = staticMessages().lib.export
 
   if (Capacitor.isNativePlatform()) {
     await Filesystem.writeFile({
@@ -30,7 +37,7 @@ export async function saveExport(json: string, now = new Date()): Promise<Export
       encoding: Encoding.UTF8,
       recursive: true,
     })
-    return { message: 'Saved to Files.' }
+    return { message: copy.savedToFiles }
   }
 
   const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
@@ -47,5 +54,5 @@ export async function saveExport(json: string, now = new Date()): Promise<Export
     // of the event loop is enough for the navigation to have been claimed.
     setTimeout(() => URL.revokeObjectURL(url), 0)
   }
-  return { message: 'Downloaded.' }
+  return { message: copy.downloaded }
 }

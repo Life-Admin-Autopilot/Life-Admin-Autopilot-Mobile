@@ -1,20 +1,17 @@
 'use client'
 
 import { Check } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { cn } from '@/lib/cn'
-import { SORT_LABEL, TASK_SORTS, type TaskSort } from '@/queries/tasks'
+import { TASK_SORTS, type TaskSort } from '@/queries/tasks'
 import { Sheet, SheetSection } from '@/components/ui/Sheet'
 
+// Both label sets are keyed by the value they describe — `matters.group.<mode>`
+// and `matters.sortBy.<sort>` — so neither needs a module-level Record that
+// could not call a hook anyway.
 export const GROUP_MODES = ['time', 'domain', 'priority', 'flat'] as const
 export type GroupMode = (typeof GROUP_MODES)[number]
-
-const GROUP_LABEL: Record<GroupMode, string> = {
-  time: 'By when',
-  domain: 'By domain',
-  priority: 'By priority',
-  flat: 'No grouping',
-}
 
 // Sort and grouping in one sheet, because they answer the same question —
 // "how do I want to look at this?" — and splitting them into two controls
@@ -39,21 +36,23 @@ export function SortSheet({
   group: GroupMode
   onGroupChange: (g: GroupMode) => void
 }) {
+  const t = useTranslations('matters')
+
   return (
     <Sheet
       open={open}
       onClose={onClose}
       trigger={trigger}
       height={520}
-      eyebrow="How you see it"
-      title="Arrange"
+      eyebrow={t('sort.eyebrow')}
+      title={t('controls.arrange')}
     >
-      <SheetSection label="Group">
+      <SheetSection label={t('section.group')}>
         <ul className="overflow-hidden rounded-lg border border-border">
           {GROUP_MODES.map((mode) => (
             <li key={mode}>
               <Row
-                label={GROUP_LABEL[mode]}
+                label={t(`group.${mode}`)}
                 selected={group === mode}
                 onClick={() => onGroupChange(mode)}
               />
@@ -62,11 +61,15 @@ export function SortSheet({
         </ul>
       </SheetSection>
 
-      <SheetSection label="Sort within groups">
+      <SheetSection label={t('section.sortWithin')}>
         <ul className="overflow-hidden rounded-lg border border-border">
           {TASK_SORTS.map((s) => (
             <li key={s}>
-              <Row label={SORT_LABEL[s]} selected={sort === s} onClick={() => onSortChange(s)} />
+              <Row
+                label={t(`sortBy.${s}`)}
+                selected={sort === s}
+                onClick={() => onSortChange(s)}
+              />
             </li>
           ))}
         </ul>

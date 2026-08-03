@@ -9,14 +9,22 @@
 
 import { useState } from 'react'
 import { Check, ChevronDown, X } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { SketchDomainIcon } from '@/components/icons/sketch/domainGlyphs'
-import { DOMAINS, formatDue, PriorityPill, SummaryNote } from '@/components/scan/candidateDisplay'
+import {
+  DOMAINS,
+  formatDue,
+  PriorityPill,
+  SummaryNote,
+  usePriorityLabels,
+} from '@/components/scan/candidateDisplay'
 import { useDomainLabels } from '@/hooks/useDomainLabels'
 import { OriginalDocumentPeek } from '@/components/scan/OriginalDocumentPeek'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
 import { env } from '@/lib/env'
+import { useIntlTag } from '@/lib/i18n/localeStore'
 import {
   useReviewScannedDocument,
   type ReviewScanResult,
@@ -26,12 +34,6 @@ import {
 } from '@/queries/documentScans'
 
 const PRIORITIES: ScanCandidatePriority[] = ['low', 'normal', 'high', 'urgent']
-const PRIORITY_CHIP_LABEL: Record<ScanCandidatePriority, string> = {
-  low: 'Low',
-  normal: 'Normal',
-  high: 'High',
-  urgent: 'Urgent',
-}
 
 function toLocalInputValue(iso?: string): string {
   if (!iso) return ''
@@ -65,7 +67,11 @@ interface ScanReviewCardProps {
 }
 
 export function ScanReviewCard({ doc, onReviewed }: ScanReviewCardProps) {
+  const t = useTranslations('scan')
+  const tCommon = useTranslations('common')
+  const intlTag = useIntlTag()
   const domainLabels = useDomainLabels()
+  const priorityLabels = usePriorityLabels()
   const pending = doc.candidates.filter((c) => !c.taskId)
   const [discarded, setDiscarded] = useState<Set<string>>(new Set())
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -82,8 +88,8 @@ export function ScanReviewCard({ doc, onReviewed }: ScanReviewCardProps) {
   if (pending.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-1 px-6 text-center">
-        <p className="text-body font-medium text-ink">Nothing left to review here.</p>
-        <p className="text-caption text-ink-subtle">Every item from this scan has already been handled.</p>
+        <p className="text-body font-medium text-ink">{t('review.noneLeftTitle')}</p>
+        <p className="text-caption text-ink-subtle">{t('review.noneLeftBody')}</p>
       </div>
     )
   }
@@ -134,9 +140,9 @@ export function ScanReviewCard({ doc, onReviewed }: ScanReviewCardProps) {
     <div className="flex h-full flex-col gap-5 overflow-hidden">
       <div className="flex shrink-0 flex-col gap-5">
         <div>
-          <span className="text-label text-accent">Review</span>
+          <span className="text-label text-accent">{t('review.eyebrow')}</span>
           <h2 className="font-display text-heading-xl text-ink">
-            {pending.length === 1 ? '1 item found' : `${pending.length} items found`}
+            {t('review.itemsFound', { count: pending.length })}
           </h2>
         </div>
         {doc.documentSummary ? <SummaryNote text={doc.documentSummary} /> : null}
@@ -154,7 +160,14 @@ export function ScanReviewCard({ doc, onReviewed }: ScanReviewCardProps) {
             const isDiscarded = discarded.has(c.key)
             const isExpanded = expanded === c.key
             const draft = draftFor(c.key, c)
-            const due = formatDue(draft.dueAt)
+            const due = formatDue(draft.dueAt, intlTag)
+            // Built as ONE message rather than a date with a suffix glued on:
+            // the caveat sits before the date in Arabic, and a fragment
+            // appended in JSX can never move.
+            const dueLine =
+              c.confidence === 'low'
+                ? t('review.doubleCheck', { label: due ?? t('review.noDateFound') })
+                : (due ?? t('review.noDateFound'))
             return (
               <li key={c.key} className={cn('px-3.5 py-3 transition-opacity', isDiscarded && 'opacity-40')}>
                 <div className="flex items-center gap-3">
@@ -168,17 +181,14 @@ export function ScanReviewCard({ doc, onReviewed }: ScanReviewCardProps) {
                       className="w-full bg-transparent text-body-sm font-medium text-ink outline-none disabled:text-ink-subtle"
                     />
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-caption tabular text-ink-muted">
-                        {due ?? 'No date found'}
-                        {c.confidence === 'low' ? ' · double-check this one' : ''}
-                      </span>
+                      <span className="text-caption tabular text-ink-muted">{dueLine}</span>
                       <PriorityPill priority={draft.priority} />
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setExpanded(isExpanded ? null : c.key)}
-                    aria-label={isExpanded ? 'Collapse details' : 'Edit details'}
+                    aria-label={isExpanded ? t('review.collapseDetails') : t('review.editDetails')}
                     aria-expanded={isExpanded}
                     className="shrink-0 rounded-full p-1.5 text-ink-subtle transition-colors hover:bg-surface-sunken hover:text-ink"
                   >
@@ -187,7 +197,7 @@ export function ScanReviewCard({ doc, onReviewed }: ScanReviewCardProps) {
                   <button
                     type="button"
                     onClick={() => toggleDiscard(c.key)}
-                    aria-label={isDiscarded ? 'Keep this item' : 'Discard this item'}
+                    aria-label={isDiscarded ? t('review.keepItem') : t('review.discardItem')}
                     className={cn(
                       'shrink-0 rounded-full p-1.5 transition-colors',
                       isDiscarded
@@ -232,7 +242,7 @@ export function ScanReviewCard({ doc, onReviewed }: ScanReviewCardProps) {
                               : 'border-border bg-surface text-ink-muted hover:bg-surface-sunken',
                           )}
                         >
-                          {PRIORITY_CHIP_LABEL[p]}
+                          {priorityLabels[p]}
                         </button>
                       ))}
                     </div>
@@ -250,17 +260,17 @@ export function ScanReviewCard({ doc, onReviewed }: ScanReviewCardProps) {
                           onClick={() => updateDraft(c.key, { dueAt: undefined })}
                           className="text-caption text-ink-subtle hover:text-ink"
                         >
-                          Clear
+                          {tCommon('clear')}
                         </button>
                       ) : null}
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <span className="text-label uppercase text-ink-subtle">Summary</span>
+                      <span className="text-label uppercase text-ink-subtle">{t('fields.summary')}</span>
                       <textarea
                         value={draft.notes ?? ''}
                         onChange={(e) => updateDraft(c.key, { notes: e.target.value })}
-                        placeholder={`What ${env.appName} found for this item…`}
+                        placeholder={t('review.notesPlaceholder', { appName: env.appName })}
                         dir="auto"
                         className="min-h-24 rounded-md bg-surface-sunken px-3 py-2 text-body-sm text-ink outline-none placeholder:text-ink-subtle"
                       />
@@ -274,7 +284,11 @@ export function ScanReviewCard({ doc, onReviewed }: ScanReviewCardProps) {
       </div>
 
       <Button variant="solid" className="w-full shrink-0" disabled={review.isPending} onClick={submit}>
-        {review.isPending ? 'Saving…' : allDiscarded ? 'Discard all' : 'Confirm'}
+        {review.isPending
+          ? tCommon('saving')
+          : allDiscarded
+            ? t('review.discardAll')
+            : tCommon('confirm')}
       </Button>
     </div>
   )

@@ -22,23 +22,10 @@ import { ChipToggle, Sheet, SheetSection } from '@/components/ui/Sheet'
 // nine times out of ten, and making them assemble it from two date inputs is
 // the friction that stops filters being used at all.
 
-const STATUS_LABEL: Record<(typeof TASK_STATUSES)[number], string> = {
-  open: 'Open',
-  done: 'Done',
-  snoozed: 'Snoozed',
-}
-
-const KIND_LABEL: Record<(typeof TASK_KINDS)[number], string> = {
-  reminder: 'Reminders',
-  list: 'List items',
-}
-
-const PRIORITY_LABEL: Record<(typeof TASK_PRIORITIES)[number], string> = {
-  low: 'Low',
-  normal: 'Normal',
-  high: 'High',
-  urgent: 'Urgent',
-}
+// Status, kind and priority labels are all keyed by the value itself
+// (`matters.status.*`, `matters.kind.*`, `matters.priority.*`), so the chips map
+// straight off the TASK_* tuples. The priority set in particular is shared with
+// the editor and the list row rather than restated here.
 
 // Toggle one member of an array filter. Returns undefined when the last member
 // is removed, so the key drops out of the querystring entirely rather than
@@ -64,6 +51,7 @@ export function FilterSheet({
   onChange: (next: TaskFilters) => void
 }) {
   const t = useTranslations('matters')
+  const tCommon = useTranslations('common')
   const domainLabels = useDomainLabels()
   const tags = useTaskTags()
   const patch = (p: Partial<TaskFilters>) => onChange({ ...filters, ...p })
@@ -74,8 +62,8 @@ export function FilterSheet({
       onClose={onClose}
       trigger={trigger}
       height={560}
-      eyebrow="Narrow the list"
-      title="Filter"
+      eyebrow={t('filter.eyebrow')}
+      title={t('controls.filter')}
       footer={
         <div className="flex items-center justify-between gap-2">
           <button
@@ -83,38 +71,38 @@ export function FilterSheet({
             onClick={() => onChange({})}
             className="rounded-pill px-3 py-1.5 text-caption text-ink-subtle hover:bg-surface-sunken hover:text-ink"
           >
-            Clear all
+            {t('filter.clearAll')}
           </button>
           <Button className="h-8 px-4 text-caption" onClick={onClose}>
-            Done
+            {tCommon('done')}
           </Button>
         </div>
       }
     >
-      <SheetSection label="Quick">
+      <SheetSection label={t('section.quick')}>
         <div className="flex flex-wrap gap-1.5">
           <ChipToggle
             selected={filters.overdue === true}
             onClick={() => patch({ overdue: filters.overdue ? undefined : true })}
           >
-            Overdue
+            {t('bucket.overdue')}
           </ChipToggle>
           <ChipToggle
             selected={filters.undated === true}
             onClick={() => patch({ undated: filters.undated ? undefined : true })}
           >
-            No date
+            {t('due.noDate')}
           </ChipToggle>
           <ChipToggle
             selected={filters.untagged === true}
             onClick={() => patch({ untagged: filters.untagged ? undefined : true })}
           >
-            Untagged
+            {t('filter.untagged')}
           </ChipToggle>
         </div>
       </SheetSection>
 
-      <SheetSection label="Status">
+      <SheetSection label={t('section.status')}>
         <div className="flex flex-wrap gap-1.5">
           {TASK_STATUSES.map((s) => (
             <ChipToggle
@@ -122,13 +110,13 @@ export function FilterSheet({
               selected={filters.status?.includes(s) ?? false}
               onClick={() => patch({ status: toggle(filters.status, s) })}
             >
-              {STATUS_LABEL[s]}
+              {t(`status.${s}`)}
             </ChipToggle>
           ))}
         </div>
       </SheetSection>
 
-      <SheetSection label="Domain">
+      <SheetSection label={t('section.domain')}>
         <div className="flex flex-wrap gap-1.5">
           {TASK_DOMAINS.map((d) => (
             <ChipToggle
@@ -142,7 +130,7 @@ export function FilterSheet({
         </div>
       </SheetSection>
 
-      <SheetSection label="Priority">
+      <SheetSection label={t('section.priority')}>
         <div className="flex flex-wrap gap-1.5">
           {TASK_PRIORITIES.map((p) => (
             <ChipToggle
@@ -150,13 +138,13 @@ export function FilterSheet({
               selected={filters.priority?.includes(p) ?? false}
               onClick={() => patch({ priority: toggle(filters.priority, p) })}
             >
-              {PRIORITY_LABEL[p]}
+              {t(`priority.${p}`)}
             </ChipToggle>
           ))}
         </div>
       </SheetSection>
 
-      <SheetSection label="Type">
+      <SheetSection label={t('section.type')}>
         <div className="flex flex-wrap gap-1.5">
           {TASK_KINDS.map((k) => (
             <ChipToggle
@@ -164,14 +152,14 @@ export function FilterSheet({
               selected={filters.kind?.includes(k) ?? false}
               onClick={() => patch({ kind: toggle(filters.kind, k) })}
             >
-              {KIND_LABEL[k]}
+              {t(`kind.${k}`)}
             </ChipToggle>
           ))}
         </div>
       </SheetSection>
 
       {(tags.data?.length ?? 0) > 0 ? (
-        <SheetSection label="Tags">
+        <SheetSection label={t('section.tags')}>
           <div className="flex flex-wrap gap-1.5">
             {tags.data?.map((tag) => (
               <ChipToggle
@@ -186,7 +174,7 @@ export function FilterSheet({
         </SheetSection>
       ) : null}
 
-      <SheetSection label="Due range">
+      <SheetSection label={t('section.dueRange')}>
         <div className="flex flex-wrap gap-1.5">
           {RANGE_PRESETS.map((preset) => {
             const range = preset.range(new Date())
@@ -212,15 +200,15 @@ export function FilterSheet({
         <div className="flex items-center gap-2">
           <input
             type="datetime-local"
-            aria-label="Due from"
+            aria-label={t('filter.dueFrom')}
             value={toLocalInputValue(filters.dueAfter)}
             onChange={(e) => patch({ dueAfter: fromLocalInputValue(e.target.value) })}
             className="h-9 min-w-0 flex-1 rounded-md bg-surface-sunken px-2 text-caption text-ink outline-none"
           />
-          <span className="text-caption text-ink-subtle">to</span>
+          <span className="text-caption text-ink-subtle">{t('filter.to')}</span>
           <input
             type="datetime-local"
-            aria-label="Due to"
+            aria-label={t('filter.dueTo')}
             value={toLocalInputValue(filters.dueBefore)}
             onChange={(e) => patch({ dueBefore: fromLocalInputValue(e.target.value) })}
             className="h-9 min-w-0 flex-1 rounded-md bg-surface-sunken px-2 text-caption text-ink outline-none"

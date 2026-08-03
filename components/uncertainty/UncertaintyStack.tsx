@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -29,11 +30,12 @@ function localTz(): string | undefined {
 // Gate on the loaded list, then hand the snapshot to the walker as a prop so it
 // captures it once via initial state (no effect, no ref-in-render).
 export function UncertaintyStack() {
+  const t = useTranslations('uncertainty')
   const { data, isLoading } = useClarifications()
   if (!data) {
     return (
       <main className="grid min-h-dvh place-items-center px-6 text-body-sm text-ink-subtle">
-        {isLoading ? 'Loading…' : ''}
+        {isLoading ? t('loading') : ''}
       </main>
     )
   }
@@ -45,6 +47,8 @@ export function UncertaintyStack() {
 // Resolving morphs to the next card. The queue is snapshotted at mount so
 // optimistic removals don't reshuffle the walk.
 function Walker({ initial }: { initial: Clarification[] }) {
+  const t = useTranslations('uncertainty')
+  const tCommon = useTranslations('common')
   const router = useRouter()
   const resolve = useResolveClarification()
   const defer = useDeferClarification()
@@ -102,14 +106,16 @@ function Walker({ initial }: { initial: Clarification[] }) {
             <span aria-hidden className="text-[34px] leading-none">
               🌤️
             </span>
-            <h2 className="font-display-wonk font-display text-display-md text-ink">All clear.</h2>
-            <p className="text-body text-ink-muted">Everything's filed the way you wanted.</p>
+            <h2 className="font-display-wonk font-display text-display-md text-ink">
+              {t('allClearTitle')}
+            </h2>
+            <p className="text-body text-ink-muted">{t('allClearBody')}</p>
             <Button
               variant="solid"
               className="mt-3 w-full"
               onClick={() => router.replace('/dashboard')}
             >
-              Back to dashboard
+              {t('backToDashboard')}
             </Button>
           </div>
         ) : (
@@ -118,10 +124,13 @@ function Walker({ initial }: { initial: Clarification[] }) {
               {/* "Already filed", not "needs your input" — the task exists
                   either way, so this is an optional correction, not a demand. */}
               <Pill tone="accent" uppercase>
-                Filed with a guess
+                {t('filedWithGuess')}
               </Pill>
+              {/* One message, not "{n}" + "/" + "{n}" in JSX: Arabic reads the
+                  counter as "3 من 12", and a slash assembled in markup cannot
+                  become a word. */}
               <span className="text-body-sm tabular text-ink-muted">
-                {index + 1}/{queue.length}
+                {t('position', { current: index + 1, total: queue.length })}
               </span>
             </div>
             <p className="mt-3 truncate text-body-sm text-ink-muted">{current!.draft.title}</p>
@@ -136,7 +145,7 @@ function Walker({ initial }: { initial: Clarification[] }) {
                     if (e.key === 'Enter') submitCustom()
                   }}
                   autoFocus
-                  placeholder="Type your answer…"
+                  placeholder={t('answerPlaceholder')}
                 />
                 <Button
                   variant="accent"
@@ -144,7 +153,7 @@ function Walker({ initial }: { initial: Clarification[] }) {
                   disabled={!custom.trim()}
                   onClick={submitCustom}
                 >
-                  Save
+                  {tCommon('save')}
                 </Button>
               </div>
             ) : (
@@ -161,7 +170,7 @@ function Walker({ initial }: { initial: Clarification[] }) {
                   onClick={() => setShowCustom((s) => !s)}
                   className="rounded-pill px-2 py-1 text-body-sm font-bold text-accent hover:bg-accent-soft"
                 >
-                  {showCustom ? 'Pick an option' : 'Type your own'}
+                  {showCustom ? t('pickOption') : t('typeYourOwn')}
                 </button>
               ) : (
                 <span />
@@ -171,13 +180,13 @@ function Walker({ initial }: { initial: Clarification[] }) {
                   onClick={skip}
                   className="rounded-pill px-2 py-1 text-body-sm text-ink-muted hover:text-ink"
                 >
-                  Skip
+                  {tCommon('skip')}
                 </button>
                 <button
                   onClick={dropIt}
                   className="rounded-pill px-2 py-1 text-body-sm text-ink-muted hover:text-danger"
                 >
-                  Drop
+                  {t('drop')}
                 </button>
               </div>
             </div>

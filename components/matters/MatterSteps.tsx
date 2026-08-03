@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Check, Plus, X } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
 import { cn } from '@/lib/cn'
@@ -23,6 +24,7 @@ import {
 // back — so the only way to notice the network is for a step to reappear.
 
 export function MatterSteps({ task }: { task: Task }) {
+  const t = useTranslations('matters')
   const [draft, setDraft] = useState('')
   const reduced = useReducedMotion()
 
@@ -62,7 +64,11 @@ export function MatterSteps({ task }: { task: Task }) {
                 // Deliberately undimmed: flashing every new row grey for the
                 // length of a request would read as breakage, not as caution.
                 disabled={isPendingSubtaskId(sub.id)}
-                aria-label={sub.done ? `Reopen ${sub.text}` : `Complete ${sub.text}`}
+                aria-label={
+                  sub.done
+                    ? t('steps.reopen', { step: sub.text })
+                    : t('steps.complete', { step: sub.text })
+                }
                 className={cn(
                   'flex size-5 shrink-0 items-center justify-center rounded-sm border transition-colors',
                   sub.done ? 'border-accent bg-accent text-accent-ink' : 'border-border-strong',
@@ -98,7 +104,7 @@ export function MatterSteps({ task }: { task: Task }) {
                 type="button"
                 onClick={() => removeSubtask.mutate({ taskId: task.id, subtaskId: sub.id })}
                 disabled={isPendingSubtaskId(sub.id)}
-                aria-label={`Remove ${sub.text}`}
+                aria-label={t('steps.remove', { step: sub.text })}
                 className="text-ink-subtle transition-colors hover:text-danger"
               >
                 <X size={14} />
@@ -127,14 +133,14 @@ export function MatterSteps({ task }: { task: Task }) {
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="Add a step"
+          placeholder={t('steps.add')}
           dir="auto"
           className="h-9 flex-1 rounded-md bg-surface-sunken px-3 text-body-sm text-ink outline-none placeholder:text-ink-subtle"
         />
         <button
           type="submit"
           disabled={!draft.trim()}
-          aria-label="Add step"
+          aria-label={t('steps.addLabel')}
           className="rounded-md p-2 text-accent transition-opacity disabled:opacity-40"
         >
           <Plus size={16} />

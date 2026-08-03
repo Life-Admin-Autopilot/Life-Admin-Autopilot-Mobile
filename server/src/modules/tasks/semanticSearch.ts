@@ -6,6 +6,8 @@ import { logger } from '../../logger'
 import { env } from '../../env'
 import { Task, notDeleted, type TaskDoc } from '../../models/Task'
 import { getGeminiClient } from '../ai/provider/geminiClient'
+import { conversationLanguageRule, type AiLocale } from '../ai/promptLanguage'
+import { getUserAiLocale } from '../ai/userLocale'
 import { withGeminiRetry } from '../ai/voiceCore/geminiRetry'
 import { formatTaskLine } from './taskLine'
 import { toUserObjectId } from './taskQuery'
@@ -32,7 +34,7 @@ import { toUserObjectId } from './taskQuery'
 // when it didn't so the UI can say so rather than quietly under-answering.
 const SEARCH_POOL_CAP = 300
 
-const SYSTEM = `
+const SYSTEM_BASE = `
 You find the matters (reminders/tasks) a person is describing from memory.
 
 They will describe something half-remembered — a topic, a rough time, a feeling about it.
@@ -53,6 +55,10 @@ MATCHING
   "late", "already done", "unscheduled".
 - Combine constraints. "renewals next month" means BOTH about renewing AND falling next
   month — a renewal due today does not qualify.
+- Match ACROSS languages. The search words and the matters need not be in the same one:
+  a matter titled in English is a hit for an Arabic description of it, and the reverse.
+  Someone whose bills arrive in one language and who thinks in another is the normal case
+  here, not the edge case.
 - Prefer precision. Returning three right answers beats ten with the right one buried.
 - If several matters are near-identical, return them all — the person may be looking at
   duplicates and needs to see that.
@@ -75,6 +81,10 @@ REASON (per match)
 
 Return ONLY the JSON object. No prose outside it.
 `.trim()
+
+function systemFor(locale: AiLocale): string {
+  return [SYSTEM_BASE, conversationLanguageRule(locale)].join('\n\n')
+}
 
 const responseSchema = {
   type: Type.OBJECT,
@@ -157,6 +167,7 @@ export async function searchMatters(
   }
 
   const byId = new Map(searchable.map((t) => [String(t._id), t]))
+  const locale = await getUserAiLocale(String(uid))
 
   const response = await withGeminiRetry(
     () =>
@@ -181,7 +192,7 @@ export async function searchMatters(
           },
         ],
         config: {
-          systemInstruction: SYSTEM,
+          systemInstruction: systemFor(locale),
           responseMimeType: 'application/json',
           responseSchema,
           temperature: 0,

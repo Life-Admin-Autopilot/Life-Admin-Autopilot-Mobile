@@ -7,7 +7,17 @@
 // real cause is a non-secure origin they find a correctly-granted permission
 // and no way forward. See `isSecureContext` below.
 
+import type { Translate } from '@/lib/i18n/translate'
+
 export type MicFailure = 'unsupported' | 'insecure-context' | 'denied' | 'no-device' | 'unknown'
+
+/** Scoped to the `lib` namespace — callers pass `useTranslations('lib')`. */
+export type MicFailureKey =
+  | 'mic.denied'
+  | 'mic.noDevice'
+  | 'mic.insecureContext'
+  | 'mic.unsupported'
+  | 'mic.unknown'
 
 /**
  * True when the page can reach `navigator.mediaDevices` at all.
@@ -37,18 +47,22 @@ export function classifyMicFailure(err: unknown): MicFailure {
   return 'unknown'
 }
 
-export function micFailureMessage(failure: MicFailure, appName: string): string {
+export function micFailureMessage(
+  failure: MicFailure,
+  appName: string,
+  t: Translate<MicFailureKey>,
+): string {
   switch (failure) {
     case 'denied':
-      return `${appName} needs microphone access. Enable it in Settings → Privacy & Security → Microphone.`
+      return t('mic.denied', { app: appName })
     case 'no-device':
-      return 'No microphone found. Connect one and try again.'
+      return t('mic.noDevice')
     case 'insecure-context':
       // Dev-only in practice — a shipped build is always a secure origin.
-      return 'Voice needs a secure connection. This dev build is served over plain http, so the browser blocks the microphone.'
+      return t('mic.insecureContext')
     case 'unsupported':
-      return 'This device or browser cannot record audio.'
+      return t('mic.unsupported')
     default:
-      return 'Could not start recording. Try again.'
+      return t('mic.unknown')
   }
 }

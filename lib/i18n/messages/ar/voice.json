@@ -1,0 +1,12 @@
+{
+  "listening": "أستمع",
+  "readyToSend": "جاهز للإرسال",
+  "transcribing": "جارٍ التحويل إلى نص",
+  "transcribingEllipsis": "جارٍ التحويل إلى نص…",
+  "orderFollows": "والباقي علينا",
+  "somethingWrong": "حدث خطأ ما",
+  "tooShort": "قصير جدًا — لم يُسجَّل شيء.",
+  "nothingCaptured": "لم يُسجَّل شيء.",
+  "transcribeFailed": "تعذّر تحويل الصوت إلى نص.",
+  "responds": "{app} يردّ"
+}

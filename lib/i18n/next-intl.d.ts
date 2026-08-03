@@ -4,11 +4,18 @@
 // key path to a user. This is what makes the ~600-string extraction safe to do
 // mechanically.
 
-import type en from '@/lib/i18n/messages/en.json'
+// Points at the COMPOSED type, not a single JSON file. It used to import
+// `messages/en.json` directly; when the catalogue was split into one file per
+// namespace that import silently became unresolvable, and because `skipLibCheck`
+// suppresses errors inside .d.ts files it did not fail the build — it quietly
+// degraded `Messages` to `any` and turned off key checking for the whole app.
+// Sourcing it from messages.ts means the reference catalogue can be restructured
+// again without this going dark.
+import type { Messages } from '@/lib/i18n/messages'
 
 declare module 'next-intl' {
   interface AppConfig {
-    Messages: typeof en
+    Messages: Messages
   }
 }
 

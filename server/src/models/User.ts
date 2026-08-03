@@ -91,8 +91,22 @@ export interface UserAttrs {
    * a LOCAL calendar day, and without this they can only guess at UTC.
    */
   timezone?: string
-  /** BCP 47 tag (e.g. `en-GB`). Display formatting only. */
+  /**
+   * BCP 47 tag (e.g. `en-GB`). The EFFECTIVE language, not just the one the
+   * user picked from a list — so it is set even when they asked to follow their
+   * device. Everything that writes prose while no device is present reads this:
+   * the daily digest, document extraction, voice-note extraction. A user whose
+   * app is in Arabic and whose scans come back in English is the failure this
+   * field exists to prevent, so it must never be null once anything has told us.
+   */
   locale?: string
+  /**
+   * True when `locale` was read off a device rather than chosen. Kept apart
+   * because the two behave differently across devices: a chosen language should
+   * follow the account onto a new phone, a device-derived one must not — that
+   * is how an Arabic phone's language would otherwise land on an English one.
+   */
+  localeFollowsDevice?: boolean
   theme: Theme
   textSize: TextSize
   mic: MicPrefs
@@ -186,6 +200,7 @@ const UserSchema = new Schema<UserAttrs>(
     emailVerifiedAt: { type: Date },
     timezone: { type: String },
     locale: { type: String },
+    localeFollowsDevice: { type: Boolean },
     theme: { type: String, enum: THEMES, default: 'system' },
     textSize: { type: String, enum: TEXT_SIZES, default: 'md' },
     mic: { type: MicSchema, default: () => ({}) },

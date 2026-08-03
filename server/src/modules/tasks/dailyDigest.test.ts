@@ -7,6 +7,7 @@ import { AiUsageCounter, utcDateBucket } from '../../models/AiUsageCounter'
 import { Clarification } from '../../models/Clarification'
 import { ScannedDocument } from '../../models/ScannedDocument'
 import { DailyDigest } from '../../models/DailyDigest'
+import { User } from '../../models/User'
 import { buildDailyDigest, whenDigestProseSettled } from './dailyDigest'
 
 // AI seam. The digest is contractually allowed to run without a model at all,
@@ -261,6 +262,84 @@ describe('buildDailyDigest — caching', () => {
     expect(second.generatedAt).not.toBe(first.generatedAt)
     // Still one row — the rebuild replaces the day's entry, it does not stack.
     expect(await DailyDigest.countDocuments({})).toBe(1)
+  })
+
+  it('rebuilds when the language changes, though no matter moved', async () => {
+    // The failure this prevents: switching to Arabic changes what the row should
+    // say without touching a single matter, so every other input to the
+    // fingerprint is identical and the English sentence would be served all day.
+    await User.create({ _id: new Types.ObjectId(userId), email: 'ar@example.com' })
+    await task({ dueAt: new Date('2026-07-27T09:00:00.000Z') })
+
+    const first = await digest()
+    await User.updateOne({ _id: new Types.ObjectId(userId) }, { $set: { locale: 'ar' } })
+    const second = await buildDailyDigest({
+      userId,
+      timezone: TZ,
+      now: new Date(NOW.getTime() + 3_600_000),
+    })
+
+    expect(second.generatedAt).not.toBe(first.generatedAt)
+    expect(await DailyDigest.countDocuments({})).toBe(1)
+    const row = await DailyDigest.findOne({}).lean()
+    expect(row?.locale).toBe('ar')
+  })
+
+  it('drops carried-forward themes when the language changes', async () => {
+    // Themes deliberately survive a rebuild so the strip does not empty out. In
+    // the language the user just left they are not stale wording, they are wrong
+    // — and they would sit directly under a headline that already switched.
+    await User.create({ _id: new Types.ObjectId(userId), email: 'themes@example.com' })
+    const matter = await task({ dueAt: new Date('2026-07-27T09:00:00.000Z') })
+
+    await digest()
+    await DailyDigest.updateOne(
+      {},
+      {
+        $set: {
+          'payload.themes': [
+            { label: 'Car paperwork', count: 1, taskIds: [String(matter._id)] },
+          ],
+        },
+      },
+    )
+
+    await User.updateOne({ _id: new Types.ObjectId(userId) }, { $set: { locale: 'ar' } })
+    const switched = await buildDailyDigest({
+      userId,
+      timezone: TZ,
+      now: new Date(NOW.getTime() + 3_600_000),
+    })
+
+    expect(switched.themes).toEqual([])
+  })
+
+  it('keeps carried-forward themes when the language is unchanged', async () => {
+    await User.create({ _id: new Types.ObjectId(userId), email: 'keep@example.com' })
+    const matter = await task({ dueAt: new Date('2026-07-27T09:00:00.000Z') })
+
+    await digest()
+    await DailyDigest.updateOne(
+      {},
+      {
+        $set: {
+          'payload.themes': [
+            { label: 'Car paperwork', count: 1, taskIds: [String(matter._id)] },
+          ],
+        },
+      },
+    )
+
+    // A real change to the matters, so the row rebuilds for a reason unrelated to
+    // language — the themes must ride along.
+    await task({ title: 'Book dentist', dueAt: new Date('2026-07-27T11:00:00.000Z') })
+    const rebuilt = await buildDailyDigest({
+      userId,
+      timezone: TZ,
+      now: new Date(NOW.getTime() + 3_600_000),
+    })
+
+    expect(rebuilt.themes.map((theme) => theme.label)).toEqual(['Car paperwork'])
   })
 
   it('rebuilds when an unrelated collection changes', async () => {

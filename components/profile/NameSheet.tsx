@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -27,6 +28,9 @@ export function NameSheet({
   trigger?: DOMRect | null
   currentName?: string
 }) {
+  const t = useTranslations('profile.name')
+  const tCommon = useTranslations('common')
+  const tGroups = useTranslations('profile.groups')
   const [name, setName] = useState(currentName ?? '')
   const update = useUpdateProfile()
 
@@ -43,10 +47,10 @@ export function NameSheet({
       { displayName: trimmed },
       {
         onSuccess: () => {
-          toast.success('Name saved.')
+          toast.success(t('saved'))
           onClose()
         },
-        onError: (err) => toast.error(translateBackendError(err, "That didn't save.")),
+        onError: (err) => toast.error(translateBackendError(err, tCommon('notSaved'))),
       },
     )
   }
@@ -57,8 +61,8 @@ export function NameSheet({
       onClose={onClose}
       trigger={trigger}
       height={300}
-      eyebrow="Account"
-      title="Your name"
+      eyebrow={tGroups('account')}
+      title={t('title')}
       footer={
         <Button
           variant="solid"
@@ -66,19 +70,19 @@ export function NameSheet({
           disabled={!trimmed || unchanged || tooLong || update.isPending}
           onClick={save}
         >
-          {update.isPending ? 'Saving…' : 'Save name'}
+          {update.isPending ? tCommon('saving') : t('save')}
         </Button>
       }
     >
       <Field
-        label="Name"
-        hint="What Kitto calls you."
-        error={tooLong ? `Keep it under ${MAX_LENGTH} characters.` : undefined}
+        label={t('label')}
+        hint={t('hint')}
+        error={tooLong ? t('tooLong', { max: MAX_LENGTH }) : undefined}
       >
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Your name"
+          placeholder={t('placeholder')}
           autoComplete="name"
           aria-invalid={tooLong || undefined}
           onKeyDown={(e) => {

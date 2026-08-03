@@ -36,11 +36,14 @@ import type { Task } from '@/queries/tasks'
 // content box, and every tap on the card's right half or its vertical padding
 // lands on nothing.
 
-const PRIORITY_PILL: Partial<Record<Task['priority'], { label: string; tone: 'high' | 'medium' }>> =
-  {
-    urgent: { label: 'Urgent', tone: 'high' },
-    high: { label: 'High', tone: 'medium' },
-  }
+// Only the two loud priorities get a pill; "normal" and "low" say nothing worth
+// the width. The label is NOT restated here — `matters.priority.*` already
+// carries all four for the filter and the editor, so this maps to a tone only
+// and the row reads the shared key.
+const PRIORITY_TONE: Partial<Record<Task['priority'], 'high' | 'medium'>> = {
+  urgent: 'high',
+  high: 'medium',
+}
 
 export function MatterListRow({
   task,
@@ -74,7 +77,7 @@ export function MatterListRow({
   const t = useTranslations('matters')
   const tag = useIntlTag()
   const overdue = !done && bucketOf(task, now) === 'overdue'
-  const priority = PRIORITY_PILL[task.priority]
+  const priorityTone = PRIORITY_TONE[task.priority]
   const openSubtasks = task.subtasks.filter((s) => !s.done).length
 
   return (
@@ -95,7 +98,11 @@ export function MatterListRow({
             if (press.consumeClick()) return
             onToggleSelect?.(task)
           }}
-          aria-label={selected ? `Deselect ${task.title}` : `Select ${task.title}`}
+          aria-label={
+            selected
+              ? t('row.deselect', { title: task.title })
+              : t('row.select', { title: task.title })
+          }
           aria-pressed={selected}
           className="relative z-10 shrink-0"
         >
@@ -162,9 +169,9 @@ export function MatterListRow({
             done && 'opacity-55',
           )}
         >
-          {priority && !done ? (
-            <Pill tone={priority.tone} className="shrink-0 px-2 py-0 text-micro">
-              {priority.label}
+          {priorityTone && !done ? (
+            <Pill tone={priorityTone} className="shrink-0 px-2 py-0 text-micro">
+              {t(`priority.${task.priority}`)}
             </Pill>
           ) : null}
           <span
@@ -193,7 +200,9 @@ export function MatterListRow({
             if (press.consumeClick()) return
             onToggleDone(task)
           }}
-          label={done ? `Reopen ${task.title}` : `Complete ${task.title}`}
+          label={
+            done ? t('row.reopen', { title: task.title }) : t('row.complete', { title: task.title })
+          }
           className="relative z-10"
         />
       ) : null}

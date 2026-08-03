@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'framer-motion'
 import { X } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { cn } from '@/lib/cn'
@@ -73,6 +74,11 @@ export function MorphSheet({
   const read = useCallback((node: HTMLDivElement | null) => {
     if (!node) return
     const r = node.getBoundingClientRect()
+    // A zero box means the containing block is not laid out YET, not that it is
+    // genuinely empty. Storing it would compute a negative width/height below
+    // and render an invisible sheet; leaving `vp` null keeps the sheet closed
+    // until a real measurement arrives.
+    if (r.width === 0 || r.height === 0) return
     setVp({ width: r.width, height: r.height, top: r.top, left: r.left })
   }, [])
 
@@ -87,11 +93,29 @@ export function MorphSheet({
     [read],
   )
 
+  // A window `resize` is NOT the only thing that changes the probe's box, and
+  // relying on it alone was why every sheet stayed shut until the window was
+  // resized by hand: the ref callback above is a stable useCallback, so React
+  // invokes it exactly once, and any layout that settled after that first commit
+  // — fonts arriving, PhoneFrame sizing itself, an orientation change, the
+  // containing block being established late — left `vp` frozen at its initial
+  // value with no way to recover. The sheet then failed the `open && target`
+  // gate below and rendered nothing at all.
+  //
+  // Observing the probe covers every one of those, including the plain resize.
   useEffect(() => {
-    const onResize = () => read(probeRef.current)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    const node = probeRef.current
+    if (!node) return
+    const observer = new ResizeObserver(() => read(node))
+    observer.observe(node)
+    return () => observer.disconnect()
   }, [read])
+
+  // Belt and braces: measure again the moment a sheet is asked to open, so a
+  // first open can never depend on an observer callback having already landed.
+  useEffect(() => {
+    if (open) read(probeRef.current)
+  }, [open, read])
 
   useEffect(() => {
     if (!open) return
@@ -222,6 +246,7 @@ function Surface({
   children: React.ReactNode
 }) {
   const isPresent = useIsPresent()
+  const t = useTranslations('common')
 
   // MUST be stable. React re-invokes a ref callback whose identity changed —
   // detaching with null, reattaching with the node — so an inline arrow here
@@ -237,7 +262,7 @@ function Surface({
     <>
       <motion.button
         type="button"
-        aria-label="Close"
+        aria-label={t('close')}
         onClick={onClose}
         variants={MORPH_BACKDROP_FADE}
         initial="initial"
@@ -294,7 +319,7 @@ function Surface({
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close"
+              aria-label={t('close')}
               className="grid size-11 shrink-0 place-items-center rounded-full bg-surface-sunken text-ink-muted transition-colors hover:text-ink"
             >
               <X size={18} />

@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -10,7 +11,7 @@ import { PasswordInput } from '@/components/ui/PasswordInput'
 import { Sheet } from '@/components/ui/Sheet'
 import { useResetOnOpen } from '@/hooks/useResetOnOpen'
 import { toast } from '@/lib/toast'
-import { REAUTH_MESSAGES, translateBackendError } from '@/lib/translateBackendError'
+import { reauthMessages, translateBackendError } from '@/lib/translateBackendError'
 import { useDeleteAccount, useExportData } from '@/queries/account'
 
 // Closing the account for good.
@@ -41,6 +42,8 @@ export function DeleteAccountSheet({
   hasPassword: boolean
 }) {
   const router = useRouter()
+  const t = useTranslations('profile.delete')
+  const tProfile = useTranslations('profile')
   const [password, setPassword] = useState('')
   const [typed, setTyped] = useState('')
   const deleteAccount = useDeleteAccount()
@@ -58,8 +61,8 @@ export function DeleteAccountSheet({
 
   const runExport = () => {
     exportData.mutate(undefined, {
-      onSuccess: (destination) => toast.success(`Exported. ${destination.message}`),
-      onError: (err) => toast.error(translateBackendError(err, "That didn't export.")),
+      onSuccess: (destination) => toast.success(tProfile('exported', { message: destination.message })),
+      onError: (err) => toast.error(translateBackendError(err, tProfile('notExported'))),
     })
   }
 
@@ -70,11 +73,11 @@ export function DeleteAccountSheet({
       {
         onSuccess: () => {
           onClose()
-          toast.success('Your account is gone. Take care.')
+          toast.success(t('gone'))
           router.replace('/welcome')
         },
         onError: (err) =>
-          toast.error(translateBackendError(err, "That didn't go through.", REAUTH_MESSAGES)),
+          toast.error(translateBackendError(err, t('failed'), reauthMessages())),
       },
     )
   }
@@ -86,8 +89,8 @@ export function DeleteAccountSheet({
       trigger={trigger}
       height={540}
       eyebrowTone="danger"
-      eyebrow="This cannot be undone"
-      title="Delete your account?"
+      eyebrow={t('eyebrow')}
+      title={t('title')}
       footer={
         <div className="flex items-center justify-end gap-2">
           <button
@@ -102,7 +105,7 @@ export function DeleteAccountSheet({
             disabled={!ready || deleteAccount.isPending}
             onClick={confirm}
           >
-            {deleteAccount.isPending ? 'Deleting…' : 'Delete everything'}
+            {deleteAccount.isPending ? t('deleting') : t('action')}
           </Button>
         </div>
       }
@@ -114,10 +117,10 @@ export function DeleteAccountSheet({
 
         <ul className="flex flex-col gap-1.5 rounded-2xl bg-danger-soft px-4 py-3.5">
           {[
-            'Every matter and reminder',
-            'Scanned documents and their originals',
-            'Voice notes and transcripts',
-            'Your chat history with Kitto',
+            t('losesMatters'),
+            t('losesDocuments'),
+            t('losesVoice'),
+            t('losesChat'),
           ].map((item) => (
             <li key={item} className="text-body-sm text-danger">
               {item}
@@ -133,7 +136,7 @@ export function DeleteAccountSheet({
         >
           <span className="min-w-0 flex-1">
             <span className="block text-heading-sm text-ink">
-              {exportData.isPending ? 'Preparing…' : 'Take your data first'}
+              {exportData.isPending ? t('preparing') : t('takeData')}
             </span>
             <span className="block text-body-sm text-ink-muted">
               Downloads everything above as a file.
@@ -142,16 +145,16 @@ export function DeleteAccountSheet({
         </button>
 
         {hasPassword ? (
-          <Field label="Password" hint="Confirms it's really you.">
+          <Field label={t('passwordLabel')} hint={t('passwordHint')}>
             <PasswordInput
               autoComplete="current-password"
-              placeholder="Your password"
+              placeholder={t('passwordPlaceholder')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </Field>
         ) : (
-          <Field label={`Type "${CONFIRM_WORD}" to confirm`}>
+          <Field label={t('confirmLabel', { word: CONFIRM_WORD })}>
             <Input
               autoComplete="off"
               autoCapitalize="none"

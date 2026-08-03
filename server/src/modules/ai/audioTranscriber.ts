@@ -11,17 +11,36 @@
 import { env } from '../../env'
 import { logger } from '../../logger'
 import { getGeminiClient } from './provider/geminiClient'
+import { DEFAULT_AI_LOCALE, languageName, type AiLocale } from './promptLanguage'
 
-const SYSTEM = [
+const SYSTEM_BASE = [
   'You are a verbatim audio transcriber. Output ONLY the spoken text from the audio.',
   'No preamble, no summary, no quotes around the text, no markdown.',
   "If the audio contains no speech, output exactly: '(no speech detected)'.",
   'Preserve the speaker’s words and punctuation as faithfully as possible.',
 ].join('\n')
 
+// The locale is a HINT to the recogniser, never an instruction to translate.
+// This transcript is the input to voiceCore/extract, which is where the user's
+// language gets applied; translating here would destroy the original wording
+// before anything had a chance to read it, and a name heard in one language and
+// rendered in another is unrecoverable.
+function systemFor(locale: AiLocale): string {
+  if (locale === DEFAULT_AI_LOCALE) return SYSTEM_BASE
+  return [
+    SYSTEM_BASE,
+    `The speaker most likely speaks ${languageName(locale)}, so prefer that reading when the audio is ambiguous.`,
+    'Still transcribe what you actually hear, in the language and script it was spoken in.',
+    'NEVER translate. Switching language mid-sentence is normal — keep each word in the',
+    'language it was said in.',
+  ].join('\n')
+}
+
 interface TranscribeArgs {
   bytes: Buffer
   mimeType: string
+  /** Recognition hint only — see systemFor. */
+  locale: AiLocale
 }
 
 const ALLOWED_MIME = new Set([
@@ -62,6 +81,7 @@ function isTransientGeminiError(err: unknown): boolean {
 export async function transcribeAudio({
   bytes,
   mimeType,
+  locale,
 }: TranscribeArgs): Promise<string> {
   const client = getGeminiClient()
   const mime = resolveMime(mimeType)
@@ -83,7 +103,7 @@ export async function transcribeAudio({
       },
     ],
     config: {
-      systemInstruction: SYSTEM,
+      systemInstruction: systemFor(locale),
       // Keep deterministic — we want the literal words, not paraphrasing.
       temperature: 0,
     },

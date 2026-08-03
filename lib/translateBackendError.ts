@@ -1,27 +1,44 @@
-// Backend error → friendly user-facing string. The Express backend already
-// returns friendly messages on its ApiError codes (e.g. invalid_credentials →
-// "Wrong email or password."), so we mostly surface err.message — but we guard
-// against raw codes/stack traces leaking, translate a few known codes, and give
-// network/5xx their own copy. Catch blocks call this instead of stringifying
-// err.message directly (AGENTS.md → UI voice: errors are factual, never Error 503).
+// Backend error → friendly user-facing string, in the user's language.
+//
+// The catalogue is authoritative, not `err.message`. That inverts what this file
+// used to do, and the inversion is the whole point: the Express backend writes
+// its ApiError messages in English, so surfacing `err.message` put an English
+// sentence in front of an Arabic reader on every error the client had not mapped.
+// errors.byCode covers the server's full code list, so a known code is answered
+// from the catalogue and the server's own wording is never shown.
+//
+// `err.message` survives only as a last resort BEFORE the generic fallback, and
+// only in English. In any other locale an unmapped code falls to errors.generic —
+// a vague sentence in the right language beats a precise one in the wrong one,
+// and it puts pressure on adding the code to the catalogue rather than letting
+// English leak.
+//
+// Reads the catalogue directly rather than taking a translator: see the header of
+// lib/i18n/staticMessages.ts for why this file is one of the three exceptions.
 
 import { ApiError } from '@/lib/api/client'
+import { DEFAULT_LOCALE } from '@/lib/i18n/locales'
+import { currentLocale } from '@/lib/i18n/localeStore'
+import { staticMessages } from '@/lib/i18n/staticMessages'
 
-const FRIENDLY_BY_CODE: Record<string, string> = {
-  invalid_credentials: 'Wrong email or password.',
-  email_taken: 'An account with this email already exists.',
-  invalid_body: 'Some of those details looked off. Check the fields and try again.',
-  rate_limited: 'Too many attempts. Wait a moment and try again.',
-  invalid_code: 'That code is wrong or has expired. Send a new one.',
-  email_send_failed: 'We could not send that email. Try again in a moment.',
-  no_pending_email: "There's no email change waiting.",
-  email_unchanged: "That's already your email address.",
+type ByCode = ReturnType<typeof staticMessages>['errors']['byCode']
+
+function friendlyByCode(code: string): string | null {
+  const byCode = staticMessages().errors.byCode as Record<string, string | undefined>
+  return byCode[code] ?? null
 }
 
-// `invalid_credentials` means "wrong email or password" at the sign-in door, but
-// inside Settings the email is not in question — only the password is. Callers
-// re-confirming a password pass this so the message names the right field.
-export const REAUTH_MESSAGES = { invalid_credentials: 'That password is incorrect.' } as const
+/**
+ * `invalid_credentials` means "wrong email or password" at the sign-in door, but
+ * inside Settings the email is not in question — only the password is. Callers
+ * re-confirming a password pass this so the message names the right field.
+ *
+ * A function, not a constant: the copy has to be read at call time or it freezes
+ * whichever language happened to be active when the module first loaded.
+ */
+export function reauthMessages(): Readonly<Record<string, string>> {
+  return { invalid_credentials: staticMessages().errors.reauthPassword }
+}
 
 // Heuristic: raw codes, stack traces, or massive strings shouldn't reach the UI.
 function looksLikeRawError(message: string): boolean {
@@ -32,28 +49,47 @@ function looksLikeRawError(message: string): boolean {
   return false
 }
 
+/** The server writes its messages in English, so they may only be shown in it. */
+function mayShowServerMessage(): boolean {
+  return currentLocale() === DEFAULT_LOCALE
+}
+
 export function translateBackendError(
   err: unknown,
-  fallback = 'Something went wrong. Try again in a moment.',
-  /** Per-surface overrides, e.g. REAUTH_MESSAGES inside Settings. */
+  fallback?: string,
+  /** Per-surface overrides, e.g. reauthMessages() inside Settings. */
   overrides?: Readonly<Record<string, string>>,
 ): string {
+  const errors = staticMessages().errors
+  const generic = fallback ?? errors.generic
+
   if (err instanceof ApiError) {
     const override = overrides?.[err.code]
     if (override) return override
-    const mapped = FRIENDLY_BY_CODE[err.code]
+
+    const mapped = friendlyByCode(err.code)
     if (mapped) return mapped
-    if (err.status >= 500) return 'Our end hiccuped. Try again in a moment.'
-    if (err.status === 401 || err.status === 403) return 'Sign in again to continue.'
-    if (err.status === 404) return "Couldn't find that — it may have been removed."
-    if (err.message && !looksLikeRawError(err.message)) return err.message
-    return fallback
+
+    if (err.status >= 500) return errors.server
+    if (err.status === 401 || err.status === 403) return errors.signInAgain
+    if (err.status === 404) return errors.notFound
+
+    if (err.message && !looksLikeRawError(err.message) && mayShowServerMessage()) {
+      return err.message
+    }
+    return generic
   }
 
   // Browser fetch surfaces network failures as TypeError ("Failed to fetch").
-  if (err instanceof TypeError) return 'No connection. Check your internet and try again.'
+  if (err instanceof TypeError) return errors.network
 
-  if (err instanceof Error && err.message && !looksLikeRawError(err.message)) return err.message
+  if (err instanceof Error && err.message && !looksLikeRawError(err.message)) {
+    // A client-thrown Error is written by this codebase, not the server, so it
+    // is already whatever language the throwing site used. Shown as-is.
+    return err.message
+  }
 
-  return fallback
+  return generic
 }
+
+export type { ByCode }

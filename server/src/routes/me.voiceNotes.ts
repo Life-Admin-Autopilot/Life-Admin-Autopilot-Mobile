@@ -19,6 +19,7 @@ import {
 import { DOMAINS } from '../models/User'
 import { TASK_PRIORITIES } from '../models/Task'
 import { env } from '../env'
+import { getUserAiLocale } from '../modules/ai/userLocale'
 import { extractItems } from '../modules/ai/voiceCore/extract'
 import { gateAndKey } from '../modules/ai/voiceCore/gate'
 import { persistTasksFromItems } from '../modules/ai/voiceCore/persist'
@@ -181,7 +182,11 @@ meVoiceNotesRouter.post(
     // Caller-supplied timezone (already IANA-validated) wins; otherwise fall
     // back to the timezone captured with the note.
     const tz = parsedBody.data.timezone ?? note.timezone
-    const drafts = await extractItems({ transcript: note.transcript, timezone: tz })
+    const drafts = await extractItems({
+      transcript: note.transcript,
+      timezone: tz,
+      locale: await getUserAiLocale(String(note.userId)),
+    })
     const { autoSave, review, clarify } = gateAndKey(note.id, drafts)
 
     const created = await persistTasksFromItems({

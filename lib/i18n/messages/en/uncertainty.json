@@ -1,0 +1,12 @@
+{
+  "loading": "Loading…",
+  "position": "{current}/{total}",
+  "filedWithGuess": "Filed with a guess",
+  "answerPlaceholder": "Type your answer…",
+  "pickOption": "Pick an option",
+  "typeYourOwn": "Type your own",
+  "drop": "Drop",
+  "allClearTitle": "All clear.",
+  "allClearBody": "Everything's filed the way you wanted.",
+  "backToDashboard": "Back to dashboard"
+}

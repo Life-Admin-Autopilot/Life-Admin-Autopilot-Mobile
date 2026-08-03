@@ -75,7 +75,7 @@ beforeEach(() => {
 describe('extractItems', () => {
   it('returns [] for an empty transcript without calling the model', async () => {
     const { extractItems } = await import('./extract')
-    const items = await extractItems({ transcript: '   ' })
+    const items = await extractItems({ transcript: '   ', locale: 'en' })
     expect(items).toEqual([])
     expect(generateContentMock).not.toHaveBeenCalled()
   })
@@ -95,6 +95,7 @@ describe('extractItems', () => {
     const items = await extractItems({
       transcript: 'renew my car insurance before the 15th',
       timezone: 'Africa/Cairo',
+      locale: 'en',
     })
     expect(items).toHaveLength(1)
     expect(items[0]?.title).toBe('Renew car insurance')
@@ -111,7 +112,7 @@ describe('extractItems', () => {
     )
     generateContentMock.mockResolvedValueOnce(modelResponse(fixtures))
     const { extractItems } = await import('./extract')
-    const items = await extractItems({ transcript: 'a very long brain dump', timezone: 'Africa/Cairo' })
+    const items = await extractItems({ transcript: 'a very long brain dump', timezone: 'Africa/Cairo', locale: 'en' })
     expect(items).toHaveLength(20)
     expect(items.map((i) => i.title)).toEqual(fixtures.map((f) => f.title))
     for (const item of items) {
@@ -125,7 +126,7 @@ describe('extractItems', () => {
       modelResponse([task({ title: 'Do the thing', domain: 'spaceship' })]),
     )
     const { extractItems } = await import('./extract')
-    const items = await extractItems({ transcript: 'do the thing' })
+    const items = await extractItems({ transcript: 'do the thing', locale: 'en' })
     expect(items).toHaveLength(1) // NOT dropped
     expect(items[0]?.domain).toBe('home')
     expect(items[0]?.reviewReason).toBe('unknown_domain')
@@ -139,7 +140,7 @@ describe('extractItems', () => {
       ]),
     )
     const { extractItems } = await import('./extract')
-    const items = await extractItems({ transcript: 'call the plumber sometime soon' })
+    const items = await extractItems({ transcript: 'call the plumber sometime soon', locale: 'en' })
     expect(items[0]?.dueAt).toBeUndefined()
     expect(items[0]?.reviewReason).toBe('vague_date')
     expect(items[0]?.confidence).toBe('medium')
@@ -153,7 +154,7 @@ describe('extractItems', () => {
       ]),
     )
     const { extractItems } = await import('./extract')
-    const items = await extractItems({ transcript: 'pay water bill, the water bill' })
+    const items = await extractItems({ transcript: 'pay water bill, the water bill', locale: 'en' })
     expect(items).toHaveLength(1)
   })
 
@@ -168,7 +169,7 @@ describe('extractItems', () => {
       ]),
     )
     const { extractItems } = await import('./extract')
-    const items = await extractItems({ transcript: 'pay the water bill' })
+    const items = await extractItems({ transcript: 'pay the water bill', locale: 'en' })
     expect(items[0]?.estimate).toEqual({ minMinutes: 5, maxMinutes: 15, source: 'ai' })
   })
 
@@ -185,7 +186,7 @@ describe('extractItems', () => {
       ]),
     )
     const { extractItems } = await import('./extract')
-    const items = await extractItems({ transcript: 'sort the recycling' })
+    const items = await extractItems({ transcript: 'sort the recycling', locale: 'en' })
     expect(items).toHaveLength(1)
     expect(items[0]?.estimate).toEqual({ minMinutes: 30, maxMinutes: 45, source: 'ai' })
   })
@@ -201,7 +202,7 @@ describe('extractItems', () => {
       ]),
     )
     const { extractItems } = await import('./extract')
-    const items = await extractItems({ transcript: 'deep clean the oven' })
+    const items = await extractItems({ transcript: 'deep clean the oven', locale: 'en' })
     expect(items[0]?.estimate).toEqual({ minMinutes: 45, maxMinutes: 120, source: 'ai' })
   })
 
@@ -211,7 +212,7 @@ describe('extractItems', () => {
       modelResponse([task({ title: 'Buy bread', domain: 'home' })]),
     )
     const { extractItems } = await import('./extract')
-    const items = await extractItems({ transcript: 'buy bread' })
+    const items = await extractItems({ transcript: 'buy bread', locale: 'en' })
     expect(items).toHaveLength(1)
     expect(items[0]?.estimate).toBeUndefined()
   })
@@ -221,7 +222,7 @@ describe('extractItems', () => {
       modelResponse([task({ title: 'Book dentist cleaning', domain: 'health' })]),
     )
     const { extractItems } = await import('./extract')
-    const items = await extractItems({ transcript: 'book a dentist cleaning' })
+    const items = await extractItems({ transcript: 'book a dentist cleaning', locale: 'en' })
     for (const item of items) {
       for (const banned of PLACEHOLDER_DENYLIST) {
         expect(item.title).not.toContain(banned)

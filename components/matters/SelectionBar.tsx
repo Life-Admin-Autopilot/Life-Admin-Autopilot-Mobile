@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { Check, Clock, Sparkles, Trash2 } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { cn } from '@/lib/cn'
 
@@ -40,6 +41,8 @@ export function SelectionActionBar({
   onDelete: (rect: DOMRect) => void
   busy?: boolean
 }) {
+  const t = useTranslations('matters')
+  const tCommon = useTranslations('common')
   const disabled = busy || count === 0
 
   return (
@@ -50,10 +53,10 @@ export function SelectionActionBar({
       transition={{ type: 'spring', stiffness: 300, damping: 32 }}
       className="bottom-safe fixed inset-x-0 z-40 mx-auto flex max-w-sm items-center justify-around rounded-pill bg-surface/95 px-2 py-2 shadow-elevated backdrop-blur-xl"
     >
-      <Action label="Complete" onClick={onComplete} disabled={disabled}>
+      <Action label={t('selection.complete')} onClick={onComplete} disabled={disabled}>
         <Check size={20} />
       </Action>
-      <Action label="Snooze" onClick={onSnooze} disabled={disabled}>
+      <Action label={t('selection.snooze')} onClick={onSnooze} disabled={disabled}>
         <Clock size={20} />
       </Action>
       {/* Say the plain word.
@@ -62,15 +65,16 @@ export function SelectionActionBar({
           reads as the noun in an app that has a Documents tab, and "Tidy" is
           warm but says nothing. "Categorize" is longer and duller and is the
           word people actually reach for when asking what this does — it fits
-          the 80px slot, same as "Documents" in the tab bar.
+          the 80px slot, same as "Documents" in the tab bar. Arabic says تصنيف,
+          which is shorter still, so the slot holds in both languages.
 
           Sits between the reversible actions and the destructive one, because
           that is what it is: it proposes, nothing is written until reviewed,
           and an applied run undoes like any other. */}
-      <Action label="Categorize" onClick={onCategorize} disabled={disabled}>
+      <Action label={t('selection.categorize')} onClick={onCategorize} disabled={disabled}>
         <Sparkles size={20} />
       </Action>
-      <Action label="Delete" onClick={onDelete} disabled={disabled} danger>
+      <Action label={tCommon('delete')} onClick={onDelete} disabled={disabled} danger>
         <Trash2 size={20} />
       </Action>
     </motion.div>

@@ -1,0 +1,237 @@
+{
+  "bucket": {
+    "overdue": "Overdue",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "thisWeek": "This week",
+    "later": "Later",
+    "undated": "No date",
+    "done": "Done"
+  },
+  "priority": {
+    "urgent": "Urgent",
+    "high": "High",
+    "normal": "Normal",
+    "low": "Low"
+  },
+  "due": {
+    "noDate": "No date",
+    "today": "Today, {time}",
+    "todayOverdue": "Today, {time} · overdue",
+    "tomorrow": "Tomorrow, {time}",
+    "yesterday": "Yesterday, {time}",
+    "daysOverdue": "{count, plural, one {# day overdue} other {# days overdue}}",
+    "overdueSince": "Overdue since {date}"
+  },
+  "range": {
+    "between": "{from} – {to}",
+    "after": "from {date}",
+    "before": "up to {date}",
+    "allTime": "all time",
+    "preset": {
+      "today": "Today",
+      "thisWeek": "This week",
+      "thisMonth": "This month",
+      "nextMonth": "Next month",
+      "lastMonth": "Last month"
+    }
+  },
+  "snooze": {
+    "laterToday": "Later today",
+    "tomorrow": "Tomorrow",
+    "nextWeek": "Next week",
+    "nextMonth": "Next month"
+  },
+  "group": {
+    "allMatters": "All matters",
+    "time": "By when",
+    "domain": "By domain",
+    "priority": "By priority",
+    "flat": "No grouping"
+  },
+  "summary": {
+    "rangeClear": "{range} is clear.",
+    "eyebrow": "What's coming",
+    "loading": "Reading your matters…",
+    "failed": "Couldn't put a summary together. Try again in a moment.",
+    "nothingScheduled": "Nothing scheduled.",
+    "statDue": "Due",
+    "statOverdue": "Overdue",
+    "statDone": "Done",
+    "drillDue": "Due in range",
+    "drillOverdue": "Overdue",
+    "drillCompleted": "Completed",
+    "duplicates": "Looks duplicated",
+    "copies": "{count, plural, one {# copy} other {# copies}}",
+    "slipping": "Slipping",
+    "unplanned": "Done but never planned",
+    "busiestDay": "{count, plural, one {<b>#</b> matter lands on {date}. Worth spreading out?} other {<b>#</b> matters land on {date}. Worth spreading out?}}"
+  },
+  "status": {
+    "open": "Open",
+    "done": "Done",
+    "snoozed": "Snoozed"
+  },
+  "kind": {
+    "reminder": "Reminders",
+    "list": "List items"
+  },
+  "sortBy": {
+    "due-asc": "Due soonest",
+    "due-desc": "Due latest",
+    "created-desc": "Newest first",
+    "created-asc": "Oldest first",
+    "priority-desc": "Priority",
+    "title-asc": "A–Z"
+  },
+  "section": {
+    "quick": "Quick",
+    "status": "Status",
+    "domain": "Domain",
+    "area": "Area",
+    "priority": "Priority",
+    "type": "Type",
+    "tags": "Tags",
+    "dueRange": "Due range",
+    "when": "When",
+    "due": "Due",
+    "steps": "Steps",
+    "notes": "Notes",
+    "group": "Group",
+    "sortWithin": "Sort within groups",
+    "themes": "Themes"
+  },
+  "controls": {
+    "filter": "Filter",
+    "arrange": "Arrange",
+    "summary": "Summary",
+    "addMatter": "Add a matter"
+  },
+  "slipping": {
+    "prompt": "{count, plural, one {<b>#</b> matter has slipped. Sort it out.} other {<b>#</b> matters have slipped. Sort them out.}}"
+  },
+  "empty": {
+    "loadFailed": "Couldn't load your matters.",
+    "loadFailedBody": "Check your connection and try again.",
+    "noMatch": "Nothing matches that.",
+    "noMatchBody": "Try loosening a filter.",
+    "none": "Nothing on your plate.",
+    "noneBody": "Anything you capture by chat, voice, or scan lands here."
+  },
+  "list": {
+    "showMore": "{count, plural, other {# more}}",
+    "loadingMore": "Loading…"
+  },
+  "toast": {
+    "undo": "Undo",
+    "restored": "Restored.",
+    "undoFailed": "Could not undo that.",
+    "actionFailed": "That did not go through. Try again.",
+    "prepareFailed": "Could not prepare that.",
+    "readFailed": "Could not look at those. Try again.",
+    "deletedOne": "Deleted “{title}”.",
+    "refiled": "{count, plural, one {Refiled # matter.} other {Refiled # matters.}}",
+    "deleted": "{count, plural, one {Deleted # matter.} other {Deleted # matters.}}",
+    "completed": "{count, plural, one {Completed # matter.} other {Completed # matters.}}",
+    "snoozedWeek": "{count, plural, one {Snoozed # matter a week.} other {Snoozed # matters a week.}}"
+  },
+  "sort": {
+    "eyebrow": "How you see it"
+  },
+  "filter": {
+    "eyebrow": "Narrow the list",
+    "clearAll": "Clear all",
+    "untagged": "Untagged",
+    "to": "to",
+    "dueFrom": "Due from",
+    "dueTo": "Due to"
+  },
+  "create": {
+    "title": "New matter",
+    "eyebrow": "Add by hand",
+    "submit": "Add matter",
+    "titlePlaceholder": "What needs doing?",
+    "titleLabel": "Matter title",
+    "pickDate": "Pick a date",
+    "dueLabel": "Due date and time",
+    "added": "Added."
+  },
+  "detail": {
+    "eyebrow": "Matter",
+    "confirmDelete": "Tap again to delete",
+    "dueLabel": "Due date",
+    "stepsCount": "Steps · {count}",
+    "rescheduled": "{count, plural, one {You've moved this once. Still worth keeping?} other {You've moved this # times. Still worth keeping?}}",
+    "saveFailed": "Couldn't save that change. Try again."
+  },
+  "row": {
+    "select": "Select {title}",
+    "deselect": "Deselect {title}",
+    "complete": "Complete {title}",
+    "reopen": "Reopen {title}"
+  },
+  "steps": {
+    "add": "Add a step",
+    "addLabel": "Add step",
+    "complete": "Complete {step}",
+    "reopen": "Reopen {step}",
+    "remove": "Remove {step}"
+  },
+  "search": {
+    "placeholder": "Describe what you're looking for",
+    "listening": "Listening…",
+    "label": "Search matters",
+    "clear": "Clear search",
+    "stop": "Stop and search",
+    "byVoice": "Search by voice",
+    "failed": "Couldn't run that search."
+  },
+  "results": {
+    "nothingMatched": "Nothing matched that.",
+    "backToAll": "Back to all matters",
+    "truncated": "Searched your most recent matters only — you have more than fit in one pass."
+  },
+  "categorize": {
+    "loadingTitle": "Reading your matters",
+    "title": "Where these belong",
+    "eyebrow": "{count, plural, one {# suggestion · nothing changed yet} other {# suggestions · nothing changed yet}}",
+    "loadingBody": "{count, plural, one {{app} is re-reading <b>#</b> matter to work out which area it really belongs to, and what to tag it.} other {{app} is re-reading <b>#</b> matters to work out which area each one really belongs to, and what to tag it.}}",
+    "loadingNote": "Nothing changes yet. You will see every suggestion first and choose which to keep.",
+    "failedTitle": "That didn't go through.",
+    "failedBody": "Nothing was changed. Close this and try again.",
+    "cleanTitle": "Already filed right.",
+    "cleanBody": "{count, plural, one {{app} read it and would not move anything. Nothing changed.} other {{app} read all # and would not move anything. Nothing changed.}}",
+    "explain": "Ticked rows move to the suggested area. {app}'s confident guesses are already ticked — untick anything you disagree with.",
+    "dismiss": "Dismiss",
+    "nothingSelected": "Nothing selected",
+    "apply": "Apply {count}",
+    "selectNone": "Select none",
+    "dismissed": "Suggestions dismissed.",
+    "dismissFailed": "Could not dismiss those."
+  },
+  "bulkDelete": {
+    "title": "{count, plural, one {Delete # matter?} other {Delete # matters?}}",
+    "deleting": "Deleting…",
+    "confirm": "Delete {count}",
+    "resolvedDates": "resolved dates",
+    "fromDocuments": "{count, plural, one {<b>#</b> came from a scanned document.} other {<b>#</b> came from scanned documents.}}",
+    "remindersFired": "{count, plural, one {<b>#</b> already reminded you.} other {<b>#</b> already reminded you.}}",
+    "hide": "Hide",
+    "preview": "Preview {count}",
+    "andMore": "{count, plural, other {…and # more}}",
+    "recoverable": "Recoverable from Trash for 30 days."
+  },
+  "selection": {
+    "complete": "Complete",
+    "snooze": "Snooze",
+    "categorize": "Categorize"
+  },
+  "provenance": {
+    "floating": "This calendar didn't say which timezone it meant, so {app} used yours. Set the time to turn its reminder on.",
+    "dateOnly": "The calendar gave a date but no time, so this uses your default time for imports."
+  },
+  "confidence": {
+    "medium": "fairly sure",
+    "low": "a guess"
+  }
+}

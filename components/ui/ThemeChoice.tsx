@@ -1,6 +1,7 @@
 'use client'
 
 import { Check } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { cn } from '@/lib/cn'
 
@@ -19,11 +20,11 @@ import { cn } from '@/lib/cn'
 
 export type ThemeChoiceValue = 'light' | 'dark' | 'system'
 
-const OPTIONS: ReadonlyArray<{ value: ThemeChoiceValue; label: string }> = [
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-  { value: 'system', label: 'System' },
-]
+// Order only. The labels are looked up inside the component — a module-level
+// constant is evaluated once at import, long before a locale exists, so a label
+// baked in here would be whichever language happened to load first and would
+// never change again when the picker does.
+const OPTIONS: readonly ThemeChoiceValue[] = ['light', 'dark', 'system']
 
 /**
  * A miniature of the app: canvas, a card carrying two text bars and a coral
@@ -98,17 +99,23 @@ export function ThemeChoice({
   onChange: (next: ThemeChoiceValue) => void
   className?: string
 }) {
+  const t = useTranslations('ui.theme')
+
   return (
-    <div role="radiogroup" aria-label="Appearance" className={cn('flex gap-3', className)}>
+    <div
+      role="radiogroup"
+      aria-label={t('groupLabel')}
+      className={cn('flex gap-3', className)}
+    >
       {OPTIONS.map((option) => {
-        const selected = option.value === value
+        const selected = option === value
         return (
           <button
-            key={option.value}
+            key={option}
             type="button"
             role="radio"
             aria-checked={selected}
-            onClick={() => onChange(option.value)}
+            onClick={() => onChange(option)}
             className="group flex flex-1 flex-col items-center gap-2 rounded-2xl outline-none"
           >
             <span
@@ -122,7 +129,7 @@ export function ThemeChoice({
                 'group-focus-visible:ring-3 group-focus-visible:ring-ring/40',
               )}
             >
-              <Preview value={option.value} />
+              <Preview value={option} />
               {selected ? (
                 <span className="absolute bottom-1.5 end-1.5 grid size-5 place-items-center rounded-full bg-accent text-accent-ink">
                   <Check size={12} strokeWidth={3} />
@@ -135,7 +142,7 @@ export function ThemeChoice({
                 selected ? 'font-bold text-accent' : 'text-ink-muted',
               )}
             >
-              {option.label}
+              {t(option)}
             </span>
           </button>
         )

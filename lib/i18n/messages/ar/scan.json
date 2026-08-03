@@ -1,0 +1,149 @@
+{
+  "header": {
+    "title": "المستندات",
+    "scan": "امسح مستندًا",
+    "selectionSubject": "المستندات"
+  },
+  "list": {
+    "loadFailedTitle": "تعذّر تحميل مستنداتك.",
+    "loadFailedBody": "تحقّق من اتصالك وحاول مرة أخرى.",
+    "emptyTitle": "لا توجد مستندات بعد",
+    "emptyBody": "امسح فاتورة أو خطابًا أو نموذجًا، وسيستخرج {appName} كل ما يحتاج إلى إجراء."
+  },
+  "toast": {
+    "deleted": "{count, plural, zero {لم يُحذف أي مستند.} one {تم حذف المستند.} two {تم حذف المستندين.} few {تم حذف # مستندات.} many {تم حذف # مستندًا.} other {تم حذف # مستند.}}",
+    "partial": "{deleted, plural, zero {لم يُحذف أي مستند} one {تم حذف مستند واحد} two {تم حذف مستندين} few {تم حذف # مستندات} many {تم حذف # مستندًا} other {تم حذف # مستند}}. {failed, plural, zero {ولم يتعذّر حذف شيء} one {وتعذّر حذف مستند واحد} two {وتعذّر حذف مستندين} few {وتعذّر حذف # مستندات} many {وتعذّر حذف # مستندًا} other {وتعذّر حذف # مستند}}.",
+    "deleteFailed": "تعذّر حذف هذه المستندات. حاول مرة أخرى."
+  },
+  "selection": {
+    "delete": "{count, plural, zero {حذف} one {حذف مستند واحد} two {حذف مستندين} few {حذف # مستندات} many {حذف # مستندًا} other {حذف # مستند}}"
+  },
+  "docType": {
+    "bill": "فاتورة",
+    "statement": "كشف حساب",
+    "receipt": "إيصال",
+    "tax": "مستند ضريبي",
+    "legal": "مستند قانوني",
+    "insurance": "تأمين",
+    "identity": "مستند هوية",
+    "medical": "مستند طبي",
+    "letter": "خطاب",
+    "form": "نموذج",
+    "other": "مستند"
+  },
+  "priority": {
+    "low": "منخفض",
+    "normal": "عادي",
+    "high": "مرتفع",
+    "urgent": "عاجل"
+  },
+  "priorityPill": {
+    "low": "أولوية منخفضة",
+    "high": "أولوية مرتفعة",
+    "urgent": "عاجل"
+  },
+  "fields": {
+    "title": "العنوان",
+    "domain": "المجال",
+    "priority": "الأولوية",
+    "due": "الموعد",
+    "summary": "الملخّص"
+  },
+  "row": {
+    "readingPdf": "جارٍ قراءة ملف PDF…",
+    "readingPhoto": "جارٍ قراءة صورتك…",
+    "readingScan": "جارٍ قراءة المسح…",
+    "readingSubtitle": "عادةً ما يستغرق هذا لحظة.",
+    "failedTitle": "تعذّرت قراءة هذا المستند",
+    "failedSubtitle": "اضغط لمعرفة ما حدث.",
+    "titlePdf": "مسح PDF",
+    "titlePhoto": "مسح صورة",
+    "titleScan": "مسح",
+    "toReview": "{count, plural, zero {لا شيء للمراجعة} one {عنصر واحد للمراجعة} two {عنصران للمراجعة} few {# عناصر للمراجعة} many {# عنصرًا للمراجعة} other {# عنصر للمراجعة}}",
+    "nothingActionable": "لا يوجد ما يستدعي إجراءً.",
+    "filed": "محفوظ."
+  },
+  "capture": {
+    "chooseTitle": "أضف فاتورة أو خطابًا أو نموذجًا",
+    "takePhoto": "التقط صورة",
+    "chooseFile": "اختر ملفًا",
+    "uploading": "جارٍ تجهيز مستندك…",
+    "processing": {
+      "reading": "جارٍ قراءة مستندك…",
+      "finding": "جارٍ استخراج ما يهم…",
+      "almost": "أوشكنا على الانتهاء…"
+    },
+    "success": {
+      "title": "{count, plural, zero {كل شيء جاهز.} one {تم حفظ أمر واحد.} two {تم حفظ أمرين.} few {تم حفظ # أمور.} many {تم حفظ # أمرًا.} other {تم حفظ # أمر.}}",
+      "bodyEmpty": "لم يُحفظ شيء من هذا المسح.",
+      "body": "سيذكّرك {appName} في الوقت المناسب."
+    },
+    "uploadFailed": {
+      "eyebrow": "لم يُرسل",
+      "title": "مستندك ما زال هنا",
+      "fallback": "لم يكتمل الرفع.",
+      "startOver": "اختر مستندًا آخر"
+    },
+    "error": {
+      "fallback": "تعذّرت قراءة ذلك المستند.",
+      "savedNote": "المسح محفوظ — يمكننا قراءته مرة أخرى دون أن تعيد تصويره.",
+      "retrying": "جارٍ المحاولة…",
+      "scanAgain": "امسح من جديد"
+    },
+    "processFailed": "تعذّرت معالجة ذلك المسح.",
+    "noCamera": "لا تتوفّر كاميرا على هذا الجهاز. اختر ملفًا بدلًا من ذلك.",
+    "cameraDenied": "يحتاج {appName} إلى إذن الكاميرا لمسح المستندات. فعّله من الإعدادات ← الخصوصية والأمان ← الكاميرا."
+  },
+  "review": {
+    "eyebrow": "مراجعة",
+    "itemsFound": "{count, plural, zero {لم نجد شيئًا} one {عنصر واحد} two {عنصران} few {# عناصر} many {# عنصرًا} other {# عنصر}}",
+    "noneLeftTitle": "لم يبقَ شيء للمراجعة هنا.",
+    "noneLeftBody": "كل عنصر من هذا المسح تمت معالجته.",
+    "noDateFound": "لا يوجد تاريخ",
+    "doubleCheck": "{label} · تحقّق من هذا",
+    "collapseDetails": "إخفاء التفاصيل",
+    "editDetails": "تعديل التفاصيل",
+    "keepItem": "الإبقاء على هذا العنصر",
+    "discardItem": "تجاهل هذا العنصر",
+    "notesPlaceholder": "ما وجده {appName} في هذا العنصر…",
+    "discardAll": "تجاهل الكل"
+  },
+  "overview": {
+    "filedCount": "{count, plural, zero {لم يُحفظ شيء} one {تم حفظ أمر واحد} two {تم حفظ أمرين} few {تم حفظ # أمور} many {تم حفظ # أمرًا} other {تم حفظ # أمر}}",
+    "emptyTitle": "لم يُحفظ شيء من هذا المسح.",
+    "emptyBody": "لم يجد {appName} ما يستدعي إجراءً هنا.",
+    "noDateSet": "بلا تاريخ",
+    "foundOnPage": "وُجد في الصفحة {page}",
+    "noDetail": "لا شيء آخر وجده {appName} هنا.",
+    "edit": "تعديل"
+  },
+  "edit": {
+    "eyebrow": "تعديل الأمر",
+    "untitled": "أمر بلا عنوان",
+    "saveFailed": "تعذّر حفظ هذا التغيير. حاول مرة أخرى."
+  },
+  "delete": {
+    "title": "{count, plural, zero {حذف هذه المستندات؟} one {حذف مستند واحد؟} two {حذف مستندين؟} few {حذف # مستندات؟} many {حذف # مستندًا؟} other {حذف # مستند؟}}",
+    "confirm": "حذف {count}",
+    "deleting": "جارٍ الحذف…",
+    "originals": "{count, plural, zero {ستُحذف النسخ الأصلية نهائيًا.} one {ستُحذف النسخة الأصلية نهائيًا.} two {ستُحذف النسختان الأصليتان نهائيًا.} few {ستُحذف النسخ الأصلية نهائيًا.} many {ستُحذف النسخ الأصلية نهائيًا.} other {ستُحذف النسخ الأصلية نهائيًا.}}",
+    "unreviewed": "{count, plural, zero {لا توجد عناصر غير مراجَعة.} one {عنصر واحد لم تتم مراجعته بعد، وسيُفقد.} two {عنصران لم تتم مراجعتهما بعد، وسيُفقدان.} few {# عناصر لم تتم مراجعتها بعد، وستُفقد.} many {# عنصرًا لم تتم مراجعته بعد، وسيُفقد.} other {# عنصر لم تتم مراجعته بعد، وسيُفقد.}}",
+    "filedStay": "سيبقى في قائمتك ما حُفظ بالفعل من {count, plural, zero {هذه المستندات} one {هذا المستند} two {هذين المستندين} few {هذه المستندات} many {هذه المستندات} other {هذه المستندات}}، {filed, plural, zero {ولا يوجد منها شيء} one {وهو أمر واحد} two {وهما أمران} few {وهي # أمور} many {وهي # أمرًا} other {وهو # أمر}}.",
+    "preview": "معاينة {count}",
+    "hide": "إخفاء",
+    "untitledScan": "مسح بلا عنوان"
+  },
+  "peek": {
+    "title": "المستند الأصلي",
+    "loading": "جارٍ التحميل…",
+    "photo": "صورة",
+    "pdfPages": "{count, plural, zero {PDF} one {PDF · صفحة واحدة} two {PDF · صفحتان} few {PDF · # صفحات} many {PDF · # صفحة} other {PDF · # صفحة}}",
+    "loadFailed": "تعذّر تحميل المستند الأصلي."
+  },
+  "viewer": {
+    "opening": "جارٍ الفتح…",
+    "fitToScreen": "ملاءمة الشاشة",
+    "imageAlt": "مستند ممسوح",
+    "page": "صفحة {number}"
+  }
+}

@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useEffect, useRef } from 'react'
 
 import { cn } from '@/lib/cn'
@@ -35,6 +36,7 @@ export function CodeInput({
   invalid?: boolean
   className?: string
 }) {
+  const t = useTranslations('ui.code')
   const refs = useRef<Array<HTMLInputElement | null>>([])
   const digits = value.padEnd(CODE_LENGTH, ' ').slice(0, CODE_LENGTH).split('')
 
@@ -85,7 +87,7 @@ export function CodeInput({
     <div
       className={cn('flex justify-between gap-2', className)}
       role="group"
-      aria-label="Confirmation code"
+      aria-label={t('groupLabel')}
     >
       {digits.map((digit, index) => (
         <input
@@ -103,7 +105,7 @@ export function CodeInput({
           // every box and pastes the whole code into each one.
           autoComplete={index === 0 ? 'one-time-code' : 'off'}
           maxLength={CODE_LENGTH}
-          aria-label={`Digit ${index + 1}`}
+          aria-label={t('digit', { position: index + 1 })}
           aria-invalid={invalid || undefined}
           className={cn(
             'h-13 w-full min-w-0 rounded-xl bg-surface-field text-center font-display text-heading-xl text-ink tabular outline-none transition-colors',

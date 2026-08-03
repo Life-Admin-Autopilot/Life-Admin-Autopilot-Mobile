@@ -67,6 +67,9 @@ export async function ensureCameraAccess(camera: CameraPermissionApi): Promise<C
   }
 }
 
-export function cameraDeniedMessage(appName: string): string {
-  return `${appName} needs camera access to scan documents. Enable it in Settings → Privacy & Security → Camera.`
-}
+// The message for a denied camera used to be built here, as
+// `cameraDeniedMessage(appName)`. It moved to the catalogue
+// (`scan.capture.cameraDenied`) and is read by useCaptureSource, which is a
+// hook and can translate: this module is pure and classifies outcomes, and a
+// pure classifier that also writes English prose is a module that quietly
+// pins one of the app's two languages.

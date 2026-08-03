@@ -1,0 +1,29 @@
+{
+  "selection": {
+    "prompt": "Select {subject}",
+    "count": "{count, plural, one {# selected} other {# selected}}",
+    "deselectAll": "Deselect all"
+  },
+  "theme": {
+    "groupLabel": "Appearance",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode"
+  },
+  "password": {
+    "show": "Show password",
+    "hide": "Hide password"
+  },
+  "code": {
+    "groupLabel": "Confirmation code",
+    "digit": "Digit {position}"
+  },
+  "settings": {
+    "working": "Working…"
+  },
+  "deadline": {
+    "late": "{duration} late"
+  }
+}

@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { AnimatePresence, motion, type MotionValue } from 'framer-motion'
@@ -14,6 +15,7 @@ import { useVoiceCapture } from '@/lib/voice/captureStore'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
 import { MORPH_BACKDROP_FADE, MORPH_SPRING } from '@/lib/motion'
+import { springToLinearEasing } from '@/lib/springEasing'
 import { isAppChatRoute } from '@/lib/appRoutes'
 import type { AiSource } from '@/lib/ai/types'
 import { env } from '@/lib/env'
@@ -24,6 +26,16 @@ import { env } from '@/lib/env'
  */
 const MIC_START_FALLBACK_MS = 600
 
+/**
+ * MORPH_SPRING as a CSS `linear()` easing, computed once at module load.
+ *
+ * Lets the open animation run off the CSS timeline instead of framer's JS spring
+ * integration. framer drives springs from requestAnimationFrame, which WebKit
+ * caps at 60Hz inside WKWebView; CSS is not rAF-bound and does no per-frame JS.
+ * Same physics, same absolute-time curve — see lib/springEasing.ts.
+ */
+const MORPH_CSS = springToLinearEasing({ stiffness: 240, damping: 30, mass: 0.9 })
+
 type Phase = 'recording' | 'review' | 'transcribing' | 'thinking' | 'done' | 'error'
 
 // Voice capture — the bridge to the assistant by voice. Opened from the TabBar mic, it
@@ -31,6 +43,8 @@ type Phase = 'recording' | 'review' | 'transcribing' | 'thinking' | 'done' | 'er
 // user can cancel, stop, then save: saving transcribes the audio and streams it
 // to the assistant, which records the matters and replies.
 export function VoiceIsland() {
+  const t = useTranslations('voice')
+  const tLib = useTranslations('lib')
   const open = useVoiceCapture((s) => s.open)
   const close = useVoiceCapture((s) => s.close)
   const pathname = usePathname()
@@ -45,6 +59,11 @@ export function VoiceIsland() {
   const [sources, setSources] = useState<AiSource[]>([])
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  // CSS-morph path (probe mode) — declared before the open effect that latches
+  // it, so the setter is initialised by the time that effect closes over it.
+  const [cssMorph, setCssMorph] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   const [vp] = useState(() => ({
     w: typeof window === 'undefined' ? 400 : window.innerWidth,
@@ -62,6 +81,10 @@ export function VoiceIsland() {
   // ~40fps. The mic now starts once the shell has settled (see below).
   useEffect(() => {
     if (open) {
+      // Latched at open time: switching probe modes requires reopening the
+      // panel to see the effect anyway, so there is nothing to gain from
+      // making this reactive mid-animation.
+      setCssMorph(document.documentElement.dataset.perf?.includes('css-morph') ?? false)
       setPhase('recording')
       setBlob(null)
       setTranscript('')
@@ -83,6 +106,17 @@ export function VoiceIsland() {
   // animation) — a missed callback here would mean a surface that says
   // "Recording" and never records.
   const micStartedRef = useRef(false)
+
+  useEffect(() => {
+    if (!open || !cssMorph) return
+    // One painted frame at the start size, so the CSS transition has something
+    // to transition FROM. framer does the same internally for its `initial`.
+    const raf = requestAnimationFrame(() => setExpanded(true))
+    return () => {
+      cancelAnimationFrame(raf)
+      setExpanded(false)
+    }
+  }, [open, cssMorph])
 
   const startMic = useCallback(() => {
     if (micStartedRef.current || !open) return
@@ -113,7 +147,7 @@ export function VoiceIsland() {
   // and only one of them is fixable in Settings.
   useEffect(() => {
     if (open && recorder.phase === 'unavailable') {
-      setError(micFailureMessage(recorder.failure ?? 'unknown', env.appName))
+      setError(micFailureMessage(recorder.failure ?? 'unknown', env.appName, tLib))
       setPhase('error')
     }
   }, [open, recorder.phase, recorder.failure])
@@ -128,7 +162,7 @@ export function VoiceIsland() {
     setCapturedMs(recorder.elapsedMs)
     const b = await recorder.stop()
     if (!b) {
-      toast.info('Too short — nothing captured.')
+      toast.info(t('tooShort'))
       close()
       return
     }
@@ -165,14 +199,14 @@ export function VoiceIsland() {
     try {
       const text = await transcribeAudio(blob)
       if (!text.trim()) {
-        toast.info('Nothing was captured.')
+        toast.info(t('nothingCaptured'))
         close()
         return
       }
       setTranscript(text)
       await askKitto(text)
     } catch (err) {
-      setError(translateBackendError(err, 'Could not transcribe that.'))
+      setError(translateBackendError(err, t('transcribeFailed')))
       setPhase('error')
     }
   }
@@ -202,12 +236,24 @@ export function VoiceIsland() {
           key="voice-panel"
           role="dialog"
           aria-label={`Speak to ${env.appName}`}
-          initial={{ width: 56, height: 56, opacity: 0.4 }}
-          animate={{ width: panelW, height: panelH, opacity: 1 }}
-          exit={{ width: 56, height: 56, opacity: 0 }}
+          // In CSS-morph mode framer handles ONLY opacity (which it already
+          // hardware-accelerates); width/height move to a CSS transition below,
+          // off the rAF clock entirely.
+          initial={cssMorph ? { opacity: 0.4 } : { width: 56, height: 56, opacity: 0.4 }}
+          animate={cssMorph ? { opacity: 1 } : { width: panelW, height: panelH, opacity: 1 }}
+          exit={cssMorph ? { opacity: 0 } : { width: 56, height: 56, opacity: 0 }}
           transition={MORPH_SPRING}
           onAnimationComplete={startMic}
-          style={{ transformOrigin: 'bottom center' }}
+          style={
+            cssMorph
+              ? {
+                  transformOrigin: 'bottom center',
+                  width: expanded ? panelW : 56,
+                  height: expanded ? panelH : 56,
+                  transition: `width ${MORPH_CSS.durationMs}ms ${MORPH_CSS.easing}, height ${MORPH_CSS.durationMs}ms ${MORPH_CSS.easing}`,
+                }
+              : { transformOrigin: 'bottom center' }
+          }
           className="bottom-safe fixed left-1/2 z-50 -translate-x-1/2 overflow-hidden rounded-3xl bg-surface shadow-elevated"
         >
           <div className="flex h-full w-full flex-col items-center justify-between p-6 text-center">
@@ -222,7 +268,7 @@ export function VoiceIsland() {
                     </span>
                   </>
                 ) : phase === 'transcribing' ? (
-                  <p className="text-body text-ink-muted">Transcribing…</p>
+                  <p className="text-body text-ink-muted">{t('transcribingEllipsis')}</p>
                 ) : phase === 'thinking' || phase === 'done' ? (
                   <div className="w-full overflow-y-auto">
                     {transcript ? (
@@ -254,18 +300,19 @@ export function VoiceIsland() {
 }
 
 function Header({ phase }: { phase: Phase }) {
+  const t = useTranslations('voice')
   const label =
     phase === 'recording'
-      ? 'Listening'
+      ? t('listening')
       : phase === 'review'
-        ? 'Ready to send'
+        ? t('readyToSend')
         : phase === 'transcribing'
-          ? 'Transcribing'
+          ? t('transcribing')
           : phase === 'thinking'
-            ? `${env.appName} responds`
+            ? t('responds', { app: env.appName })
             : phase === 'done'
-              ? 'Order follows'
-              : 'Something went wrong'
+              ? t('orderFollows')
+              : t('somethingWrong')
   return <span className="text-label uppercase tracking-wide text-accent">{label}</span>
 }
 

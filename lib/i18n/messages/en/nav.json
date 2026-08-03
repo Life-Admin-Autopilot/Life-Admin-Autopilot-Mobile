@@ -1,0 +1,9 @@
+{
+  "home": "Home",
+  "matters": "Matters",
+  "record": "Record",
+  "documents": "Documents",
+  "profile": "Profile",
+  "dashboard": "Dashboard",
+  "speakTo": "Speak to {app}"
+}

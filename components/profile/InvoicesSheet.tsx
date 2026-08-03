@@ -1,5 +1,7 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
+
 import { Button } from '@/components/ui/button'
 import { Sheet } from '@/components/ui/Sheet'
 import { useInvoices } from '@/queries/billing'
@@ -22,6 +24,9 @@ export function InvoicesSheet({
   onClose: () => void
   trigger?: DOMRect | null
 }) {
+  const t = useTranslations('profile.plan')
+  const tCommon = useTranslations('common')
+  const tGroups = useTranslations('profile.groups')
   const { data, isPending, isError, refetch } = useInvoices()
   const invoices = data?.invoices ?? []
 
@@ -31,8 +36,8 @@ export function InvoicesSheet({
       onClose={onClose}
       trigger={trigger}
       height={380}
-      eyebrow="Plan"
-      title="Billing history"
+      eyebrow={tGroups('plan')}
+      title={t('invoicesTitle')}
     >
       {isPending ? (
         <ul className="flex flex-col gap-2.5">
@@ -42,14 +47,14 @@ export function InvoicesSheet({
         </ul>
       ) : isError ? (
         <div className="flex flex-col items-center gap-3 py-10 text-center">
-          <p className="font-display text-heading-serif text-ink">Couldn&rsquo;t load your invoices.</p>
+          <p className="font-display text-heading-serif text-ink">{t('invoicesLoadFailed')}</p>
           <Button variant="secondary" size="pill" onClick={() => void refetch()}>
-            Try again
+            {tCommon('tryAgain')}
           </Button>
         </div>
       ) : invoices.length === 0 ? (
         <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
-          <p className="font-display text-heading-serif text-ink">No invoices yet.</p>
+          <p className="font-display text-heading-serif text-ink">{t('noInvoices')}</p>
           <p className="max-w-[30ch] text-body text-ink-muted">
             You&rsquo;re on the free plan, so there&rsquo;s nothing to bill.
           </p>

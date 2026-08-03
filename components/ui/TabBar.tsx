@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { LayoutGrid, ListChecks, FileText, User, Mic } from 'lucide-react'
 
 import { cn } from '@/lib/cn'
@@ -26,6 +27,7 @@ export function TabBar({
    */
   hidden?: boolean
 }) {
+  const t = useTranslations('nav')
   const openCapture = useVoiceCapture((s) => s.openCapture)
   return (
     <nav
@@ -36,24 +38,24 @@ export function TabBar({
         hidden && 'pointer-events-none translate-y-28 opacity-0',
       )}
     >
-      <Link href="/dashboard" aria-label="Dashboard">
-        <Tab icon={<LayoutGrid size={21} />} label="Dashboard" active={active === 'dashboard'} />
+      <Link href="/dashboard" aria-label={t('dashboard')}>
+        <Tab icon={<LayoutGrid size={21} />} label={t('dashboard')} active={active === 'dashboard'} />
       </Link>
-      <Link href="/matters" aria-label="Matters">
-        <Tab icon={<ListChecks size={21} />} label="Matters" active={active === 'matters'} />
+      <Link href="/matters" aria-label={t('matters')}>
+        <Tab icon={<ListChecks size={21} />} label={t('matters')} active={active === 'matters'} />
       </Link>
       <button
         onClick={openCapture}
-        aria-label={`Speak to ${env.appName}`}
+        aria-label={t('speakTo', { app: env.appName })}
         className="grid size-13 -translate-y-3 place-items-center rounded-full bg-accent text-accent-ink shadow-halo transition-transform active:scale-95"
       >
         <Mic size={22} strokeWidth={2} className="text-accent-ink" />
       </button>
-      <Link href="/documents" aria-label="Documents">
-        <Tab icon={<FileText size={21} />} label="Documents" active={active === 'documents'} />
+      <Link href="/documents" aria-label={t('documents')}>
+        <Tab icon={<FileText size={21} />} label={t('documents')} active={active === 'documents'} />
       </Link>
-      <Link href="/profile" aria-label="Profile">
-        <Tab icon={<User size={21} />} label="Profile" active={active === 'profile'} />
+      <Link href="/profile" aria-label={t('profile')}>
+        <Tab icon={<User size={21} />} label={t('profile')} active={active === 'profile'} />
       </Link>
     </nav>
   )

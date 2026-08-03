@@ -1,6 +1,10 @@
+'use client'
+
 import { CalendarClock, TriangleAlert } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { cn } from '@/lib/cn'
+import { env } from '@/lib/env'
 import type { Task } from '@/queries/tasks'
 
 // Where an imported matter's TIME came from.
@@ -24,6 +28,8 @@ import type { Task } from '@/queries/tasks'
 // value with nothing to disclose.
 
 export function TimeProvenance({ task }: { task: Task }) {
+  const t = useTranslations('matters')
+
   if (!task.externalSource) return null
   if (!task.timePrecision || task.timePrecision === 'exact') return null
 
@@ -43,9 +49,7 @@ export function TimeProvenance({ task }: { task: Task }) {
         className={cn('mt-0.5 shrink-0', floating ? 'text-warning' : 'text-ink-subtle')}
       />
       <p className={cn('text-caption', floating ? 'text-warning' : 'text-ink-subtle')}>
-        {floating
-          ? "This calendar didn't say which timezone it meant, so Kitto used yours. Set the time to turn its reminder on."
-          : 'The calendar gave a date but no time, so this uses your default time for imports.'}
+        {floating ? t('provenance.floating', { app: env.appName }) : t('provenance.dateOnly')}
       </p>
     </div>
   )

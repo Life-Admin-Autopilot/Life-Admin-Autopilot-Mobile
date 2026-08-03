@@ -60,7 +60,10 @@ export interface AuthUser {
   /** IANA zone. Absent means "trust the device". */
   timezone?: string
   /** BCP 47 tag. */
+  /** Effective language. Absent only on accounts that predate the picker. */
   locale?: string
+  /** True when `locale` was read off a device — do not adopt it on another one. */
+  localeFollowsDevice?: boolean
   theme?: Theme
   notifications?: NotificationPrefs
   subscription?: SubscriptionState

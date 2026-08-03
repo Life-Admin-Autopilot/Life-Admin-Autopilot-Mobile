@@ -22,6 +22,7 @@
 // they decide they want to act on that document.
 
 import { ScanLine } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { AppHeader } from '@/components/layout/AppHeader'
 import { Button } from '@/components/ui/button'
@@ -43,14 +44,16 @@ export function DocumentsHeader({
   /** Receives the button's rect so the capture flow morphs out of it. */
   onScan: (rect: DOMRect) => void
 }) {
+  const t = useTranslations('scan')
+
   return (
     <>
-      <AppHeader title="Documents" />
+      <AppHeader title={t('header.title')} />
 
       <div className="sticky top-0 z-20 bg-canvas/95 px-5 py-3 backdrop-blur-xl">
         {selectMode ? (
           <SelectionToolbar
-            subject="documents"
+            subjectLabel={t('header.selectionSubject')}
             count={count}
             allSelected={allSelected}
             onSelectAll={onSelectAll}
@@ -67,7 +70,7 @@ export function DocumentsHeader({
             onClick={(e) => onScan(e.currentTarget.getBoundingClientRect())}
           >
             <ScanLine />
-            Scan a document
+            {t('header.scan')}
           </Button>
         )}
       </div>

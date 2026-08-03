@@ -30,6 +30,10 @@ server/uploads/
 .env.*.local
 server/.env
 
+# pdf.js runtime assets, vendored out of node_modules by scripts/copy-pdfjs-assets.mjs
+# (worker, cmaps, standard fonts, wasm codecs). Generated — never edited here.
+/public/pdfjs/
+
 # Misc
 .DS_Store
 *.log

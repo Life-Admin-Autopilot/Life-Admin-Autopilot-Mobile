@@ -15,6 +15,8 @@ import { DOMAINS, type Domain } from '../../../models/User'
 import { TaskBulkOp, bulkOpExpiry, type BulkOpEntry } from '../../../models/TaskBulkOp'
 import { BadRequest } from '../../../lib/errors'
 import { getGeminiClient } from '../../ai/provider/geminiClient'
+import type { AiLocale } from '../../ai/promptLanguage'
+import { getUserAiLocale } from '../../ai/userLocale'
 import { withGeminiRetry } from '../../ai/voiceCore/geminiRetry'
 import { resolveTargets, type BulkTarget } from '../bulkService'
 import {
@@ -22,8 +24,8 @@ import {
   MAX_CATEGORIZE_TARGETS,
   MAX_PROPOSED_TAGS,
   ModelCategorizeSchema,
-  SYSTEM,
   responseSchema,
+  systemFor,
 } from './prompt'
 
 // Propose a refiling of existing matters. Writes NOTHING to Task.
@@ -76,7 +78,11 @@ function renderTask(task: TaskDoc): string {
   return lines.join('\n')
 }
 
-async function askModel(batch: TaskDoc[], vocabulary: string[]): Promise<ModelItem[]> {
+async function askModel(
+  batch: TaskDoc[],
+  vocabulary: string[],
+  locale: AiLocale,
+): Promise<ModelItem[]> {
   const response = await withGeminiRetry(
     () =>
       getGeminiClient().models.generateContent({
@@ -98,7 +104,7 @@ async function askModel(batch: TaskDoc[], vocabulary: string[]): Promise<ModelIt
           },
         ],
         config: {
-          systemInstruction: SYSTEM,
+          systemInstruction: systemFor(locale),
           responseMimeType: 'application/json',
           responseSchema,
           temperature: 0,
@@ -193,13 +199,15 @@ export async function proposeCategorization(args: ProposeArgs): Promise<Proposal
     ...notDeleted(),
   })) as string[]).sort()
 
+  const locale = await getUserAiLocale(userId)
+
   const byId = new Map(tasks.map((t) => [String(t._id), t]))
   const items: ModelItem[] = []
 
   for (let i = 0; i < tasks.length; i += MAX_CATEGORIZE_BATCH) {
     const batch = tasks.slice(i, i + MAX_CATEGORIZE_BATCH)
     try {
-      items.push(...(await askModel(batch, vocabulary)))
+      items.push(...(await askModel(batch, vocabulary, locale)))
     } catch (err: unknown) {
       // One bad batch must not lose the batches that worked. The run reports
       // what it got; the user can run it again for the rest.

@@ -127,9 +127,25 @@ Read-only — it prints the fix, it never edits. Exit code 1 on any blocking iss
 - Framer Motion springs run on rAF. `MorphSurface` animates `width`/`height`/`borderRadius` — layout properties that can never be compositor-driven — so the shell is rAF-bound and tops out at 60.
 - `CADisableMinimumFrameDurationOnPhone` (set by `patch-ios-plist.sh`) lifts the *native* 60Hz cap on ProMotion iPhones. Necessary for CSS/compositor animations to run above 60; it does **not** unlock rAF.
 
-Exceeding 60 would mean animating only `transform`/`opacity` via CSS or WAAPI — i.e. scale-based morphing, which distorts children. That is exactly the failure `lib/motion.ts` documents and exists to avoid. **The target is a locked 60, not 120.**
+Exceeding 60 would mean animating only `transform`/`opacity` via CSS or WAAPI — i.e. scale-based morphing, which distorts children. That is exactly the failure `lib/motion.ts` documents and exists to avoid.
 
-Measure on-device with the FPS overlay (`components/dev/FpsMeter.tsx`, enabled by `NEXT_PUBLIC_SHOW_FPS=1` in `.env.native-dev.local`). Read *worst frame time*, not average — an average hides a single 200ms hitch. Measure with Xcode detached: an attached debugger and an inspectable WKWebView slow JS by roughly an order of magnitude.
+### Lifting the render cap (`scripts/patch-ios-highrefresh.sh`)
+
+Dev builds rewrite `AppDelegate.swift` to lift WebKit's 60fps render cap:
+
+1. Flips WebKit's internal `PreferPageRenderingUpdatesNear60FPSEnabled` to `false` via the **private** `WKPreferences._setEnabled:forFeature:`. Called through the IMP, not `perform()` — the selector takes a primitive `BOOL`, and `perform(_:with:)` can only pass objects, so a boxed `NSNumber` arrives as a garbage pointer.
+2. Runs a `CADisplayLink` at 120Hz calling the **private** `WKWebView._updateVisibleContentRects` each tick. This is what actually does the work on iOS 26, where Apple disconnected the preference from the compositor — step 1 alone is inert there.
+3. Publishes a natively-measured compositor rate to `window.__compositorFps`. Necessary because a JS rAF counter **cannot observe past 60** — rAF is itself capped, so an in-page number reads 60 even when the compositor runs at 120. Read it from the Safari console, or re-add a temporary overlay.
+
+**This does not raise `requestAnimationFrame`.** Only composited animations (`transform`, `opacity`, `filter`, `clip-path`) benefit. The island morph animates `width`/`height` and is unaffected — lifting the cap does not change it.
+
+Safety: `cap:sync:dev` applies the patch; **`cap:sync:prod` runs `--revert`**, so a prod build cannot ship private APIs. Both private calls are guarded by `responds(to:)` and degrade to a no-op. Manual control: `npm run ios:fps:on` / `npm run ios:fps:off`.
+
+Costs: App Review may reject private API use, and sustained 120Hz costs ~10–15% battery.
+
+When measuring, read *worst frame time*, not average — an average hides a single 200ms hitch. Measure with Xcode detached: an attached debugger and an inspectable WKWebView slow JS by roughly an order of magnitude, which is enough to invent a performance problem that does not exist in a real build.
+
+`VoiceIsland` still carries a CSS-`linear()` morph path (`lib/springEasing.ts`) behind `document.documentElement.dataset.perf` containing `css-morph`. Nothing sets that attribute now that the dev overlay is gone — set it from the Safari console to try it. It removes per-frame JS but does **not** lift the 60fps cap, because `width`/`height` are layout properties (see above).
 
 ### What was fixed
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { ChevronRight } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { EmojiChip, type CatColor } from '@/components/ui/EmojiChip'
 import { SwitchVisual } from '@/components/ui/CompletionRing'
@@ -125,12 +126,15 @@ export function SettingActionRow({
 }: RowIdentity & {
   meta?: string
   pending?: boolean
-  /** Replaces the title while the action runs, e.g. "Preparing…". */
+  /** Replaces the title while the action runs, e.g. "Preparing…". Already
+   *  translated — the caller owns this the way it owns `title`. */
   pendingTitle?: string
   onAction: () => void
   disabled?: boolean
   className?: string
 }) {
+  const t = useTranslations('ui.settings')
+
   return (
     <button
       type="button"
@@ -145,7 +149,7 @@ export function SettingActionRow({
       <EmojiChip emoji={emoji} category={category} size={40} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-heading-sm text-ink">
-          {pending ? (pendingTitle ?? 'Working…') : title}
+          {pending ? (pendingTitle ?? t('working')) : title}
         </span>
         {meta ? <span className="truncate text-body-sm text-ink-muted">{meta}</span> : null}
       </span>

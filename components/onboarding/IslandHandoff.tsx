@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
+import { useTranslations } from 'next-intl'
 
 import { MORPH_SPRING } from '@/lib/motion'
 import { useMorphColors } from '@/lib/motion-colors'
@@ -18,10 +19,12 @@ export function IslandHandoff({
   fromRect,
   onComplete,
 }: {
-  name: string
+  /** First name, or null when the field was left blank. */
+  name: string | null
   fromRect: DOMRect | null
   onComplete: () => void
 }) {
+  const t = useTranslations('onboarding')
   const reduced = useReducedMotion()
   const { surface, canvas } = useMorphColors()
   const [vp] = useState(() => ({
@@ -66,8 +69,13 @@ export function IslandHandoff({
           transition={{ delay: reduced ? 0 : 0.28, duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
           className="text-center"
         >
-          <h1 className="font-display text-display-hero text-ink">Good to see you, {name}.</h1>
-          <p className="mt-1 text-body text-ink-muted">Order, restored.</p>
+          {/* Two whole messages rather than one with an interpolated "there":
+              the English filler has no Arabic equivalent, and a greeting is
+              exactly where a translated placeholder reads as a mistake. */}
+          <h1 className="font-display text-display-hero text-ink">
+            {name ? t('handoff.withName', { name }) : t('handoff.withoutName')}
+          </h1>
+          <p className="mt-1 text-body text-ink-muted">{t('handoff.subtitle')}</p>
         </motion.div>
       </div>
     </motion.div>

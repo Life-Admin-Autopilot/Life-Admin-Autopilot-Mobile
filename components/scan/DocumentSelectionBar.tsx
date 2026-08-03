@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { Trash2 } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 // The bottom bar for /documents selection mode. Same geometry as matters'
 // SelectionActionBar (`fixed inset-x-0 bottom-safe`, centred `max-w-sm` pill) so it
@@ -22,6 +23,7 @@ export function DocumentSelectionBar({
   /** Receives the button's rect so the confirm sheet morphs out of it. */
   onDelete: (rect: DOMRect) => void
 }) {
+  const t = useTranslations('scan')
   const disabled = busy || count === 0
 
   return (
@@ -39,7 +41,7 @@ export function DocumentSelectionBar({
         className="flex items-center gap-2 rounded-pill text-body-sm font-medium text-danger transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
       >
         <Trash2 size={18} />
-        {count === 0 ? 'Delete' : count === 1 ? 'Delete 1 document' : `Delete ${count} documents`}
+        {t('selection.delete', { count })}
       </button>
     </motion.div>
   )

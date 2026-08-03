@@ -7,9 +7,16 @@ import { useEffect, useState } from 'react'
 import { cn } from '@/lib/cn'
 import { useIntlTag } from '@/lib/i18n/localeStore'
 import { formatRange } from '@/lib/taskFormat'
-import { SUMMARY_RANGES, useSummarize, type TaskSummary } from '@/queries/mattersAi'
+import {
+  SUMMARY_RANGES,
+  useSummarize,
+  type SummaryRange,
+  type TaskSummary,
+} from '@/queries/mattersAi'
 import type { TaskFilters } from '@/queries/tasks'
 import { ChipToggle, Sheet, SheetSection } from '@/components/ui/Sheet'
+
+type SummaryRangeKey = SummaryRange['labelKey']
 
 // "Summarize my next month" — a structured report, not a paragraph.
 //
@@ -34,21 +41,25 @@ export function SummarySheet({
   /** Applies a filter to the list and closes — the summary's whole payoff. */
   onDrillDown: (filters: TaskFilters, label: string) => void
 }) {
-  const [rangeLabel, setRangeLabel] = useState(SUMMARY_RANGES[1].label)
+  const t = useTranslations('matters')
+  // The chosen range is held as its catalogue KEY, not its label. Holding the
+  // rendered string would mean the selected chip stopped matching the moment
+  // the language changed under an open sheet.
+  const [rangeKey, setRangeKey] = useState<SummaryRangeKey>(SUMMARY_RANGES[1].labelKey)
   const summarize = useSummarize()
   const summary = summarize.data ?? null
 
-  const runFor = (label: string) => {
-    const preset = SUMMARY_RANGES.find((r) => r.label === label)
+  const runFor = (key: SummaryRangeKey) => {
+    const preset = SUMMARY_RANGES.find((r) => r.labelKey === key)
     if (!preset) return
-    setRangeLabel(label)
+    setRangeKey(key)
     summarize.mutate(preset.range(new Date()))
   }
 
   // Run once on open so the sheet never shows an empty shell with a button.
   useEffect(() => {
     if (!open || summarize.isPending || summarize.data) return
-    const preset = SUMMARY_RANGES.find((r) => r.label === rangeLabel)
+    const preset = SUMMARY_RANGES.find((r) => r.labelKey === rangeKey)
     if (preset) summarize.mutate(preset.range(new Date()))
     // Deliberately keyed on `open` alone: re-running on every mutation state
     // change would loop.
@@ -65,17 +76,17 @@ export function SummarySheet({
       onClose={onClose}
       trigger={trigger}
       height={620}
-      eyebrow="What's coming"
-      title={rangeLabel}
+      eyebrow={t('summary.eyebrow')}
+      title={t(`range.preset.${rangeKey}`)}
     >
       <div className="flex flex-wrap gap-1.5 pb-1">
         {SUMMARY_RANGES.map((r) => (
           <ChipToggle
-            key={r.label}
-            selected={rangeLabel === r.label}
-            onClick={() => runFor(r.label)}
+            key={r.labelKey}
+            selected={rangeKey === r.labelKey}
+            onClick={() => runFor(r.labelKey)}
           >
-            {r.label}
+            {t(`range.preset.${r.labelKey}`)}
           </ChipToggle>
         ))}
       </div>
@@ -83,12 +94,10 @@ export function SummarySheet({
       {summarize.isPending ? (
         <div className="flex flex-col items-center gap-2 py-12 text-center">
           <Loader2 size={20} className="animate-spin text-accent" />
-          <p className="text-caption text-ink-subtle">Reading your matters…</p>
+          <p className="text-caption text-ink-subtle">{t('summary.loading')}</p>
         </div>
       ) : summarize.isError ? (
-        <p className="py-10 text-center text-caption text-ink-subtle">
-          Couldn&apos;t put a summary together. Try again in a moment.
-        </p>
+        <p className="py-10 text-center text-caption text-ink-subtle">{t('summary.failed')}</p>
       ) : summary ? (
         <Report
           summary={summary}
@@ -120,7 +129,7 @@ function Report({
   if (counts.dueInRange === 0) {
     return (
       <div className="py-10 text-center">
-        <p className="text-body font-medium text-ink">Nothing scheduled.</p>
+        <p className="text-body font-medium text-ink">{t('summary.nothingScheduled')}</p>
         <p className="mt-1 text-caption text-ink-subtle">
           {t('summary.rangeClear', { range: formatRange(summary.range.from, summary.range.to, { t, tag }) })}
         </p>
@@ -135,18 +144,18 @@ function Report({
       <div className="mt-4 grid grid-cols-3 gap-2">
         <Stat
           n={counts.dueInRange}
-          label="Due"
-          onClick={range ? () => onDrillDown(range, 'Due in range') : undefined}
+          label={t('summary.statDue')}
+          onClick={range ? () => onDrillDown(range, t('summary.drillDue')) : undefined}
         />
         <Stat
           n={counts.overdue}
-          label="Overdue"
+          label={t('summary.statOverdue')}
           accent={counts.overdue > 0}
-          onClick={() => onDrillDown({ overdue: true }, 'Overdue')}
+          onClick={() => onDrillDown({ overdue: true }, t('summary.drillOverdue'))}
         />
         <Stat
           n={counts.completedInRange}
-          label="Done"
+          label={t('summary.statDone')}
           // Comparing against the same-length window immediately before is the
           // only honest way to say whether this is a lot.
           delta={counts.completedPrevious > 0 || counts.completedInRange > 0 ? delta : undefined}
@@ -157,14 +166,14 @@ function Report({
                 completedAfter: summary.range.from,
                 completedBefore: summary.range.to,
               },
-              'Completed',
+              t('summary.drillCompleted'),
             )
           }
         />
       </div>
 
       {summary.themes.length > 0 ? (
-        <SheetSection label="Themes">
+        <SheetSection label={t('section.themes')}>
           <ul className="flex flex-col gap-1.5">
             {summary.themes.map((theme) => (
               <li key={theme.label}>
@@ -190,7 +199,7 @@ function Report({
           chat, by voice, and off a scanned document. Tapping one filters the
           list to those copies so they can be dealt with. */}
       {summary.duplicates.length > 0 ? (
-        <SheetSection label="Looks duplicated">
+        <SheetSection label={t('summary.duplicates')}>
           <ul className="flex flex-col gap-1">
             {summary.duplicates.map((dupe) => (
               <li key={dupe.title}>
@@ -201,7 +210,7 @@ function Report({
                 >
                   <span className="truncate text-body-sm text-ink">{dupe.title}</span>
                   <span className="shrink-0 text-caption tabular text-accent">
-                    {dupe.count} copies
+                    {t('summary.copies', { count: dupe.count })}
                   </span>
                 </button>
               </li>
@@ -211,7 +220,7 @@ function Report({
       ) : null}
 
       {summary.slipping.length > 0 ? (
-        <SheetSection label="Slipping">
+        <SheetSection label={t('summary.slipping')}>
           <ul className="flex flex-col gap-1">
             {summary.slipping.map((slip) => (
               <li key={slip.taskId} className="flex items-baseline justify-between gap-2">
@@ -224,7 +233,7 @@ function Report({
       ) : null}
 
       {summary.unplannedCompleted.length > 0 ? (
-        <SheetSection label="Done but never planned">
+        <SheetSection label={t('summary.unplanned')}>
           <ul className="flex flex-col gap-0.5">
             {summary.unplannedCompleted.map((t) => (
               <li key={t.taskId} className="truncate text-body-sm text-ink-muted">
@@ -240,13 +249,15 @@ function Report({
           reads as the app repeating itself. */}
       {summary.duplicates.length === 0 && summary.busiestDay && summary.busiestDay.count > 2 ? (
         <p className="mt-3 rounded-md bg-surface-sunken px-3 py-2 text-caption text-ink-muted">
-          <span className="tabular font-medium">{summary.busiestDay.count}</span> matters land on{' '}
-          {new Date(`${summary.busiestDay.date}T12:00:00`).toLocaleDateString(undefined, {
-            weekday: 'long',
-            month: 'short',
-            day: 'numeric',
+          {t.rich('summary.busiestDay', {
+            count: summary.busiestDay.count,
+            date: new Date(`${summary.busiestDay.date}T12:00:00`).toLocaleDateString(tag, {
+              weekday: 'long',
+              month: 'short',
+              day: 'numeric',
+            }),
+            b: (chunks: React.ReactNode) => <span className="tabular font-medium">{chunks}</span>,
           })}
-          . Worth spreading out?
         </p>
       ) : null}
 

@@ -1,0 +1,57 @@
+{
+  "fallbackName": "there",
+  "hero": {
+    "logoLabel": "Your companion, ready to help",
+    "morning": "Good morning",
+    "afternoon": "Good afternoon",
+    "evening": "Good evening",
+    "greetingLine": "{greeting}, {name}."
+  },
+  "progress": {
+    "todayCount": "{done} of {total} today"
+  },
+  "summary": {
+    "firstRun": "Nothing here yet, {name}. Tell me what’s on your plate and I’ll keep track of it.",
+    "clearDay": "Rest, {name}. Everything on your plate has a date that isn’t today."
+  },
+  "rightNow": {
+    "done": "Done",
+    "notToday": "Not today",
+    "open": "Open {title}"
+  },
+  "alsoToday": {
+    "title": "Also today",
+    "load": "{load} left",
+    "more": "{count, plural, other {# more in Matters}}"
+  },
+  "row": {
+    "overdue": "Overdue"
+  },
+  "needsYou": {
+    "title": "Needs you",
+    "guesses": "{count, plural, one {A guess to confirm} other {A few guesses to confirm}}",
+    "guessesBody": "I filed them already — correct me if I got one wrong.",
+    "scans": "{count, plural, one {# scan to confirm} other {# scans to confirm}}",
+    "scansBody": "Check what was pulled out before it lands.",
+    "slipped": "{count, plural, one {# matter has slipped} other {# matters have slipped}}",
+    "slippedBody": "Sort them out when you have a moment."
+  },
+  "firstRun": {
+    "title": "Start anywhere",
+    "speakTitle": "Say what’s on your mind",
+    "speakBody": "“The car insurance is up next month.”",
+    "scanTitle": "Scan a bill or letter",
+    "scanBody": "I’ll pull out the dates and amounts.",
+    "manualTitle": "Add one by hand",
+    "manualBody": "Anything you already know is coming."
+  },
+  "toast": {
+    "movedToTomorrow": "Moved to tomorrow.",
+    "dueDateUnchanged": "Its due date has not changed.",
+    "undo": "Undo",
+    "pushFailed": "That did not go through. Try again.",
+    "deleted": "Deleted “{title}”.",
+    "restored": "Restored.",
+    "undoFailed": "Could not undo that."
+  }
+}

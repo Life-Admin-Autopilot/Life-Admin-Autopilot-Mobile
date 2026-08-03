@@ -52,6 +52,13 @@ export interface DashboardViewProps {
   onComplete: (task: Task) => void
   onCompleteSubtask: (task: Task, subtask: Subtask) => void
   onPush: (task: Task) => void
+  /**
+   * Open a matter's detail sheet, passing the tapped element's rect so the sheet
+   * can morph out of it. OPTIONAL on purpose: /zz-preview-dashboard renders this
+   * tree against fixtures with no query client behind it, and the detail sheet
+   * mutates. Omitted, the rows fall back to linking to /matters.
+   */
+  onOpenTask?: (task: Task, rect: DOMRect) => void
 }
 
 export function DashboardView({
@@ -69,8 +76,13 @@ export function DashboardView({
   onComplete,
   onCompleteSubtask,
   onPush,
+  onOpenTask,
 }: DashboardViewProps) {
-  const t = useTranslations('matters')
+  const t = useTranslations('dashboard')
+  // formatDue reads `due.*` out of the matters catalogue, not this one — the
+  // due-date vocabulary is shared with the workspace and must not fork.
+  const tMatters = useTranslations('matters')
+  const tLib = useTranslations('lib')
   const tag = useIntlTag()
   // Today's plate is what is due today PLUS what already slipped — a matter
   // that was due yesterday is still today's problem, and hiding it under a
@@ -83,7 +95,7 @@ export function DashboardView({
   const focus: Task | undefined = onThePlate[0]
   const rest = onThePlate.slice(1, 1 + REST_OF_DAY_ROWS)
   const remaining = Math.max(0, onThePlate.length - 1 - rest.length)
-  const load = formatLoad(totalLoad(onThePlate))
+  const load = formatLoad(totalLoad(onThePlate), tLib)
 
   // Only claim the day is clear once we actually know. Rendering "nothing
   // needs you" while the list is still loading is a lie the user acts on.
@@ -116,9 +128,9 @@ export function DashboardView({
   // progress pill read as the app repeating itself to fill space — and the
   // whole point of a clear day is that there is less on the screen, not more.
   const summary = firstRun
-    ? `Nothing here yet, ${name}. Tell me what’s on your plate and I’ll keep track of it.`
+    ? t('summary.firstRun', { name })
     : clearDay
-      ? `Rest, ${name}. Everything on your plate has a date that isn't today.`
+      ? t('summary.clearDay', { name })
       : digest?.headline
 
   return (
@@ -140,32 +152,63 @@ export function DashboardView({
             onComplete={onComplete}
             onCompleteSubtask={onCompleteSubtask}
             onPush={onPush}
+            onOpen={onOpenTask}
           />
 
           {rest.length > 0 ? (
             <section className="flex flex-col gap-3">
               <div className="flex items-center justify-between gap-2">
-                <SectionHeaderChip label="Also today" tone="morning" count={onThePlate.length - 1} />
-                {load ? <span className="text-body-sm text-ink-muted">{load} left</span> : null}
+                <SectionHeaderChip
+                  label={t('alsoToday.title')}
+                  tone="morning"
+                  count={onThePlate.length - 1}
+                />
+                {load ? (
+                  <span className="text-body-sm text-ink-muted">
+                    {t('alsoToday.load', { load })}
+                  </span>
+                ) : null}
               </div>
 
-              {rest.map((task) => (
-                <Link key={task.id} href="/matters" className="block">
-                  <MatterRow
-                    domain={task.domain}
-                    title={task.title}
-                    due={formatDue(task.dueAt, { t, tag, now })}
-                    overdue={bucketOf(task, now) === 'overdue'}
-                  />
-                </Link>
-              ))}
+              {/* Tapping a row opens the matter in place, the same detail sheet
+                  the workspace uses. It used to navigate to /matters, which
+                  answered a question the user had not asked — they tapped THIS
+                  matter, not "show me all of them" — and lost the dashboard's
+                  scroll position on the way. `onOpenTask` is optional, so the
+                  preview route keeps the old link behaviour with no wiring. */}
+              {rest.map((task) =>
+                onOpenTask ? (
+                  <button
+                    key={task.id}
+                    type="button"
+                    onClick={(e) => onOpenTask(task, e.currentTarget.getBoundingClientRect())}
+                    className="block w-full text-start"
+                  >
+                    <MatterRow
+                      domain={task.domain}
+                      title={task.title}
+                      due={formatDue(task.dueAt, { t: tMatters, tag, now })}
+                      overdue={bucketOf(task, now) === 'overdue'}
+                    />
+                  </button>
+                ) : (
+                  <Link key={task.id} href="/matters" className="block">
+                    <MatterRow
+                      domain={task.domain}
+                      title={task.title}
+                      due={formatDue(task.dueAt, { t: tMatters, tag, now })}
+                      overdue={bucketOf(task, now) === 'overdue'}
+                    />
+                  </Link>
+                ),
+              )}
 
               {remaining > 0 ? (
                 <Link
                   href="/matters"
                   className="self-center rounded-pill px-3 py-1.5 text-body-sm font-bold text-accent hover:bg-accent-soft"
                 >
-                  {remaining} more in Matters
+                  {t('alsoToday.more', { count: remaining })}
                 </Link>
               ) : null}
             </section>

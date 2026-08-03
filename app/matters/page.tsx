@@ -100,6 +100,10 @@ const NO_HELD_ROWS: HeldRow[] = []
 
 export default function MattersPage() {
   const t = useTranslations('matters')
+  const tCommon = useTranslations('common')
+  // The header names the screen, and the tab bar already names it — one word,
+  // one key. `nav.matters` is the screen's name everywhere it appears.
+  const tNav = useTranslations('nav')
   const domainLabels = useDomainLabels()
   const [filters, setFilters] = useState<TaskFilters>(DEFAULT_FILTERS)
   const [sort, setSort] = useState<TaskSort>('due-asc')
@@ -317,16 +321,16 @@ export default function MattersPage() {
       }
       toast.success(message, {
         action: {
-          label: 'Undo',
+          label: t('toast.undo'),
           onPress: () =>
             undoBulk.mutate(undoToken, {
-              onSuccess: () => toast.info('Restored.'),
-              onError: () => toast.error('Could not undo that.'),
+              onSuccess: () => toast.info(t('toast.restored')),
+              onError: () => toast.error(t('toast.undoFailed')),
             }),
         },
       })
     },
-    [undoBulk],
+    [undoBulk, t],
   )
 
   const runBulk = (
@@ -338,7 +342,7 @@ export default function MattersPage() {
         offerUndo(describe(res.affected), res.undoToken)
         exitSelect()
       },
-      onError: () => toast.error('That did not go through. Try again.'),
+      onError: () => toast.error(t('toast.actionFailed')),
     })
   }
 
@@ -365,9 +369,7 @@ export default function MattersPage() {
           // anyway, so land on it rather than reporting a failure for a state
           // the user can act on.
           if (err instanceof ApiError && err.code === 'categorize_already_open') return
-          toast.error(
-            err instanceof ApiError ? err.message : 'Could not look at those. Try again.',
-          )
+          toast.error(err instanceof ApiError ? err.message : t('toast.readFailed'))
         },
       },
     )
@@ -377,7 +379,7 @@ export default function MattersPage() {
     setTriggerRect(rect)
     bulkPreview.mutate(
       { ids: [...selected], action: 'delete' },
-      { onSuccess: setDeletePreview, onError: () => toast.error('Could not prepare that.') },
+      { onSuccess: setDeletePreview, onError: () => toast.error(t('toast.prepareFailed')) },
     )
   }
 
@@ -391,7 +393,7 @@ export default function MattersPage() {
 
   return (
     <main className="min-h-dvh pb-32">
-      <AppHeader title="Matters" />
+      <AppHeader title={tNav('matters')} />
 
       <div className="sticky top-0 z-20 flex flex-col gap-2.5 bg-canvas/95 px-5 py-4 backdrop-blur-xl">
         <MattersSearchBar
@@ -409,7 +411,7 @@ export default function MattersPage() {
             narrow the list and keep selecting, the way Mail does. */}
         {selectMode ? (
           <SelectionToolbar
-            subject="matters"
+            subjectLabel={tCommon('matters')}
             count={selectedCount}
             allSelected={allSelected}
             onSelectAll={() =>
@@ -425,7 +427,7 @@ export default function MattersPage() {
             <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
             <Control
               icon={<ListFilter size={15} />}
-              label="Filter"
+              label={t('controls.filter')}
               active={filtered}
               onClick={(rect) => {
                 setTriggerRect(rect)
@@ -434,7 +436,7 @@ export default function MattersPage() {
             />
             <Control
               icon={<ArrowUpDown size={15} />}
-              label="Arrange"
+              label={t('controls.arrange')}
               onClick={(rect) => {
                 setTriggerRect(rect)
                 setSortOpen(true)
@@ -442,7 +444,7 @@ export default function MattersPage() {
             />
             <Control
               icon={<CalendarRange size={15} />}
-              label="Summary"
+              label={t('controls.summary')}
               onClick={(rect) => {
                 setTriggerRect(rect)
                 setSummaryOpen(true)
@@ -469,7 +471,7 @@ export default function MattersPage() {
                 state. */}
             <button
               type="button"
-              aria-label="Add a matter"
+              aria-label={t('controls.addMatter')}
               onClick={(e) => {
                 setTriggerRect(e.currentTarget.getBoundingClientRect())
                 setCreateOpen(true)
@@ -496,8 +498,12 @@ export default function MattersPage() {
           >
             <EmojiChip emoji="🌾" category="peach" size={40} />
             <span className="min-w-0 flex-1 text-body text-ink">
-              <span className="font-bold tabular">{counts.data?.slipping}</span>{' '}
-              {counts.data?.slipping === 1 ? 'matter has' : 'matters have'} slipped. Sort them out.
+              {t.rich('slipping.prompt', {
+                count: counts.data?.slipping ?? 0,
+                b: (chunks: React.ReactNode) => (
+                  <span className="font-bold tabular">{chunks}</span>
+                ),
+              })}
             </span>
             <ArrowRight size={17} className="shrink-0 text-accent" />
           </button>
@@ -533,24 +539,15 @@ export default function MattersPage() {
             ))}
           </ul>
         ) : list.isError ? (
-          <EmptyState
-            title="Couldn't load your matters."
-            body="Check your connection and try again."
-          />
+          <EmptyState title={t('empty.loadFailed')} body={t('empty.loadFailedBody')} />
         ) : tasks.length === 0 ? (
           // Only a FILTER can empty this list now — typing no longer narrows it,
           // so an unsent question in the box must not be blamed for the list
           // being empty.
           filtered ? (
-            <EmptyState
-              title="Nothing matches that."
-              body="Try loosening a filter."
-            />
+            <EmptyState title={t('empty.noMatch')} body={t('empty.noMatchBody')} />
           ) : (
-            <EmptyState
-              title="Nothing on your plate."
-              body="Anything you capture by chat, voice, or scan lands here."
-            />
+            <EmptyState title={t('empty.none')} body={t('empty.noneBody')} />
           )
         ) : (
           <>
@@ -607,14 +604,16 @@ export default function MattersPage() {
                 className="flex items-center justify-center gap-2 py-1 text-caption text-ink-subtle"
               >
                 <span className="h-px flex-1 bg-border" />
-                <span className="tabular">{hidden} more</span>
+                <span className="tabular">{t('list.showMore', { count: hidden })}</span>
                 <span className="h-px flex-1 bg-border" />
               </button>
             ) : null}
 
             <div ref={sentinel} className="h-4" />
             {list.isFetchingNextPage ? (
-              <p className="pb-2 text-center text-caption text-ink-subtle">Loading…</p>
+              <p className="pb-2 text-center text-caption text-ink-subtle">
+                {t('list.loadingMore')}
+              </p>
             ) : null}
           </>
         )}
@@ -654,7 +653,7 @@ export default function MattersPage() {
         task={detail}
         trigger={triggerRect}
         onClose={() => setDetailId(null)}
-        onDeleted={(token, title) => offerUndo(`Deleted “${title}”.`, token)}
+        onDeleted={(token, title) => offerUndo(t('toast.deletedOne', { title }), token)}
       />
       <CreateMatterSheet
         open={createOpen}
@@ -675,10 +674,7 @@ export default function MattersPage() {
           exitSelect()
         }}
         onApplied={(applied, undoToken) => {
-          offerUndo(
-            applied === 1 ? 'Refiled 1 matter.' : `Refiled ${applied} matters.`,
-            undoToken,
-          )
+          offerUndo(t('toast.refiled', { count: applied }), undoToken)
           exitSelect()
         }}
       />
@@ -692,7 +688,7 @@ export default function MattersPage() {
         onConfirm={() => {
           setDeletePreview(null)
           runBulk({ ids: [...selected], action: 'delete' }, (n) =>
-            n === 1 ? 'Deleted 1 matter.' : `Deleted ${n} matters.`,
+            t('toast.deleted', { count: n }),
           )
         }}
       />
@@ -704,7 +700,7 @@ export default function MattersPage() {
             busy={bulkAction.isPending || bulkPreview.isPending || proposeCategorization.isPending}
             onComplete={() =>
               runBulk({ ids: [...selected], action: 'complete' }, (n) =>
-                n === 1 ? 'Completed 1 matter.' : `Completed ${n} matters.`,
+                t('toast.completed', { count: n }),
               )
             }
             onSnooze={() =>
@@ -714,7 +710,7 @@ export default function MattersPage() {
                   action: 'snooze',
                   until: new Date(Date.now() + 7 * 86_400_000).toISOString(),
                 },
-                (n) => (n === 1 ? 'Snoozed 1 matter a week.' : `Snoozed ${n} matters a week.`),
+                (n) => t('toast.snoozedWeek', { count: n }),
               )
             }
             onCategorize={askCategorize}

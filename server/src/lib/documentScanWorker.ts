@@ -10,6 +10,7 @@ import {
 import { Notification } from '../models/Notification'
 import { User } from '../models/User'
 import { extractDocumentCandidates } from '../modules/ai/documentCore/extract'
+import { getUserAiLocale } from '../modules/ai/userLocale'
 import type { DraftCandidate } from '../modules/ai/documentCore/contract'
 import { isTransientGeminiError } from '../modules/ai/voiceCore/geminiRetry'
 import { getDocumentScanStorage } from './documentScanStorage'
@@ -65,6 +66,10 @@ export async function processScannedDocument(doc: ScannedDocumentDoc): Promise<v
         bytes,
         mimeType: doc.mimeType,
         timezone: doc.timezone,
+        // Read here rather than stamped on the scan at upload: a scan can sit in
+        // the queue across a language change, and the review card is read after
+        // the extraction, not before it.
+        locale: await getUserAiLocale(String(doc.userId)),
       })
       doc.candidates = extraction.candidates.map((c, i) => draftToCandidate(doc.id, i, c))
       doc.documentSummary = extraction.documentSummary

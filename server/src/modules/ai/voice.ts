@@ -13,15 +13,16 @@ import type { Content } from '@google/genai'
 // getPrefillContents) so callers (contextBuilder.ts) are unchanged. Behavior
 // is byte-for-byte identical to the pre-split version.
 
-import { SYSTEM_PROMPT } from './voice/systemPrompt'
+import type { AiLocale } from './promptLanguage'
+import { buildSystemPrompt } from './voice/systemPrompt'
 import { PREFILL } from './voice/prefill'
 
-export { SYSTEM_PROMPT } from './voice/systemPrompt'
+export { buildSystemPrompt } from './voice/systemPrompt'
 export { TOOL_RULES } from './voice/toolRules'
 export { PREFILL } from './voice/prefill'
 
-export function getSystemPrompt(): string {
-  return SYSTEM_PROMPT
+export function getSystemPrompt(locale: AiLocale): string {
+  return buildSystemPrompt(locale)
 }
 
 export function getPrefillContents(): Content[] {

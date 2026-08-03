@@ -1,7 +1,11 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
+import { useState } from 'react'
+
 import { AppHeader } from '@/components/layout/AppHeader'
 import { DashboardView } from '@/components/dashboard/DashboardView'
+import { MatterDetailSheet } from '@/components/matters/MatterDetailSheet'
 import { useSessionStore, selectUser } from '@/lib/auth/sessionStore'
 import { toast } from '@/lib/toast'
 import { useDigest } from '@/queries/digest'
@@ -11,14 +15,23 @@ import {
   useTaskCounts,
   useTasks,
   useToggleSubtask,
+  useUndoBulk,
   useUpdateTask,
   type Task,
 } from '@/queries/tasks'
 
-function firstName(displayName?: string, email?: string): string {
+// `fallback` is passed in rather than read here: this is a plain function, it
+// cannot call a hook, and the last branch is the only user-facing string in it.
+// "there" reads as a name in the greeting slot ("Good morning, there.") and
+// Arabic wants a different word in the same slot, not a translation of that one.
+function firstName(
+  displayName: string | undefined,
+  email: string | undefined,
+  fallback: string,
+): string {
   if (displayName && displayName.trim()) return displayName.trim().split(/\s+/)[0]
   if (email) return email.split('@')[0]
-  return 'there'
+  return fallback
 }
 
 /** Tomorrow morning, local. Where "not today" sends things. */
@@ -42,8 +55,9 @@ function tomorrowMorning(now: Date): string {
 // exactly when the user had just changed something, because a changed
 // fingerprint is precisely what misses the digest's cache.
 export default function DashboardPage() {
+  const t = useTranslations('dashboard')
   const user = useSessionStore(selectUser)
-  const name = firstName(user?.displayName, user?.email)
+  const name = firstName(user?.displayName, user?.email, t('fallbackName'))
 
   const list = useTasks({ status: ['open'] }, 'due-asc')
   const counts = useTaskCounts()
@@ -53,8 +67,18 @@ export default function DashboardPage() {
   const snoozeTask = useSnoozeTask()
   const toggleSubtask = useToggleSubtask()
   const updateTask = useUpdateTask()
+  const undoBulk = useUndoBulk()
 
   const now = new Date()
+
+  const openTasks = list.data?.pages[0]?.tasks ?? []
+
+  // Detail sheet, same component the workspace uses. Held by ID rather than by
+  // value so the open sheet re-reads the task from the list — completing a
+  // subtask inside it then shows the new state instead of a stale snapshot.
+  const [detailId, setDetailId] = useState<string | null>(null)
+  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null)
+  const detail = detailId ? openTasks.find((task) => task.id === detailId) ?? null : null
 
   // "Not today" snoozes; it does not delete, and it does not touch the real
   // deadline — rewriting dueAt would be a lie about when a bill is actually
@@ -67,10 +91,10 @@ export default function DashboardPage() {
       { taskId: task.id, until: tomorrowMorning(now) },
       {
         onSuccess: () =>
-          toast.success('Moved to tomorrow.', {
-            description: 'Its due date has not changed.',
+          toast.success(t('toast.movedToTomorrow'), {
+            description: t('toast.dueDateUnchanged'),
             action: {
-              label: 'Undo',
+              label: t('toast.undo'),
               onPress: () =>
                 updateTask.mutate({
                   taskId: task.id,
@@ -78,7 +102,7 @@ export default function DashboardPage() {
                 }),
             },
           }),
-        onError: () => toast.error('That did not go through. Try again.'),
+        onError: () => toast.error(t('toast.pushFailed')),
       },
     )
   }
@@ -94,7 +118,7 @@ export default function DashboardPage() {
       <DashboardView
         name={name}
         now={now}
-        openTasks={list.data?.pages[0]?.tasks ?? []}
+        openTasks={openTasks}
         loaded={!list.isPending}
         completedToday={counts.data?.completedToday ?? 0}
         needsInput={counts.data?.needsInput ?? 0}
@@ -111,6 +135,33 @@ export default function DashboardPage() {
           toggleSubtask.mutate({ taskId: task.id, subtaskId: subtask.id, done: true })
         }
         onPush={pushToTomorrow}
+        onOpenTask={(task, rect) => {
+          setTriggerRect(rect)
+          setDetailId(task.id)
+        }}
+      />
+      {/* Deleting from here removes the matter from the very list the dashboard
+          is built on, so the undo offer is the only way back. */}
+      <MatterDetailSheet
+        task={detail}
+        trigger={triggerRect}
+        onClose={() => setDetailId(null)}
+        onDeleted={(token, title) => {
+          if (!token) {
+            toast.info(t('toast.deleted', { title }))
+            return
+          }
+          toast.success(t('toast.deleted', { title }), {
+            action: {
+              label: t('toast.undo'),
+              onPress: () =>
+                undoBulk.mutate(token, {
+                  onSuccess: () => toast.info(t('toast.restored')),
+                  onError: () => toast.error(t('toast.undoFailed')),
+                }),
+            },
+          })
+        }}
       />
     </main>
   )

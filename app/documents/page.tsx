@@ -16,6 +16,7 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
+import { useTranslations } from 'next-intl'
 
 import { DeleteDocumentsConfirm } from '@/components/scan/DeleteDocumentsConfirm'
 import { DocumentCaptureFlow, type DocumentCaptureTrigger } from '@/components/scan/DocumentCaptureFlow'
@@ -34,6 +35,7 @@ import {
 } from '@/queries/documentScans'
 
 export default function DocumentsPage() {
+  const t = useTranslations('scan')
   // Origin colour for the capture morph, read live off the CTA's own token so
   // the shell reads as that button expanding rather than a new surface popping
   // in. It used to be a hardcoded plum literal left over from a previous
@@ -99,18 +101,20 @@ export default function DocumentsPage() {
         exitSelect()
         // Reported honestly rather than as a flat success — a partial failure
         // that claims "Deleted 5" leaves the user trusting a list that still
-        // has two of them in it.
+        // has two of them in it. Both halves are ONE ICU message with two
+        // plurals: Arabic agrees the verb with each count separately, so the
+        // sentence cannot be assembled from two independently-translated ones.
         if (failed > 0) {
           toast.error(
             deleted > 0
-              ? `Deleted ${deleted}. ${failed} could not be deleted.`
-              : 'Could not delete those. Try again.',
+              ? t('toast.partial', { deleted, failed })
+              : t('toast.deleteFailed'),
           )
           return
         }
-        toast.info(deleted === 1 ? 'Document deleted.' : `${deleted} documents deleted.`)
+        toast.info(t('toast.deleted', { count: deleted }))
       },
-      onError: () => toast.error('Could not delete those. Try again.'),
+      onError: () => toast.error(t('toast.deleteFailed')),
     })
   }
 
@@ -148,20 +152,17 @@ export default function DocumentsPage() {
           ))}
         </ul>
       ) : isError ? (
-        <EmptyState
-          title="Couldn't load your documents."
-          body="Check your connection and try again."
-        />
+        <EmptyState title={t('list.loadFailedTitle')} body={t('list.loadFailedBody')} />
       ) : docs.length === 0 ? (
         <div className="mt-8 flex flex-col items-center gap-4 px-6 text-center">
           <SketchEmptyTrayGlyph size={104} />
           <div>
-            <h2 className="font-display text-heading-serif text-ink">Nothing scanned yet</h2>
+            <h2 className="font-display text-heading-serif text-ink">{t('list.emptyTitle')}</h2>
             {/* No CTA of its own — the scan button is already sitting a
                 centimetre above this, and two identical buttons that close
                 together read as one of them being broken. */}
             <p className="mt-1.5 max-w-[34ch] text-body text-ink-muted">
-              Scan a bill, letter, or form and {env.appName} will pull out anything actionable.
+              {t('list.emptyBody', { appName: env.appName })}
             </p>
           </div>
         </div>

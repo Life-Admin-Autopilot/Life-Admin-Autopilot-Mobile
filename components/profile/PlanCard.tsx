@@ -1,5 +1,7 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
+
 import { cn } from '@/lib/cn'
 import { useAiQuota } from '@/queries/ai'
 import { useDocumentScanQuota } from '@/queries/documentScanQuota'
@@ -55,6 +57,7 @@ function MeterSkeleton() {
 }
 
 export function PlanCard({ onSeePro }: { onSeePro: (rect: DOMRect) => void }) {
+  const t = useTranslations('profile.plan')
   const subscription = useSubscription()
   const aiQuota = useAiQuota()
   const scanQuota = useDocumentScanQuota()
@@ -93,17 +96,17 @@ export function PlanCard({ onSeePro }: { onSeePro: (rect: DOMRect) => void }) {
         {aiQuota.isPending ? (
           <MeterSkeleton />
         ) : aiRow ? (
-          <Meter label="AI questions today" used={aiRow.used} limit={aiRow.limit} pro={pro} />
+          <Meter label={t('aiToday')} used={aiRow.used} limit={aiRow.limit} pro={pro} />
         ) : null}
 
         {scanQuota.isPending ? (
           <MeterSkeleton />
         ) : scan ? (
-          <Meter label="Document scans this month" used={scan.used} limit={scan.limit} pro={pro} />
+          <Meter label={t('scansMonth')} used={scan.used} limit={scan.limit} pro={pro} />
         ) : null}
 
         {aiQuota.isError && scanQuota.isError ? (
-          <p className="text-body-sm text-ink-muted">Usage is unavailable right now.</p>
+          <p className="text-body-sm text-ink-muted">{t('usageUnavailable')}</p>
         ) : null}
       </div>
 

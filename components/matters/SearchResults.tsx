@@ -1,5 +1,7 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
+
 import { SketchEmptyTrayGlyph } from '@/components/icons/sketch/flowGlyphs'
 import type { SearchResult } from '@/queries/mattersAi'
 import type { Task } from '@/queries/tasks'
@@ -39,14 +41,16 @@ export function SearchResults({
   onLongPress?: (task: Task) => void
   onClear: () => void
 }) {
+  const t = useTranslations('matters')
+
   if (result.matches.length === 0) {
     return (
       <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
         <SketchEmptyTrayGlyph />
-        <p className="text-body font-medium text-ink">Nothing matched that.</p>
+        <p className="text-body font-medium text-ink">{t('results.nothingMatched')}</p>
         <p className="text-caption text-ink-subtle">{result.answer}</p>
         <button type="button" onClick={onClear} className="mt-2 text-caption text-accent">
-          Back to all matters
+          {t('results.backToAll')}
         </button>
       </div>
     )
@@ -64,9 +68,7 @@ export function SearchResults({
       {/* Says so out loud rather than quietly answering from a slice — a search
           that only looked at part of your backlog is a different claim. */}
       {result.truncated ? (
-        <p className="px-1 text-caption text-ink-subtle">
-          Searched your most recent matters only — you have more than fit in one pass.
-        </p>
+        <p className="px-1 text-caption text-ink-subtle">{t('results.truncated')}</p>
       ) : null}
 
       <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface shadow-card">
@@ -89,7 +91,7 @@ export function SearchResults({
       </ul>
 
       <button type="button" onClick={onClear} className="py-1 text-caption text-accent">
-        Back to all matters
+        {t('results.backToAll')}
       </button>
     </div>
   )
