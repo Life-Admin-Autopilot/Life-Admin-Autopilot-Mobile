@@ -10,6 +10,10 @@ export type PillTone =
   | 'medium'
   | 'low'
   | 'success'
+  // A caveat on a value that is otherwise correct — the date that is filed but
+  // will never ring. Distinct from `danger`, which is reserved for destructive
+  // confirmations and would read as "something broke".
+  | 'warning'
   | 'danger'
 
 const TONE: Record<PillTone, string> = {
@@ -20,6 +24,7 @@ const TONE: Record<PillTone, string> = {
   medium: 'bg-priority-med-soft text-priority-med',
   low: 'bg-priority-low-soft text-priority-low',
   success: 'bg-success-soft text-success',
+  warning: 'bg-warning-soft text-warning',
   danger: 'bg-danger-soft text-danger',
 }
 

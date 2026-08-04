@@ -4,6 +4,19 @@
   "clearConversation": "مسح المحادثة",
   "closeAssistant": "إغلاق المساعد",
   "ledger": {
-    "noReminder": "بدون تذكير"
+    "noReminder": "بدون تذكير",
+    "verb": {
+      "createTask": "أُضيفت",
+      "updateTask": "حُدّثت",
+      "completeTask": "أُنجزت",
+      "deleteTask": "حُذفت",
+      "deleteAllTasks": "مُسحت",
+      "snoozeTask": "أُجّلت",
+      "queryTasks": "روجعت",
+      "addSubtask": "أُضيفت خطوة",
+      "toggleSubtask": "حُدّثت خطوة",
+      "removeSubtask": "حُذفت خطوة",
+      "holdForClarification": "بانتظار توضيح"
+    }
   }
 }

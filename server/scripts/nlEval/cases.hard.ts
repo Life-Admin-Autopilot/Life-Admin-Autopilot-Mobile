@@ -242,8 +242,12 @@ export const HARD_CASES: EvalCase[] = [
     prompt: "cancel the insurance thing before it charges me again",
     tasks: [TASK_CAR_INSURANCE, TASK_HEALTH_INSURANCE],
     expect: {
-      // Asking or reading are both defensible. Acting is not.
-      anyOf: [[{ name: 'holdForClarification' }], [{ name: 'queryTasks' }]],
+      // Acting is the failure; asking is the pass, in whichever form. The
+      // empty group accepts a plain prose "which one did you mean?" — which
+      // toolRules.ts explicitly sanctions for an unresolvable referent
+      // ("ask 'Which task did you mean?' instead of guessing"), so requiring a
+      // tool call here would fail the model for following the rule.
+      anyOf: [[{ name: 'holdForClarification' }], [{ name: 'queryTasks' }], []],
       forbidTools: ['deleteTask', 'deleteAllTasks', 'completeTask', 'updateTask'],
     },
   },
@@ -622,6 +626,53 @@ export const HARD_CASES: EvalCase[] = [
         [{ name: 'updateTask', args: { taskId: TASK_CAR_SERVICE.id } }],
       ],
       forbidTools: ['holdForClarification', 'createTask'],
+    },
+  },
+
+  // ══ THE GAUNTLET ═════════════════════════════════════════════════════════
+  // One prompt carrying nine traps, each one a failure this suite has already
+  // measured in isolation. The breakdown request sits THIRD on purpose: every
+  // dropped-intent failure so far has lost whatever came after an addSubtask
+  // fan-out, so six more intents are stacked behind it.
+  //
+  //   1  vent, not a request               → no task from "underwater this week"
+  //   2  routine booking                   → create with a default date, NO hold
+  //   3  breakdown                         → N addSubtask, and DON'T stop here
+  //   4  destructive verb, retracted,      → no delete, no complete
+  //      on an ambiguous referent
+  //   5  high-stakes conflicting date      → HOLD (a wedding flight)
+  //   6  create then retract in one breath → milk must not exist
+  //   7  unnameable                        → HOLD, and file something (iron rule)
+  //   8  bulk wipe idiom                   → ONE deleteAllTasks, never N deletes
+  //   9  trailing "urgent" with no date    → must not persist the contradiction
+  //      and no clear antecedent
+  //
+  // Expect this to fail for a long time. It is a progress bar, not a gate — the
+  // per-trap cases above are what you fix against.
+  {
+    category: 'GAUNTLET',
+    trap: 'Everything after the passport breakdown gets dropped on the floor.',
+    prompt:
+      "ok so — I'm completely underwater this week, everything's a mess. right: book the dentist sometime, and break down what I need for the passport thing. oh and the insurance one, just cancel it — no wait, check it first, I think I already did it. my sister's wedding is either the 14th or the 21st, I genuinely can't remember which, and I need to book the flights before they go up. add milk. actually scratch the milk, I got some. and that other thing we discussed — still need to sort that out. delete everything from last month, it's all done anyway. this is urgent by the way, don't let me forget.",
+    tasks: [TASK_C, TASK_CAR_INSURANCE, TASK_HEALTH_INSURANCE, TASK_DENTIST],
+    expect: {
+      tools: [
+        { name: 'addSubtask', args: { taskId: TASK_C.id } },
+        { name: 'holdForClarification', args: { kind: 'date' } },
+        { name: 'holdForClarification', args: { kind: 'detail' } },
+        { name: 'deleteAllTasks' },
+      ],
+      toolCounts: {
+        addSubtask: { min: 2 },
+        // Exactly two: the wedding and the unnameable. A third means the
+        // dentist booking was held — the over-ask this prompt bakes in.
+        holdForClarification: { min: 2, max: 2 },
+        deleteAllTasks: { min: 1, max: 1 },
+        // The retracted cancel and the bulk wipe both forbid a single delete.
+        deleteTask: { max: 0 },
+      },
+      forbidArgs: [{ name: 'createTask', args: { title: 'milk' } }],
+      forbidTools: ['completeTask'],
     },
   },
 ]

@@ -43,11 +43,9 @@ export function UncertaintyCard({
     // comes for free — and it arrives in its own task, clear of React's commit.
     // Reporting synchronously from a layout effect instead re-renders the tree
     // mid-AnimatePresence handoff, which drops the incoming pane's fade-in.
-    console.log('[dbg] observe effect ran', state)
     const observer = new ResizeObserver(([entry]) => {
       const height =
         entry.borderBoxSize?.[0]?.blockSize ?? entry.target.getBoundingClientRect().height
-      console.log('[dbg] measured', state, height)
       onMeasure(state, Math.ceil(height))
     })
     observer.observe(el)

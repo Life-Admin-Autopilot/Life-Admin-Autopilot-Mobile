@@ -1,20 +1,36 @@
 // Renders one tool call below an assistant message.
 //
-// Since the agent now acts directly on every per-item mutation, a tool call is
-// almost always a passive RECEIPT of what the assistant did — rendered as a quiet
-// ledger row (purple tick · verb · matter · date), not a card. The single
-// exception is the bulk `deleteAllTasks` wipe, which still pauses for a
-// Confirm / Decline card because it is irreversible.
+// Since the agent acts directly on every per-item mutation, a tool call is
+// almost always a passive RECEIPT of what the assistant did. Two shapes carry
+// that, split on whether there is anything left to correct:
+//
+//   FILED (create / update / snooze / hold) — a real card. These verbs put a
+//     matter in the list with three values Kitto GUESSED on the user's behalf:
+//     when, how urgent, which part of your life. A ledger line rendered them at
+//     caption weight next to everything else, which is the uniform-emphasis
+//     failure — the eye skips the row, the wrong guess ships. The card gives the
+//     matter the same emoji-chip-and-title shape it will have in the list, so
+//     the receipt is recognisably the thing that was filed, and puts each guess
+//     in its own pill: legible at a glance, one message away from a correction.
+//
+//   EVERYTHING ELSE (delete / resolve / query / subtasks) — the quiet ledger
+//     row it always was. These leave no guess behind, so a card would be a box
+//     around a fact nobody needs to check.
+//
+// The single interactive exception is the bulk `deleteAllTasks` wipe, which
+// still pauses for a Confirm / Decline card because it is irreversible.
 //
 // Institutional voice: state the action, no chatter — the product noun is
 // "matter". A completion is a status change, not an event.
 
-import { BellOff, Check, X } from 'lucide-react'
+import { BellOff, CalendarDays, Check, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
+import { DomainIcon } from '@/components/icons/DomainIcon'
 import { Button } from '@/components/ui/button'
+import { Pill, type PillTone } from '@/components/ui/Pill'
 import { taskFieldsOf, type ToolCallTaskFields } from '@/lib/ai/toolCallSummary'
-import type { AiToolCall, AiToolName } from '@/lib/ai/types'
+import type { AiToolCall } from '@/lib/ai/types'
 import { useIntlTag } from '@/lib/i18n/localeStore'
 import { formatDue } from '@/lib/taskFormat'
 import type { TaskPriority } from '@/queries/tasks'
@@ -27,22 +43,6 @@ interface ToolCallCardProps {
   onDecline: (callId: string) => void
   /** Which action the user just initiated on THIS call (null otherwise). */
   pendingAction?: PendingAction
-}
-
-// Past-tense verb for a completed action — the ledger reads as a record of what
-// already happened, not a menu of what could happen.
-const PAST_VERB: Record<AiToolName, string> = {
-  createTask: 'Created',
-  updateTask: 'Updated',
-  completeTask: 'Resolved',
-  deleteTask: 'Deleted',
-  deleteAllTasks: 'Cleared',
-  snoozeTask: 'Deferred',
-  queryTasks: 'Reviewed',
-  addSubtask: 'Step added',
-  toggleSubtask: 'Step updated',
-  removeSubtask: 'Step removed',
-  holdForClarification: 'Held',
 }
 
 // The matter a row refers to: prefer the persisted task title from the result,
@@ -60,15 +60,16 @@ function matterLabel(call: AiToolCall): string {
   return ''
 }
 
-// Priority earns emphasis only when it is load-bearing. Rendering all four
-// levels identically would put "Normal" — true of most matters — at the same
-// weight as "Urgent", which is the uniform-emphasis failure: the line becomes
-// something the eye skips instead of something it scans.
-const PRIORITY_TONE: Record<TaskPriority, string> = {
-  urgent: 'text-danger font-medium',
-  high: 'text-ink font-medium',
-  normal: 'text-ink-subtle',
-  low: 'text-ink-subtle',
+// Priority always earns a pill on the card — it is one of the three guesses the
+// card exists to expose — but not the same pill. Rendering "Urgent" and
+// "Normal" identically would put the level true of most matters at the weight of
+// the one that isn't, so only the loud two take a coloured wash; the quiet two
+// sit in `field`, the tone this app already uses for "a value that is set".
+const PRIORITY_TONE: Record<TaskPriority, PillTone> = {
+  urgent: 'high',
+  high: 'medium',
+  normal: 'field',
+  low: 'low',
 }
 
 // Bulk delete reads from a filter (domain/status) plus a count — either the
@@ -89,6 +90,10 @@ function summarizeBulkDelete(call: AiToolCall): string {
 }
 
 export function ToolCallCard({ call, onConfirm, onDecline, pendingAction = null }: ToolCallCardProps) {
+  // Read unconditionally, before any branch returns — the verb names the action
+  // in every shape below, and hooks cannot hide behind an early return.
+  const tChat = useTranslations('chat')
+
   // The only surviving confirmation: the irreversible bulk wipe.
   if (call.status === 'pending_confirmation') {
     const isConfirming = pendingAction === 'confirm'
@@ -140,61 +145,115 @@ export function ToolCallCard({ call, onConfirm, onDecline, pendingAction = null 
     )
   }
 
-  // executed — the quiet ledger row: purple tick · verb · matter, with the
-  // filed fields (date · priority · category) on a second line underneath.
-  const verb = PAST_VERB[call.name] ?? call.name
+  const verb = tChat(`ledger.verb.${call.name}`)
   const matter = matterLabel(call)
   const fields = taskFieldsOf(call)
+
+  // A matter was filed, with guesses attached — the card.
+  if (fields) return <FiledReceipt verb={verb} matter={matter} fields={fields} />
+
+  // Nothing to correct — the quiet ledger row: purple tick · verb · matter.
   return (
-    <div className="flex items-start gap-2.5 px-1 py-1.5">
-      <Check size={13} strokeWidth={2.5} className="mt-[3px] shrink-0 text-accent" />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex items-center gap-2">
-          <span className="shrink-0 text-caption font-medium text-ink">{verb}</span>
-          {matter ? (
-            <span className="truncate text-caption text-ink-muted" dir="auto">
-              {matter}
-            </span>
-          ) : null}
-        </div>
-        {fields ? <FiledFields fields={fields} /> : null}
-      </div>
+    <div className="flex items-center gap-2.5 px-1 py-1.5">
+      <Check size={13} strokeWidth={2.5} className="shrink-0 text-accent" />
+      <span className="shrink-0 text-caption font-medium text-ink">{verb}</span>
+      {matter ? (
+        <span className="truncate text-caption text-ink-muted" dir="auto">
+          {matter}
+        </span>
+      ) : null}
     </div>
   )
 }
 
-// The second ledger line: what Kitto decided, in the order the user is most
-// likely to want to change it. Every value is a real persisted field, so a
-// follow-up message ("make it urgent", "that's car not home") has something
-// concrete to correct — which is the whole reason the line exists.
-function FiledFields({ fields }: { fields: ToolCallTaskFields }) {
+/**
+ * The receipt for a matter that was filed.
+ *
+ * Deliberately echoes `MatterListRow` — same emoji chip, same title weight — so
+ * the card in the conversation and the row in the list are recognisably the
+ * same object. What the list row hides, this one states: every value here is a
+ * real persisted field, so a follow-up message ("make it urgent", "that's car
+ * not home") has something concrete to correct.
+ *
+ * The domain reads twice — as the chip and as a word — and that is deliberate:
+ * the chip is how the matter is identified everywhere else in the app, the word
+ * is what makes a wrong guess nameable in the next message.
+ */
+function FiledReceipt({
+  verb,
+  matter,
+  fields,
+}: {
+  verb: string
+  matter: string
+  fields: ToolCallTaskFields
+}) {
   const tMatters = useTranslations('matters')
   const tDomain = useTranslations('domain')
   const tChat = useTranslations('chat')
   const tag = useIntlTag()
 
-  const due = formatDue(fields.dueAt, { t: tMatters, tag })
-
   return (
-    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-caption text-ink-subtle">
-      <span className="tabular">{due}</span>
-      <span aria-hidden>·</span>
-      <span className={PRIORITY_TONE[fields.priority]}>
-        {tMatters(`priority.${fields.priority}`)}
-      </span>
-      <span aria-hidden>·</span>
-      <span>{tDomain(fields.domain)}</span>
-      {/* A date that is present but will never fire — the held high-stakes case.
-          Silence here would read the date as a promise Kitto has not made. */}
-      {fields.dueAt && !fields.willRemind ? (
-        <>
-          <span aria-hidden>·</span>
-          <span className="inline-flex items-center gap-1">
-            <BellOff size={11} strokeWidth={2.5} aria-hidden />
-            {tChat('ledger.noReminder')}
+    <div className="flex items-start gap-3 rounded-2xl bg-surface p-3.5 shadow-card">
+      <DomainIcon domain={fields.domain} size={40} className="mt-0.5" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        {/* Eyebrow, not a heading: what happened is the smallest thing on the
+            card because the matter is the thing being checked. `text-label`
+            rather than a literal tracking value — globals.css zeroes its
+            letter-spacing under Arabic, where spacing between letters breaks
+            the cursive join. */}
+        <span className="flex items-center gap-1.5 text-label uppercase text-ink-subtle">
+          <Check size={12} strokeWidth={3} className="shrink-0 text-accent" />
+          {verb}
+        </span>
+
+        {matter ? (
+          // Two lines, not a truncation: "Check health insurance rene…" hides
+          // the half of the title that says which renewal it is.
+          <span className="line-clamp-2 text-heading-sm text-ink" dir="auto">
+            {matter}
           </span>
-        </>
-      ) : null}
+        ) : null}
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <MetaPill icon={<CalendarDays size={12} strokeWidth={2.25} />}>
+            <span className="tabular">{formatDue(fields.dueAt, { t: tMatters, tag })}</span>
+          </MetaPill>
+          <MetaPill tone={PRIORITY_TONE[fields.priority]}>
+            {tMatters(`priority.${fields.priority}`)}
+          </MetaPill>
+          {/* The word only. The emoji is already the chip on the left at 40px;
+              repeating it at 12px inside the pill added a second, murkier copy
+              of the one thing on the card that was never ambiguous. */}
+          <MetaPill>{tDomain(fields.domain)}</MetaPill>
+          {/* A date that is present but will never fire — the held high-stakes
+              case. Silence here would read the date pill as a promise Kitto has
+              not made. */}
+          {fields.dueAt && !fields.willRemind ? (
+            <MetaPill tone="warning" icon={<BellOff size={12} strokeWidth={2.25} />}>
+              {tChat('ledger.noReminder')}
+            </MetaPill>
+          ) : null}
+        </div>
+      </div>
     </div>
+  )
+}
+
+// Pills at meta scale. Same compact override the matter list row uses, so the
+// two surfaces read as one system rather than two sizes of the same component.
+function MetaPill({
+  tone = 'field',
+  icon,
+  children,
+}: {
+  tone?: PillTone
+  icon?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <Pill tone={tone} icon={icon} className="gap-1 px-2.5 py-0.5 text-micro">
+      {children}
+    </Pill>
   )
 }

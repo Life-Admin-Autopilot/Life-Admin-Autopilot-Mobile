@@ -223,6 +223,97 @@ Constraints: window is **30 days**, cap **60** reminders, re-synced wholesale on
 ## 6. Regression harness
 
 ```bash
-cd server && npm run nl-eval
+cd server
+npm run nl-eval          # core suite — 58 cases, one clean intent per prompt
+npm run nl-eval:hard     # hard suite — 53 spoken, multi-intent, adversarial cases
+npm run nl-eval:all      # both (111)
+
+npm run nl-eval:hard -- --filter=RETRACTION   # iterate on one group
+npm run nl-eval:hard -- --concurrency=8       # default is 4
 ```
-Covers `CLARIFY_UNSURE_DATE`, `CLARIFY_MISSING_TIME`, `CLARIFY_ANTI_OVERASK`, `CLARIFY_MIX` plus held-out cases that detect prompt overfitting. Run this before shipping any change to `voice/toolRules.ts`.
+
+Both call real Gemini through the production system prompt + prefill. Roughly
+$0.06 per 60 cases. Run before shipping any change to `voice/toolRules.ts`.
+
+**Core** covers `CLARIFY_UNSURE_DATE`, `CLARIFY_MISSING_TIME`,
+`CLARIFY_ANTI_OVERASK`, `CLARIFY_MIX` plus held-out cases that detect prompt
+overfitting.
+
+**Hard** is built to break Kitto rather than confirm it — every case carries a
+`trap` naming the specific wrong answer it exists to catch, printed on failure:
+
+| Group | n | What it hunts |
+|---|---|---|
+| `MULTI_INTENT` | 9 | Narrating step 1 and dropping the rest of the turn |
+| `RETRACTION` | 7 | Acting on a value the user abandoned mid-sentence |
+| `HOLD_REQUIRED` | 7 | Guessing a date that is expensive to get wrong |
+| `ANTI_OVERASK` | 8 | A clarification card on an item that needed none |
+| `DESTRUCTIVE` | 6 | Wrong-target deletes, wipes fanned into N calls |
+| `URGENT_NO_DATE` | 3 | Persisting the urgent-with-no-date contradiction |
+| `LANG_*` | 8 | Reply language, across turns and code-switching |
+| `SUBTASK_DEPTH` | 3 | Re-listing existing steps; note-vs-step confusion |
+| `NO_TOOL` | 2 | Manufacturing tasks out of a vent or a question |
+
+Assertions beyond the core matcher: `toolCounts` (min/max per tool — the only
+way to catch a duplicate create or a fanned-out wipe), `forbidArgs` (a call that
+must not carry a given value), `anyOf` (alternative sanctioned answers), `'*'`
+(the key must be present, any value), `replyScript`, plus per-case `locale` and
+`history`.
+
+**Baseline at the time of writing: hard suite 46/53 (87%).** The failures are
+tracked, not accepted — see the language contradiction in §7.
+
+---
+
+## 7. Known failures the hard suite pins
+
+Written from a full `nl-eval:hard` run. These are open bugs with a failing test
+each, not accepted behaviour.
+
+### 7a. Two contradictory LANGUAGE rules — 3 failures
+
+`buildSystemPrompt` composes `PERSONA + TOOL_RULES + conversationLanguageRule(locale)`.
+The last two disagree outright:
+
+| Source | Rule |
+|---|---|
+| `voice/toolRules.ts` LANGUAGE block | "LANGUAGE IS DETERMINED PER MESSAGE, NOT PER CONVERSATION… If the user wrote English, your reply is English from start to finish." |
+| `promptLanguage.conversationLanguageRule` | "This is a language they chose in Settings, so it holds even when they write to you in a different one." |
+
+The per-message block is winning, so the Settings language is ignored:
+
+- `locale: 'ar'` + English prompt → replies in English
+- `locale: 'en'` + Arabic prompt → replies in Arabic
+- `locale: 'en'` + Arabic history → replies in Arabic
+
+One of the two blocks has to go. `LANG_LOCALE_WINS` and `LANG_HISTORY` pin the
+locale-driven behaviour; if per-message is the intended product, invert those
+two cases instead and delete the block in `promptLanguage.ts`.
+
+Note `LANG_UNSUPPORTED` (Spanish in, `locale: 'en'`) passes only because the
+script check cannot distinguish Spanish from English — the reply is in Spanish,
+so it is the same bug wearing a Latin alphabet.
+
+### 7b. Over-asking on a routine booking — 1 failure
+
+`book the dentist sometime` is held with *"When should I remind you to book the
+dentist?"* — the exact question `toolRules.ts` forbids ("ask the
+DEADLINE-DEFINING question, not 'when should I remind you'"), on an item the
+same file lists as LOW cost ("book a routine appointment"). It should default a
+date and say so.
+
+### 7c. Second intent dropped after a breakdown — 2 failures
+
+`break down the passport one, and also what do I need for the move?` fires three
+`addSubtask` calls for the passport and none for the move. Same shape in
+`went to the dentist so tick that off, and my optician appointment is either the
+8th or the 9th` — the completion runs, the hold never fires. This is the
+MULTI-STEP failure mode the prompt already names; it survives the warning.
+
+### 7d. Unnameable item asked in prose instead of held — 1 failure
+
+`I still need to sort out the other thing we talked about` with an empty task
+list gets a prose "which task do you mean?" and files nothing, violating the
+IRON RULE that every item mentioned becomes a real matter in the same turn.
+(Where the referent IS an existing task, prose-asking is correct and the
+`cancel the insurance thing` case accepts it.)

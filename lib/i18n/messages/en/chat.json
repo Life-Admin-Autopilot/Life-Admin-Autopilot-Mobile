@@ -4,6 +4,19 @@
   "clearConversation": "Clear conversation",
   "closeAssistant": "Close assistant",
   "ledger": {
-    "noReminder": "Won't remind"
+    "noReminder": "Won't remind",
+    "verb": {
+      "createTask": "Created",
+      "updateTask": "Updated",
+      "completeTask": "Resolved",
+      "deleteTask": "Deleted",
+      "deleteAllTasks": "Cleared",
+      "snoozeTask": "Deferred",
+      "queryTasks": "Reviewed",
+      "addSubtask": "Step added",
+      "toggleSubtask": "Step updated",
+      "removeSubtask": "Step removed",
+      "holdForClarification": "Held"
+    }
   }
 }

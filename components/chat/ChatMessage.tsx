@@ -9,7 +9,9 @@
 import { AssistantText } from '@/components/chat/AssistantText'
 import { ToolCallCard } from '@/components/chat/ToolCallCard'
 import { ClarificationDeck } from '@/components/chat/ClarificationDeck'
+import { taskFieldsOf } from '@/lib/ai/toolCallSummary'
 import type { AiMessage } from '@/lib/ai/types'
+import { cn } from '@/lib/cn'
 
 interface ChatMessageProps {
   message: AiMessage
@@ -41,12 +43,13 @@ export function ChatMessage({
   const hasText = message.text.length > 0
   const hasTools = message.toolCalls.length > 0
 
-  // Receipts = executed/failed mutations → quiet ledger rows.
+  // Receipts = executed/failed mutations → a card when a matter was filed,
+  //            a quiet ledger row otherwise (ToolCallCard owns that split).
   // Confirms = the bulk-delete prompt (its own card).
   // Clarifications = all held questions → ONE consolidated deck, not a stack.
   //
   // A held item is FILED like any other — the task exists the moment the hold
-  // runs — so it earns a ledger row too, carrying the guess Kitto applied
+  // runs — so it earns a receipt too, carrying the guess Kitto applied
   // (date · priority · category, flagged when the date will not fire). It used
   // to appear only as a deck card, which showed the question but never the
   // guess, so the one thing the user was being asked to correct was invisible.
@@ -62,6 +65,10 @@ export function ChatMessage({
     (c) => c.name !== 'holdForClarification' && c.status === 'pending_confirmation',
   )
   const clarifications = message.toolCalls.filter((c) => c.name === 'holdForClarification')
+
+  // A receipt that filed a matter renders as a card (see ToolCallCard). The
+  // container needs to know before it lays the stack out.
+  const hasFiledReceipt = receipts.some((c) => taskFieldsOf(c) !== null)
 
   // Prose lives in the grey bubble; tool/clarification cards render standalone
   // below it (never nested inside the bubble — that read as a box-in-a-box).
@@ -79,11 +86,21 @@ export function ChatMessage({
 
       {hasTools ? (
         <div className="flex w-full flex-col gap-2">
-          {/* Receipts (executed / failed mutations) stack as a tight ledger,
-              closed by a single hairline rule. The bulk-delete confirm card and
-              the clarification cards render as standalone cards below. */}
+          {/* Receipts (executed / failed mutations). Rows stack as a tight
+              ledger closed by a single hairline rule; a filed matter renders as
+              a card instead, and a card needs air around it rather than a rule
+              underneath — a hairline hung off the bottom of a shadowed card
+              reads as a broken border. One filed matter in the batch switches
+              the whole stack to the spaced treatment, so a mixed turn does not
+              get a rule running under half of it. The bulk-delete confirm and
+              the clarification cards render standalone below. */}
           {receipts.length > 0 ? (
-            <div className="w-full border-b border-border/60 pb-1">
+            <div
+              className={cn(
+                'flex w-full flex-col',
+                hasFiledReceipt ? 'gap-2' : 'border-b border-border/60 pb-1',
+              )}
+            >
               {receipts.map((call) => (
                 <ToolCallCard
                   key={call.callId}
