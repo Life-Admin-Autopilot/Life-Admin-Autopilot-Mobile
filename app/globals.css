@@ -290,7 +290,14 @@
 
   /* ---- Motion ---- */
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Google's Material Design standard curve, NOT an Apple one — it predates
+     the SpringBoard measurement below and is kept because existing code
+     depends on it. `--ease-ios-open` is the Apple-derived alternative; migrate
+     call sites to it deliberately, one at a time, never by repointing this. */
   --ease-in-out-quad: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* The measured iOS motion tokens live in their own `@theme static` block
+     below — they must not be tree-shaken. See the comment there. */
 
 
   /*
@@ -352,6 +359,82 @@
   --shadow-elevated: 0 8px 28px rgb(20 20 40 / 0.08), 0 2px 6px rgb(20 20 40 / 0.05);
   --shadow-halo: 0 6px 20px rgb(0 0 0 / 0.08);
 }
+
+/*
+ * ---- Measured iOS motion tokens ----
+ *
+ * Frame-by-frame capture of the real SpringBoard app-open transition
+ * (iOS 26.5) measured ζ = 1.000, ωₙ = 22.34 rad/s. A spring cannot be
+ * expressed as a cubic-bezier — a cubic has at most one overshoot and a fixed
+ * end, a spring oscillates and only settles asymptotically — so these are the
+ * spring's closed-form solution sampled at 27 adaptively-spaced points. Density
+ * is concentrated early, where the curvature is: max deviation from the true
+ * curve is 0.186% of travel, versus 1.1% for the same number of evenly-spaced
+ * points.
+ *
+ * `@theme static` is load-bearing, not stylistic. A plain `@theme` is
+ * TREE-SHAKEN: Tailwind only emits a variable that some generated utility
+ * references. `--ease-*` is a Tailwind namespace so `ease-ios-open` is a real
+ * utility, but `--duration-*` is NOT — `duration-ios-open` is not a class, and
+ * a bare `var(--duration-ios-blur)` read from a JSX style prop is invisible to
+ * the compiler. Under a plain `@theme` the unreferenced tokens compiled away
+ * and silently resolved to nothing; `--ease-ios-close` in particular survived
+ * only inside the @supports fallback below, so it was undefined on every
+ * MODERN WebView — the exact inverse of the intended behaviour. `static`
+ * emits the whole block unconditionally and removes that failure mode.
+ *
+ * In markup: `ease-ios-open` works as a utility; durations need the arbitrary
+ * form `duration-(--duration-ios-open)`.
+ */
+@theme static {
+  --ease-ios-open: linear(
+    0.0000 0.0%, 0.0012 0.5%, 0.0105 1.7%, 0.0351 3.2%, 0.0790 5.0%,
+    0.1422 7.2%, 0.2218 9.6%, 0.3126 12.3%, 0.4086 15.2%, 0.5043 18.3%,
+    0.5947 21.7%, 0.6766 25.3%, 0.7479 29.0%, 0.8078 33.0%, 0.8566 37.1%,
+    0.8953 41.5%, 0.9250 46.0%, 0.9473 50.7%, 0.9637 55.5%, 0.9754 60.5%,
+    0.9837 65.7%, 0.9893 71.1%, 0.9931 76.5%, 0.9957 82.2%, 0.9973 88.0%,
+    0.9983 93.9%, 1.0000 100.0%
+  );
+  --duration-ios-open: 414ms;
+  --ease-ios-close: linear(
+    0.0000 0.0%, 0.0012 0.5%, 0.0105 1.7%, 0.0351 3.2%, 0.0790 5.0%,
+    0.1423 7.2%, 0.2219 9.6%, 0.3127 12.3%, 0.4087 15.2%, 0.5044 18.3%,
+    0.5948 21.7%, 0.6767 25.3%, 0.7480 29.0%, 0.8079 33.0%, 0.8567 37.1%,
+    0.8953 41.5%, 0.9251 46.0%, 0.9474 50.7%, 0.9637 55.5%, 0.9755 60.5%,
+    0.9837 65.7%, 0.9893 71.1%, 0.9932 76.5%, 0.9957 82.2%, 0.9973 88.0%,
+    0.9984 93.9%, 1.0000 100.0%
+  );
+  --duration-ios-close: 188ms;
+  /* Blur ramps ~4x faster than geometry — measured 92% strength in ~68ms. */
+  --duration-ios-blur: 70ms;
+}
+
+/*
+ * ---- linear() fallback for old WebViews ----
+ *
+ * `linear()` needs WKWebView on iOS 17.2+ or Android WebView 113+ (Safari 17.2
+ * was the last engine to ship it, Dec 2023 — caniuse/MDN, NOT 17.4 as the
+ * measurement writeup states). Where it is missing the sampled value is
+ * garbage, so both iOS easings collapse to an ease-out bezier. It is an
+ * approximation by definition — a bezier cannot be a spring — but it lands in
+ * the right shape: fast out, long soft settle.
+ *
+ * This has to live OUTSIDE `@theme`, in a plain `:root`. Tailwind v4 compiles
+ * `@theme` into `:root, :host` inside `@layer theme` (verified against the
+ * v4.3 compiler, and consistent with the header note that these stay runtime
+ * CSS vars). An UNLAYERED declaration beats any layered one regardless of
+ * source order, so this overrides the tokens above without a specificity hack
+ * — and would still override them if it were moved earlier in the file.
+ *
+ * The duration tokens need no fallback: they are plain <time> values.
+ */
+@supports not (animation-timing-function: linear(0, 1)) {
+  :root {
+    --ease-ios-open: cubic-bezier(0.25, 1, 0.35, 1);
+    --ease-ios-close: cubic-bezier(0.25, 1, 0.35, 1);
+  }
+}
+
 
 /*
  * shadcn semantic vars mapped onto the soft-planner palette. Coral is the

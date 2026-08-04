@@ -40,41 +40,57 @@ export const MESSY_TRANSCRIPTS: string[] = [
   'Pay the bill — not the electricity one, the other one.',
 ]
 
-export const CLARIFY_QUESTIONS: { question: string; kind: 'date' | 'detail' | 'choice'; options: string[] }[] = [
+// `said` is what the user asked for in their own words — the card quotes it back
+// so a question opened days later is answerable without remembering the request.
+// Each one has to genuinely PRODUCE its question: a quote that doesn't explain
+// why Kitto asked makes the seeded stack read as noise.
+export const CLARIFY_QUESTIONS: {
+  question: string
+  kind: 'date' | 'detail' | 'choice'
+  options: string[]
+  said: string
+}[] = [
   {
     question: 'You said Tuesday or Thursday — which one should I hold?',
     kind: 'date',
     options: ['Tuesday', 'Thursday'],
+    said: 'Remind me about the thing with the bank, either Tuesday or Thursday, I’ll know by then.',
   },
   {
     question: 'Which bill did you mean?',
     kind: 'choice',
     options: ['Water', 'Gas', 'Internet'],
+    said: 'Pay the bill — not the electricity one, the other one.',
   },
   {
     question: 'What should I call this one?',
     kind: 'detail',
     options: [],
+    said: 'Email that guy back about the quote — the one from last week.',
   },
   {
     question: '“Soon-ish” — is that this month or next?',
     kind: 'date',
     options: ['This month', 'Next month'],
+    said: 'I need to deal with the insurance, it renews soon-ish.',
   },
   {
     question: 'Morning or evening appointment?',
     kind: 'choice',
     options: ['Morning', 'Evening'],
+    said: 'Book the appointment, maybe the fifteenth, or the week after if they’re full.',
   },
   {
     question: 'Is this the same quote you asked about last week, or a new one?',
     kind: 'choice',
     options: ['Same one', 'New one'],
+    said: 'Chase up the quote for the balcony sealing, they still haven’t sent it.',
   },
   {
     question: 'Should I put a deadline on this, or leave it on the list?',
     kind: 'choice',
     options: ['Give it a deadline', 'Leave it on the list'],
+    said: 'Sort out the car thing before it becomes a problem.',
   },
 ]
 

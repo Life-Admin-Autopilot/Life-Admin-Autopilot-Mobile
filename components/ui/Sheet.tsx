@@ -6,7 +6,8 @@ import { useTranslations } from 'next-intl'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { cn } from '@/lib/cn'
-import { LIST_SPRING, MORPH_BACKDROP_FADE, MORPH_CONTENT_VARIANTS, MORPH_SPRING } from '@/lib/motion'
+import { BACKDROP_BLUR_FADE, BACKDROP_BLUR_STYLE } from '@/lib/motion-backdrop'
+import { LIST_SPRING, MORPH_CONTENT_VARIANTS, MORPH_SPRING } from '@/lib/motion'
 import { useMorphColors } from '@/lib/motion-colors'
 
 // The app's bottom-sheet primitive — Matters' filter/arrange/detail/delete
@@ -264,10 +265,15 @@ function Surface({
         type="button"
         aria-label={t('close')}
         onClick={onClose}
-        variants={MORPH_BACKDROP_FADE}
+        // Frost arrives in ~70ms while the shell keeps the ~280ms spring: on
+        // iOS the blur is essentially already there before the panel has
+        // finished moving, and matching the two timelines is what makes a
+        // hand-built sheet read as heavy. See lib/motion-backdrop.ts.
+        variants={BACKDROP_BLUR_FADE}
         initial="initial"
         animate="animate"
         exit="exit"
+        style={BACKDROP_BLUR_STYLE}
         className={cn(
           'fixed inset-0 z-40 bg-ink/30 backdrop-blur-md',
           !isPresent && 'pointer-events-none',

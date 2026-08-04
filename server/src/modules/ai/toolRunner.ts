@@ -254,6 +254,14 @@ interface RunArgs {
   name: ToolName
   args: unknown
   timezone?: string
+  /**
+   * The user's message for this turn, verbatim. Only `holdForClarification`
+   * uses it — a held question is answered later, on a screen with none of the
+   * conversation around it, so the row carries the words that produced it. It
+   * is NOT a tool argument: the model must never get to edit, summarise, or
+   * invent what the user said.
+   */
+  sourceText?: string
 }
 
 // Run a non-destructive tool immediately. Destructive tools throw —
@@ -270,7 +278,7 @@ export async function runTool(
     )
   }
   const validated = validateToolArgs(args.name, args.args)
-  return dispatch(args.userId, args.name, validated, args.timezone)
+  return dispatch(args.userId, args.name, validated, args.timezone, args.sourceText)
 }
 
 // Run a destructive tool after the user confirms. Re-validates args
@@ -286,7 +294,7 @@ export async function runConfirmedTool(
     )
   }
   const validated = validateToolArgs(args.name, args.args)
-  return dispatch(args.userId, args.name, validated, args.timezone)
+  return dispatch(args.userId, args.name, validated, args.timezone, args.sourceText)
 }
 
 async function dispatch(
@@ -294,6 +302,7 @@ async function dispatch(
   name: ToolName,
   validated: unknown,
   timezone: string | undefined,
+  sourceText?: string,
 ): Promise<{ result: Record<string, unknown> }> {
   switch (name) {
     case 'createTask':
@@ -318,7 +327,12 @@ async function dispatch(
       return { result: await runRemoveSubtask(userId, validated as RemoveSubtaskArgs) }
     case 'holdForClarification':
       return {
-        result: await runHoldForClarification(userId, validated as HoldForClarificationArgs, timezone),
+        result: await runHoldForClarification(
+          userId,
+          validated as HoldForClarificationArgs,
+          timezone,
+          sourceText,
+        ),
       }
   }
 }
@@ -330,6 +344,7 @@ async function runHoldForClarification(
   userId: string,
   args: HoldForClarificationArgs,
   tz: string | undefined,
+  sourceText?: string,
 ): Promise<Record<string, unknown>> {
   // The best guess we have for the date, in priority order: an explicit guess,
   // else the model's most-likely option (it orders them).
@@ -384,6 +399,7 @@ async function runHoldForClarification(
       title: o.title,
       notes: o.notes,
     })),
+    sourceText,
   })
   return { ok: true, clarificationId: out.clarificationId, taskId: task.id, title: out.title, ...created }
 }

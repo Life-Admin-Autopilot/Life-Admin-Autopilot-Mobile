@@ -73,6 +73,13 @@ export interface ClarificationAttrs {
   kind: ClarificationKind
   costOfWrong: ClarificationCost
   options: ClarificationOption[]
+  // What the user actually SAID — the chat message or voice transcript this
+  // question came out of, verbatim. The card used to show only `draft.title`,
+  // which is Kitto's paraphrase ("Email that guy"), so a question opened hours
+  // later ("What's the email to that guy about?") asked the user to recall a
+  // request they could no longer see. Their own words are the memory anchor.
+  // Display-only: nothing reads it back into a prompt.
+  sourceText?: string
   // Idempotency key for VOICE-born holds: the note-scoped item key. Lets a
   // worker reclaim/retry upsert the same held item instead of duplicating it.
   // Omitted for chat-born holds (each is a fresh create).
@@ -127,6 +134,7 @@ const ClarificationSchema = new Schema<ClarificationAttrs>(
     kind: { type: String, enum: CLARIFICATION_KINDS, default: 'date' },
     costOfWrong: { type: String, enum: CLARIFICATION_COSTS, default: 'high' },
     options: { type: [ClarificationOptionSchema], default: [] },
+    sourceText: { type: String },
     sourceKey: { type: String },
     deferredUntil: { type: Date },
     answer: { type: String },

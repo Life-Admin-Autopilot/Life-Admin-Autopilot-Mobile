@@ -2,6 +2,7 @@
   "loading": "جارٍ التحميل…",
   "position": "{current} من {total}",
   "filedWithGuess": "حُفظ بتخمين",
+  "youSaid": "قلت",
   "answerPlaceholder": "اكتب إجابتك…",
   "pickOption": "اختر من الخيارات",
   "typeYourOwn": "اكتب إجابتك بنفسك",

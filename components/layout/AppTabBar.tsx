@@ -6,10 +6,12 @@ import { TabBar } from '@/components/ui/TabBar'
 import { routeTab } from '@/lib/appRoutes'
 import { useTabBarClaimed } from '@/lib/tabBarStore'
 
-// Rendered once in Providers, as a sibling of the per-route `children` slot
-// app/template.tsx re-mounts and fades on every navigation — that's what
-// keeps the bar itself persistent across page transitions instead of
-// fading out and back in with the page content above it.
+// Rendered once in Providers, as a sibling of — not inside — the PageTransition
+// that closes and re-opens the routed page on every navigation. That's what
+// keeps the bar itself persistent across page transitions instead of animating
+// out and back in with the page content above it. It reads `usePathname()` to
+// pick the active tab, and since it sits above the transition it simply
+// re-renders with the new path rather than remounting.
 export function AppTabBar() {
   const pathname = usePathname()
   const active = routeTab(pathname)

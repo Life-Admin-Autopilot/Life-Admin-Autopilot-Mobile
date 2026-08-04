@@ -21,7 +21,7 @@ import { useTranslations } from 'next-intl'
 import { PdfStage, pdfContentSize } from '@/components/scan/viewer/PdfStage'
 import { ZoomPanSurface } from '@/components/scan/viewer/ZoomPanSurface'
 import { usePdfDocument } from '@/lib/pdf/usePdfDocument'
-import { MORPH_BACKDROP_FADE } from '@/lib/motion'
+import { BACKDROP_BLUR_FADE, BACKDROP_BLUR_STYLE } from '@/lib/motion-backdrop'
 import { rasterStepFor } from '@/lib/viewer/rasterLadder'
 import { useZoomPan } from '@/lib/viewer/useZoomPan'
 import type { Size } from '@/lib/viewer/zoomPanMath'
@@ -46,12 +46,17 @@ export function DocumentViewer({ open, onClose, blob, url, isPdf }: DocumentView
         {open ? (
           <motion.div
             key="doc-viewer-backdrop"
-            variants={MORPH_BACKDROP_FADE}
+            // The frost used to finish 80ms AFTER the panel it sits behind had
+            // already settled, which reads as the page slowly clouding over.
+            // ~70ms enter puts it in place before the panel moves, matching the
+            // measured iOS launch. See lib/motion-backdrop.ts.
+            variants={BACKDROP_BLUR_FADE}
             initial="initial"
             animate="animate"
             exit="exit"
             onClick={onClose}
             aria-hidden
+            style={BACKDROP_BLUR_STYLE}
             className="fixed inset-0 z-[60] bg-ink/60 backdrop-blur-md"
           />
         ) : null}

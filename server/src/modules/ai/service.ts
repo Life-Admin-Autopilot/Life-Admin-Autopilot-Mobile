@@ -141,6 +141,7 @@ export async function* ask(args: AskArgs): AsyncGenerator<AskEvent> {
     timezone: args.timezone,
     systemInstruction: ctx.system,
     contents,
+    sourceText: args.question,
   })
 
   await appendTurn({
@@ -245,6 +246,9 @@ export async function* continueAfterConfirm(
     timezone: args.timezone,
     systemInstruction: ctx.system,
     contents,
+    // The turn the user confirmed grew out of their last real message; '(continue)'
+    // is our own placeholder and would be a lie to quote back at them.
+    sourceText: lastUserTurn?.text,
   })
 
   await appendTurn({
@@ -271,6 +275,13 @@ interface ToolLoopArgs {
   timezone?: string
   systemInstruction: string
   contents: Content[]
+  /**
+   * The user's message for this turn, verbatim — passed to the tool runner so a
+   * `holdForClarification` row can quote it back on /uncertainties. Deliberately
+   * NOT the grounded scaffold (`ctx.user`), which wraps the question in a data
+   * block the user never wrote.
+   */
+  sourceText?: string
 }
 
 interface ToolLoopOutput {
@@ -441,6 +452,7 @@ async function* runToolLoop(
           name: inv.name,
           args: inv.args,
           timezone: args.timezone,
+          sourceText: args.sourceText,
         })
         yield {
           kind: 'tool_result',

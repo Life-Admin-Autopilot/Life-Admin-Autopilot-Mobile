@@ -76,6 +76,7 @@ export function buildClarifications(args: {
       question: q.question,
       kind: q.kind,
       options,
+      sourceText: q.said,
       answer:
         status === 'resolved'
           ? q.options.length > 0

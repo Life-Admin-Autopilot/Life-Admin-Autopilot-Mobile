@@ -1,7 +1,7 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,11 @@ import { Pill } from '@/components/ui/Pill'
 import { ChoiceChip } from '@/components/onboarding/QuestionChips'
 import { MorphSurface, type MorphShape } from '@/components/ui/MorphSurface'
 import {
+  OriginalRequest,
+  UncertaintyCard,
+  type MeasureFn,
+} from '@/components/uncertainty/UncertaintyCard'
+import {
   useClarifications,
   useResolveClarification,
   useDeferClarification,
@@ -17,7 +22,19 @@ import {
   type Clarification,
 } from '@/queries/clarifications'
 
-const WIDTH = 348
+// The card is a fixed-width island, and 348 is the width it wants. On a phone
+// it can't have it: 348 plus the page's 24px gutters needs a 396px viewport,
+// and an iPhone SE/12/13 mini is 375. The shell overflowed the centred grid on
+// BOTH sides — the page scrolled sideways and the card's edges sat off-screen.
+// Below that threshold the island simply takes the width it's given.
+const MAX_WIDTH = 348
+const GUTTER = 24
+
+// First-frame heights only. Every card measures itself on mount (UncertaintyCard)
+// and the shell springs to the real number; these just decide what the first
+// paint is springing FROM, so a card is never born at height 0.
+const INITIAL_HEIGHT = 300
+const DONE_HEIGHT = 236
 
 function localTz(): string | undefined {
   try {
@@ -25,6 +42,27 @@ function localTz(): string | undefined {
   } catch {
     return undefined
   }
+}
+
+/**
+ * The island's width, clamped to what the viewport can actually hold.
+ *
+ * Starts at MAX_WIDTH rather than measuring during render: the walker only
+ * mounts after the list resolves client-side, so there is no server render to
+ * disagree with, and the effect corrects the width before the first paint the
+ * user sees. Tracks resize because a phone rotation changes the answer.
+ */
+function useIslandWidth(): number {
+  const [width, setWidth] = useState(MAX_WIDTH)
+
+  useEffect(() => {
+    const read = () => setWidth(Math.min(MAX_WIDTH, window.innerWidth - GUTTER * 2))
+    read()
+    window.addEventListener('resize', read)
+    return () => window.removeEventListener('resize', read)
+  }, [])
+
+  return width
 }
 
 // Gate on the loaded list, then hand the snapshot to the walker as a prop so it
@@ -53,11 +91,13 @@ function Walker({ initial }: { initial: Clarification[] }) {
   const resolve = useResolveClarification()
   const defer = useDeferClarification()
   const drop = useDropClarification()
+  const width = useIslandWidth()
 
   const [queue] = useState(initial)
   const [index, setIndex] = useState(0)
   const [showCustom, setShowCustom] = useState(false)
   const [custom, setCustom] = useState('')
+  const [measured, setMeasured] = useState<Record<string, number>>({})
 
   const done = index >= queue.length
   const current = done ? null : (queue[index] ?? null)
@@ -90,19 +130,38 @@ function Walker({ initial }: { initial: Clarification[] }) {
     advance()
   }
 
-  const state = done ? 'done' : current!.id
+  const onMeasure = useCallback<MeasureFn>((state, height) => {
+    setMeasured((m) => (m[state] === height ? m : { ...m, [state]: height }))
+  }, [])
+
   const typing = !done && (showCustom || current!.kind === 'detail')
-  const optionCount = done ? 0 : Math.min(current!.options.length, 4)
-  const height = done ? 236 : 262 + (typing ? 76 : optionCount * 52)
-  const shapes: Record<string, MorphShape> = { [state]: { width: WIDTH, height, radius: 30 } }
+  // Toggling between chips and the input changes the pane's height, and the
+  // measurement for the new content lands a frame later — so the shape key has
+  // to distinguish them. Keyed on the id alone, the shell kept the height of
+  // whichever mode was measured last and clipped the other.
+  const shapeKey = done ? 'done' : `${current!.id}:${typing ? 'typing' : 'options'}`
+  const shapes = useMemo<Record<string, MorphShape>>(
+    () => ({
+      [shapeKey]: {
+        width,
+        height: measured[shapeKey] ?? (done ? DONE_HEIGHT : INITIAL_HEIGHT),
+        radius: 30,
+      },
+    }),
+    [shapeKey, width, measured, done],
+  )
 
   return (
-    <main className="grid min-h-dvh place-items-center px-6">
-      <MorphSurface state={state} shapes={shapes}>
+    <main className="grid min-h-dvh place-items-center px-6 py-8">
+      <MorphSurface state={shapeKey} shapes={shapes}>
         {done ? (
           // Closing the loop earns the celebration surface — one of the four
           // places gradient is allowed to appear.
-          <div className="bg-celebrate-gradient flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+          <UncertaintyCard
+            state={shapeKey}
+            onMeasure={onMeasure}
+            className="bg-celebrate-gradient items-center justify-center gap-2 text-center"
+          >
             <span aria-hidden className="text-[34px] leading-none">
               🌤️
             </span>
@@ -117,10 +176,10 @@ function Walker({ initial }: { initial: Clarification[] }) {
             >
               {t('backToDashboard')}
             </Button>
-          </div>
+          </UncertaintyCard>
         ) : (
-          <div className="flex h-full flex-col p-6">
-            <div className="flex items-center justify-between">
+          <UncertaintyCard state={shapeKey} onMeasure={onMeasure}>
+            <div className="flex items-center justify-between gap-3">
               {/* "Already filed", not "needs your input" — the task exists
                   either way, so this is an optional correction, not a demand. */}
               <Pill tone="accent" uppercase>
@@ -129,12 +188,16 @@ function Walker({ initial }: { initial: Clarification[] }) {
               {/* One message, not "{n}" + "/" + "{n}" in JSX: Arabic reads the
                   counter as "3 من 12", and a slash assembled in markup cannot
                   become a word. */}
-              <span className="text-body-sm tabular text-ink-muted">
+              <span className="shrink-0 text-body-sm tabular text-ink-muted">
                 {t('position', { current: index + 1, total: queue.length })}
               </span>
             </div>
             <p className="mt-3 truncate text-body-sm text-ink-muted">{current!.draft.title}</p>
-            <h2 className="mt-1 font-display text-heading-serif text-ink">{current!.question}</h2>
+            <h2 className="mt-1 text-pretty font-display text-heading-serif text-ink">
+              {current!.question}
+            </h2>
+
+            {current!.sourceText ? <OriginalRequest text={current!.sourceText} /> : null}
 
             {typing ? (
               <div className="mt-4 flex flex-col gap-2.5">
@@ -164,7 +227,7 @@ function Walker({ initial }: { initial: Clarification[] }) {
               </div>
             )}
 
-            <div className="mt-auto flex items-center justify-between pt-4">
+            <div className="mt-5 flex items-center justify-between gap-2">
               {current!.kind !== 'detail' ? (
                 <button
                   onClick={() => setShowCustom((s) => !s)}
@@ -175,7 +238,7 @@ function Walker({ initial }: { initial: Clarification[] }) {
               ) : (
                 <span />
               )}
-              <div className="flex gap-1">
+              <div className="flex shrink-0 gap-1">
                 <button
                   onClick={skip}
                   className="rounded-pill px-2 py-1 text-body-sm text-ink-muted hover:text-ink"
@@ -190,7 +253,7 @@ function Walker({ initial }: { initial: Clarification[] }) {
                 </button>
               </div>
             </div>
-          </div>
+          </UncertaintyCard>
         )}
       </MorphSurface>
     </main>

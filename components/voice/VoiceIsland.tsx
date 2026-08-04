@@ -14,7 +14,8 @@ import { micFailureMessage } from '@/lib/ai/micFailure'
 import { useVoiceCapture } from '@/lib/voice/captureStore'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
-import { MORPH_BACKDROP_FADE, MORPH_SPRING } from '@/lib/motion'
+import { BACKDROP_BLUR_FADE, BACKDROP_BLUR_STYLE } from '@/lib/motion-backdrop'
+import { MORPH_SPRING } from '@/lib/motion'
 import { springToLinearEasing } from '@/lib/springEasing'
 import { isAppChatRoute } from '@/lib/appRoutes'
 import type { AiSource } from '@/lib/ai/types'
@@ -216,7 +217,10 @@ export function VoiceIsland() {
       {open ? (
         <motion.div
           key="voice-backdrop"
-          variants={MORPH_BACKDROP_FADE}
+          // Frost on its own ~70ms track while the panel keeps MORPH_SPRING —
+          // the measured iOS launch reaches ~92% blur strength by 68ms, four
+          // times faster than the geometry. See lib/motion-backdrop.ts.
+          variants={BACKDROP_BLUR_FADE}
           initial="initial"
           animate="animate"
           exit="exit"
@@ -227,7 +231,7 @@ export function VoiceIsland() {
           // fullscreen backdrop-filter is re-sampled every frame the island
           // moves above it — the single most expensive thing on this screen.
           // Blur radius and color are unchanged; this is a compositing hint only.
-          style={{ willChange: 'opacity' }}
+          style={BACKDROP_BLUR_STYLE}
           className="fixed inset-0 z-50 bg-ink/30 backdrop-blur-md"
         />
       ) : null}

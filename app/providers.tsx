@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 
 import { Toaster } from '@/components/ui/sonner'
 import { AppTabBar } from '@/components/layout/AppTabBar'
+import { PageTransition } from '@/components/layout/PageTransition'
 import { PhoneFrame } from '@/components/layout/PhoneFrame'
 import { ChatIsland } from '@/components/chat/ChatIsland'
 import { LocaleProvider } from '@/components/i18n/LocaleProvider'
@@ -84,7 +85,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <NativeNotifications />
           <SyncAccountLocale />
           <PhoneFrame>
-            {children}
+            {/* Only the routed page animates. The tab bar, the islands and the
+                toaster are siblings, not children, so they stay mounted and
+                still across every navigation. PageTransition must be rendered
+                from here — a component that persists across navigation — rather
+                than from app/template.tsx, which is re-created on each one and
+                so can never hold an exiting page. */}
+            <PageTransition>{children}</PageTransition>
             <AppTabBar />
             <ChatIsland />
             <VoiceIsland />

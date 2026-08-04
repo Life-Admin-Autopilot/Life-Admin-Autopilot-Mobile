@@ -9,10 +9,15 @@
 // Institutional voice: state the action, no chatter — the product noun is
 // "matter". A completion is a status change, not an event.
 
-import { Check, X } from 'lucide-react'
+import { BellOff, Check, X } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 import { Button } from '@/components/ui/button'
+import { taskFieldsOf, type ToolCallTaskFields } from '@/lib/ai/toolCallSummary'
 import type { AiToolCall, AiToolName } from '@/lib/ai/types'
+import { useIntlTag } from '@/lib/i18n/localeStore'
+import { formatDue } from '@/lib/taskFormat'
+import type { TaskPriority } from '@/queries/tasks'
 
 type PendingAction = 'confirm' | 'decline' | null
 
@@ -55,18 +60,15 @@ function matterLabel(call: AiToolCall): string {
   return ''
 }
 
-// Trailing meta — the due date, formatted "Jun 25". Pulled from the persisted
-// result first so an updated/created reminder shows its real, normalized date.
-function metaLabel(call: AiToolCall): string {
-  const result = (call.result ?? {}) as Record<string, unknown>
-  const task = result.task as Record<string, unknown> | undefined
-  const due =
-    (typeof task?.dueAt === 'string' ? task.dueAt : undefined) ??
-    (typeof call.args.dueAt === 'string' ? call.args.dueAt : undefined)
-  if (!due) return ''
-  const d = new Date(due)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+// Priority earns emphasis only when it is load-bearing. Rendering all four
+// levels identically would put "Normal" — true of most matters — at the same
+// weight as "Urgent", which is the uniform-emphasis failure: the line becomes
+// something the eye skips instead of something it scans.
+const PRIORITY_TONE: Record<TaskPriority, string> = {
+  urgent: 'text-danger font-medium',
+  high: 'text-ink font-medium',
+  normal: 'text-ink-subtle',
+  low: 'text-ink-subtle',
 }
 
 // Bulk delete reads from a filter (domain/status) plus a count — either the
@@ -138,21 +140,60 @@ export function ToolCallCard({ call, onConfirm, onDecline, pendingAction = null 
     )
   }
 
-  // executed — the quiet ledger row: purple tick · verb · matter · date.
+  // executed — the quiet ledger row: purple tick · verb · matter, with the
+  // filed fields (date · priority · category) on a second line underneath.
   const verb = PAST_VERB[call.name] ?? call.name
   const matter = matterLabel(call)
-  const meta = metaLabel(call)
+  const fields = taskFieldsOf(call)
   return (
-    <div className="flex items-center gap-2.5 px-1 py-1.5">
-      <Check size={13} strokeWidth={2.5} className="shrink-0 text-accent" />
-      <span className="shrink-0 text-caption font-medium text-ink">{verb}</span>
-      {matter ? (
-        <span className="truncate text-caption text-ink-muted" dir="auto">
-          {matter}
-        </span>
-      ) : null}
-      {meta ? (
-        <span className="tabular ms-auto shrink-0 text-caption text-ink-subtle">{meta}</span>
+    <div className="flex items-start gap-2.5 px-1 py-1.5">
+      <Check size={13} strokeWidth={2.5} className="mt-[3px] shrink-0 text-accent" />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 text-caption font-medium text-ink">{verb}</span>
+          {matter ? (
+            <span className="truncate text-caption text-ink-muted" dir="auto">
+              {matter}
+            </span>
+          ) : null}
+        </div>
+        {fields ? <FiledFields fields={fields} /> : null}
+      </div>
+    </div>
+  )
+}
+
+// The second ledger line: what Kitto decided, in the order the user is most
+// likely to want to change it. Every value is a real persisted field, so a
+// follow-up message ("make it urgent", "that's car not home") has something
+// concrete to correct — which is the whole reason the line exists.
+function FiledFields({ fields }: { fields: ToolCallTaskFields }) {
+  const tMatters = useTranslations('matters')
+  const tDomain = useTranslations('domain')
+  const tChat = useTranslations('chat')
+  const tag = useIntlTag()
+
+  const due = formatDue(fields.dueAt, { t: tMatters, tag })
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-caption text-ink-subtle">
+      <span className="tabular">{due}</span>
+      <span aria-hidden>·</span>
+      <span className={PRIORITY_TONE[fields.priority]}>
+        {tMatters(`priority.${fields.priority}`)}
+      </span>
+      <span aria-hidden>·</span>
+      <span>{tDomain(fields.domain)}</span>
+      {/* A date that is present but will never fire — the held high-stakes case.
+          Silence here would read the date as a promise Kitto has not made. */}
+      {fields.dueAt && !fields.willRemind ? (
+        <>
+          <span aria-hidden>·</span>
+          <span className="inline-flex items-center gap-1">
+            <BellOff size={11} strokeWidth={2.5} aria-hidden />
+            {tChat('ledger.noReminder')}
+          </span>
+        </>
       ) : null}
     </div>
   )

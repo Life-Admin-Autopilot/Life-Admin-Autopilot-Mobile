@@ -4,6 +4,7 @@ import { Clarification } from '../../models/Clarification'
 import type { Domain } from '../../models/User'
 import type { TaskPriority } from '../../models/Task'
 import type { ClarificationCost, ClarificationKind } from '../../models/Clarification'
+import { clampSourceText } from './sourceQuote'
 
 // Persist one held item. Called from the `holdForClarification` tool dispatch
 // (toolRunner) with dates already normalized to Date objects, so this stays a
@@ -27,6 +28,8 @@ export interface CreateClarificationInput {
   kind: ClarificationKind
   costOfWrong: ClarificationCost
   options: { label: string; dueAt?: Date; title?: string; notes?: string }[]
+  /** The message this question came out of, verbatim — shown back on the card. */
+  sourceText?: string
 }
 
 export async function createClarification(
@@ -48,6 +51,7 @@ export async function createClarification(
     kind: input.kind,
     costOfWrong: input.costOfWrong,
     options: input.options,
+    sourceText: clampSourceText(input.sourceText),
   })
   return { clarificationId: doc.id, title: doc.draft.title }
 }

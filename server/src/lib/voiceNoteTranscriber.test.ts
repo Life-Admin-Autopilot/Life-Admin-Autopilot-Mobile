@@ -204,6 +204,9 @@ describe('processVoiceNote', () => {
     expect(clars[0]?.draft.title).toBe('See the doctor')
     // The link that makes cascade-on-delete possible at all.
     expect(String(clars[0]?.taskId)).toBe(String(tasks[0]?._id))
+    // What the user said, so the card can show it back on a day when "See the
+    // doctor" no longer reminds them which doctor or why.
+    expect(clars[0]?.sourceText).toBe('see the doctor on the 17th or 19th, not sure')
   })
 
   it('upserts voice clarifications idempotently across re-processing (no duplicate question)', async () => {

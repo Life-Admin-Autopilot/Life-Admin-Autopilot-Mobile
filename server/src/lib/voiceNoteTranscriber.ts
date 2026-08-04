@@ -224,6 +224,10 @@ export async function persistClarifications(note: VoiceNoteDoc): Promise<void> {
       kind: item.kind,
       costOfWrong: item.costOfWrong,
       options: item.options.map((o) => ({ label: o.label, dueAt: o.dueAt ?? undefined })),
+      // The whole transcript, not a per-item slice: extraction returns titles
+      // and questions, never the span of speech each one came from, and a
+      // guessed slice would quote the user saying something they didn't.
+      sourceText: note.transcript,
     })
   }
 }

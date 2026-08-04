@@ -2,5 +2,8 @@
   "ask": "Ask {app}",
   "assistant": "{app} assistant",
   "clearConversation": "Clear conversation",
-  "closeAssistant": "Close assistant"
+  "closeAssistant": "Close assistant",
+  "ledger": {
+    "noReminder": "Won't remind"
+  }
 }

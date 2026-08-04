@@ -29,7 +29,8 @@ import { cn } from '@/lib/cn'
 import { useCaptureSource, type UseCaptureSourceResult } from '@/lib/documentScan/useCaptureSource'
 import { env } from '@/lib/env'
 import { useMorphColors } from '@/lib/motion-colors'
-import { MORPH_BACKDROP_FADE, MORPH_CONTENT_VARIANTS, MORPH_SPRING } from '@/lib/motion'
+import { BACKDROP_BLUR_FADE, BACKDROP_BLUR_STYLE } from '@/lib/motion-backdrop'
+import { MORPH_CONTENT_VARIANTS, MORPH_SPRING } from '@/lib/motion'
 import { useBodyScrollLock } from '@/lib/scrollLock'
 import { useReprocessScannedDocument } from '@/queries/documentScans'
 import type { ReviewScanResult, ScannedDocument } from '@/queries/documentScans'
@@ -191,12 +192,16 @@ export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureF
         {!isFullscreen ? (
           <motion.div
             key="capture-backdrop"
-            variants={MORPH_BACKDROP_FADE}
+            // ~70ms frost against the shell's ~280ms spring: the measured iOS
+            // launch has the blur ~92% in by 68ms, so the scrim is frosted
+            // before the shell has travelled. See lib/motion-backdrop.ts.
+            variants={BACKDROP_BLUR_FADE}
             initial="initial"
             animate={isPresent ? 'animate' : 'exit'}
             exit="exit"
             onClick={onClose}
             aria-hidden
+            style={BACKDROP_BLUR_STYLE}
             className={cn(
               'fixed inset-0 z-40 bg-ink/30 backdrop-blur-md',
               !isPresent && 'pointer-events-none',

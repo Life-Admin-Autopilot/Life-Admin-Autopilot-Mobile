@@ -11,7 +11,8 @@ import chatbotImg from '@/assets/ghost/logo.png'
 import { ChatMessage } from '@/components/chat/ChatMessage'
 import { MorphSurface, type MorphShape } from '@/components/ui/MorphSurface'
 import { isAppChatRoute } from '@/lib/appRoutes'
-import { MORPH_BACKDROP_FADE, MORPH_SPRING } from '@/lib/motion'
+import { BACKDROP_BLUR_FADE, BACKDROP_BLUR_STYLE } from '@/lib/motion-backdrop'
+import { MORPH_SPRING } from '@/lib/motion'
 import { useMorphColors } from '@/lib/motion-colors'
 import { useAskAi } from '@/queries/ai'
 import { useVoiceRecorder } from '@/lib/ai/useVoiceRecorder'
@@ -51,13 +52,18 @@ function ChatIslandSurface() {
 
   return (
     <>
-      {/* Backdrop — a soft blur + dim that fades in while the island is
-          expanded (chat or in-panel voice). Tapping it dismisses the panel. */}
+      {/* Backdrop — a soft blur + dim behind the expanded island (chat or
+          in-panel voice). Tapping it dismisses the panel.
+
+          The frost lands in ~70ms, NOT on the island's ~280ms spring: measured
+          against the real iOS launch animation the blur is ~92% of full
+          strength by 68ms, so the scrim is already frosted while the FAB is
+          still growing into a panel. See lib/motion-backdrop.ts. */}
       <AnimatePresence>
         {open ? (
           <motion.div
             key="chat-backdrop"
-            variants={MORPH_BACKDROP_FADE}
+            variants={BACKDROP_BLUR_FADE}
             initial="initial"
             animate="animate"
             exit="exit"
@@ -65,7 +71,7 @@ function ChatIslandSurface() {
             aria-hidden
             // See VoiceIsland's backdrop: compositing hint only, so the
             // fullscreen blur rasterizes once instead of every frame.
-            style={{ willChange: 'opacity' }}
+            style={BACKDROP_BLUR_STYLE}
             className="fixed inset-0 z-30 bg-ink/20 backdrop-blur-md"
           />
         ) : null}

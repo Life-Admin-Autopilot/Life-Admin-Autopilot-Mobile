@@ -7,6 +7,7 @@ import {
 } from '../../models/Clarification'
 import type { Domain } from '../../models/User'
 import type { TaskPriority } from '../../models/Task'
+import { clampSourceText } from './sourceQuote'
 
 // Idempotent creation of a VOICE-born held item, keyed by the note-scoped item
 // key. A worker reclaim/retry that re-runs this is a no-op for an already-held
@@ -33,6 +34,12 @@ export interface UpsertVoiceClarificationInput {
   kind: ClarificationKind
   costOfWrong: ClarificationCost
   options: { label: string; dueAt?: Date; title?: string; notes?: string }[]
+  /**
+   * The note's transcript — what the user actually said. Every question from one
+   * recording quotes the same passage, which is the point: the card can show the
+   * moment the item was captured instead of only Kitto's paraphrase of it.
+   */
+  sourceText?: string
 }
 
 export async function upsertVoiceClarification(
@@ -59,6 +66,7 @@ export async function upsertVoiceClarification(
         kind: input.kind,
         costOfWrong: input.costOfWrong,
         options: input.options,
+        sourceText: clampSourceText(input.sourceText),
       },
     },
     { upsert: true, new: true, setDefaultsOnInsert: true },

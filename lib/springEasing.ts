@@ -63,8 +63,16 @@ function springValue(spec: SpringSpec, t: number): number {
     return 1 - Math.exp(-omega0 * t) * (1 + omega0 * t)
   }
 
-  // Overdamped — two real roots, no overshoot. Kitto's morph springs all land
-  // marginally here (MORPH_SPRING: zeta ~1.02).
+  // Overdamped — two real roots, no overshoot.
+  //
+  // This used to be the branch every Kitto spring took (MORPH_SPRING was
+  // zeta ~1.02). Since the retune to critical damping in lib/motion.ts they sit
+  // on the boundary and float rounding decides the branch: MORPH lands at
+  // zeta 0.999915 (underdamped), LIST at 1.000030 and STEP at 1.000084 (here).
+  // All three are within 1e-4 of critical, where the three closed forms
+  // converge, so the branch taken is numerically irrelevant — but note the
+  // `zeta === 1` case above is now effectively unreachable, since exact
+  // equality on a computed ratio essentially never holds.
   const alpha = omega0 * Math.sqrt(zeta * zeta - 1)
   const r1 = -zeta * omega0 + alpha
   const r2 = -zeta * omega0 - alpha

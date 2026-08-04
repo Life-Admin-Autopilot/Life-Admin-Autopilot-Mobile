@@ -631,6 +631,47 @@ describe('holdForClarification — non-destructive, persists a Clarification', (
     expect(doc?.options[1]?.dueAt?.toISOString()).toBe('2026-06-18T06:00:00.000Z')
   })
 
+  // The turn's message rides in on RunArgs, NOT in the tool args — the model
+  // must never get to edit, summarise, or invent what the user said.
+  it('records the turn that produced the hold, without the model touching it', async () => {
+    const session = await signUp()
+    const said = 'Email that guy back about the quote — the one from last week.'
+    const out = await runTool({
+      userId: session.userId,
+      name: 'holdForClarification',
+      args: {
+        title: 'Email that guy',
+        domain: 'home',
+        priority: 'normal',
+        question: "What's the email to that guy about?",
+        kind: 'detail',
+      },
+      sourceText: said,
+    })
+
+    const doc = await Clarification.findById(out.result.clarificationId as string)
+    expect(doc?.sourceText).toBe(said)
+  })
+
+  it('holds fine with no turn text to quote (the card just omits it)', async () => {
+    const session = await signUp()
+    const out = await runTool({
+      userId: session.userId,
+      name: 'holdForClarification',
+      args: {
+        title: 'Car insurance renewal',
+        domain: 'car',
+        priority: 'normal',
+        question: 'Is it the 15th or the 18th?',
+        kind: 'date',
+      },
+    })
+
+    const doc = await Clarification.findById(out.result.clarificationId as string)
+    expect(doc?.status).toBe('open')
+    expect(doc?.sourceText).toBeUndefined()
+  })
+
   it('throws when routed through the confirm path (it is not destructive)', async () => {
     const session = await signUp()
     await expect(

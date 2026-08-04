@@ -2,6 +2,7 @@
   "loading": "Loading…",
   "position": "{current}/{total}",
   "filedWithGuess": "Filed with a guess",
+  "youSaid": "You said",
   "answerPlaceholder": "Type your answer…",
   "pickOption": "Pick an option",
   "typeYourOwn": "Type your own",

@@ -38,6 +38,12 @@ export interface Clarification {
   /** 'high' → the task's reminder waits for confirmation. 'low' → it may fire on the guess. */
   costOfWrong: 'low' | 'high'
   options: ClarificationOption[]
+  /**
+   * What the user actually said — the chat message or voice transcript this
+   * question came out of. Absent on rows written before it was captured, so
+   * every surface that shows it must tolerate it being missing.
+   */
+  sourceText?: string
   answer?: string
   createdAt: string
   updatedAt: string
