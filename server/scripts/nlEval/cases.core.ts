@@ -140,7 +140,7 @@ export const CORE_CASES: EvalCase[] = [
       tools: [
         {
           name: 'toggleSubtask',
-          args: { taskId: TASK_C.id, subtaskId: TASK_C.subtasks![0].id },
+          args: { taskId: TASK_C.id, subtaskId: TASK_C.subtasks![0]!.id },
         },
       ],
     },

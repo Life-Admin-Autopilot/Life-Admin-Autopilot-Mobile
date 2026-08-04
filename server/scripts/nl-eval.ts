@@ -5,8 +5,16 @@
 // "=== NOW === / === MY TASKS === / ..." scaffold the contextBuilder
 // produces in real chat, then assert on the tool calls Kitto emits.
 //
-// Run with `npm run nl-eval` from the server/ directory. Requires
-// GEMINI_API_KEY in server/.env. Costs ~$0.06 per full run.
+//   npm run nl-eval          — the core suite (one clean intent per prompt)
+//   npm run nl-eval:hard     — the hard suite (spoken, multi-intent, adversarial)
+//   npm run nl-eval:all      — both
+//
+//   --suite=core|hard|all    same as the scripts above
+//   --concurrency=N          cases in flight (default 4)
+//   --filter=SUBSTR          only categories containing SUBSTR — iterate on one
+//                            group without paying for the whole run
+//
+// Requires GEMINI_API_KEY in server/.env. Roughly $0.06 per 60 cases.
 
 import 'dotenv/config'
 
@@ -15,654 +23,10 @@ import type { Content } from '@google/genai'
 import { isAiConfigured, getGeminiClient } from '../src/modules/ai/provider/geminiClient'
 import { streamPersonal } from '../src/modules/ai/provider/streamPersonal'
 import { getPrefillContents, getSystemPrompt } from '../src/modules/ai/voice'
-
-// ─── Types ───────────────────────────────────────────────────────────────
-
-interface FakeTask {
-  id: string
-  title: string
-  domain: string
-  status: 'open' | 'done' | 'snoozed'
-  priority?: 'low' | 'normal' | 'high' | 'urgent'
-  dueAt?: string // ISO
-  notes?: string
-  tags?: string[]
-  subtasks?: Array<{ id: string; text: string; done: boolean }>
-}
-
-interface ExpectedTool {
-  name: string
-  // Subset of args we care about for this case. Title is checked as a
-  // case-insensitive substring; priority/domain/status are exact; arrays
-  // require all expected items present (order-independent).
-  args?: Record<string, unknown>
-}
-
-interface EvalCase {
-  category: string
-  prompt: string
-  tasks?: FakeTask[]
-  expect: {
-    // Pass when the union of model tool calls satisfies ALL `tools`. Use
-    // an empty array to assert NO tool calls.
-    tools?: ExpectedTool[]
-    // Tool names that must NOT appear at all. Lets a case assert the model
-    // HELD (holdForClarification) and did NOT silently guess (createTask),
-    // or that it just created without over-asking.
-    forbidTools?: string[]
-    // Optional substring (case-insensitive) the model's text reply must
-    // contain — useful for "decline / clarify" cases.
-    textIncludes?: string
-  }
-}
-
-interface CaseOutcome {
-  case: EvalCase
-  toolCalls: Array<{ name: string; args: Record<string, unknown> }>
-  text: string
-  pass: boolean
-  reasons: string[]
-}
-
-// ─── Cases ───────────────────────────────────────────────────────────────
-
-const TASK_A: FakeTask = {
-  id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
-  title: 'Old gym membership',
-  domain: 'health',
-  status: 'open',
-  priority: 'normal',
-}
-const TASK_B: FakeTask = {
-  id: 'bbbbbbbbbbbbbbbbbbbbbbbb',
-  title: 'Pay water bill',
-  domain: 'home',
-  status: 'open',
-  priority: 'normal',
-}
-const TASK_C: FakeTask = {
-  id: 'cccccccccccccccccccccccc',
-  title: 'Renew passport',
-  domain: 'family',
-  status: 'open',
-  priority: 'normal',
-  subtasks: [
-    { id: 'sub111111111111111111111a', text: 'gather birth certificate', done: false },
-    { id: 'sub222222222222222222222b', text: 'take new photo', done: false },
-  ],
-}
-
-const CASES: EvalCase[] = [
-  // ── PRIORITY: paraphrased ──────────────────────────────────────────
-  {
-    category: 'PRIORITY',
-    prompt: 'add a task to fix the kitchen sink, water is everywhere, I need this done today',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'home', priority: 'urgent' } }],
-    },
-  },
-  {
-    category: 'PRIORITY',
-    prompt: 'add a task to organize the garage when I get to it, no rush',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'home', priority: 'low' } }],
-    },
-  },
-  {
-    category: 'PRIORITY',
-    prompt: 'fix the leak under the bathroom sink, I am in a rush',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'home', priority: 'high' } }],
-    },
-  },
-  {
-    category: 'PRIORITY',
-    prompt: 'add buy birthday card for mom — whenever, her birthday is in November',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'family', priority: 'low' } }],
-    },
-  },
-  {
-    category: 'PRIORITY',
-    prompt: 'add pay the gas bill before they cut me off',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'finance', priority: 'urgent' } }],
-    },
-  },
-  {
-    category: 'PRIORITY_ANTI_CUE',
-    prompt: 'I had an emergency last week, anyway add a task to clean the gutters this weekend',
-    expect: {
-      // "emergency" appears but is narrative, not directive. Should be normal.
-      tools: [{ name: 'createTask', args: { domain: 'home', priority: 'normal' } }],
-    },
-  },
-
-  // ── DOMAIN: indirect ──────────────────────────────────────────────
-  {
-    category: 'DOMAIN',
-    prompt: 'add a task to book Buddy in for his annual checkup next month',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'pets' } }],
-    },
-  },
-  {
-    category: 'DOMAIN',
-    prompt: 'add a task to file my Q3 taxes',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'finance' } }],
-    },
-  },
-  {
-    category: 'DOMAIN',
-    prompt: 'add a task to take the car in for an oil change',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'car' } }],
-    },
-  },
-  {
-    category: 'DOMAIN',
-    prompt: 'add a task to call mom about thanksgiving plans',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'family' } }],
-    },
-  },
-  {
-    category: 'DOMAIN_TRICKY',
-    prompt: 'add a task to refill my blood pressure prescription',
-    expect: {
-      // Borderline — could be health or home. Prefer health since it's medication.
-      tools: [{ name: 'createTask', args: { domain: 'health' } }],
-    },
-  },
-
-  // ── SUBTASKS vs NOTES ─────────────────────────────────────────────
-  {
-    category: 'SUBTASKS',
-    prompt: 'for the passport renewal, what papers do I actually need? break it into steps',
-    tasks: [TASK_C],
-    expect: {
-      // Should fire MULTIPLE addSubtask calls.
-      tools: [
-        { name: 'addSubtask', args: { taskId: TASK_C.id } },
-        { name: 'addSubtask', args: { taskId: TASK_C.id } },
-        { name: 'addSubtask', args: { taskId: TASK_C.id } },
-      ],
-    },
-  },
-  {
-    category: 'SUBTASKS',
-    prompt: 'for the passport, list out what I need to bring to the appointment',
-    tasks: [TASK_C],
-    expect: {
-      tools: [
-        { name: 'addSubtask', args: { taskId: TASK_C.id } },
-        { name: 'addSubtask', args: { taskId: TASK_C.id } },
-      ],
-    },
-  },
-  {
-    category: 'NOTES',
-    prompt:
-      'for the water bill task, add a note: auto-pay is set up but check the statement for the meter reading before the 15th',
-    tasks: [TASK_B],
-    expect: {
-      tools: [{ name: 'updateTask', args: { taskId: TASK_B.id } }],
-    },
-  },
-  {
-    category: 'SUBTASKS_AMBIGUOUS',
-    prompt: 'I already grabbed the birth certificate for the passport, mark that step done',
-    tasks: [TASK_C],
-    expect: {
-      tools: [
-        {
-          name: 'toggleSubtask',
-          args: { taskId: TASK_C.id, subtaskId: TASK_C.subtasks![0].id },
-        },
-      ],
-    },
-  },
-
-  // ── TAGS ──────────────────────────────────────────────────────────
-  {
-    category: 'TAGS',
-    prompt: 'add a task to book a dentist for the twins',
-    expect: {
-      tools: [
-        {
-          name: 'createTask',
-          args: { domain: 'health' },
-        },
-      ],
-      // Soft expectation — Kitto MAY add a tag like 'kids' or 'twins'; we won't
-      // hard-fail if it doesn't.
-    },
-  },
-  {
-    category: 'TAGS',
-    prompt: "tag the water bill with 'recurring' and 'utilities'",
-    tasks: [TASK_B],
-    expect: {
-      tools: [
-        {
-          name: 'updateTask',
-          args: { taskId: TASK_B.id, tags: ['recurring', 'utilities'] },
-        },
-      ],
-    },
-  },
-  {
-    category: 'TAGS_NORMALIZE',
-    prompt: 'tag the passport task with "International Travel" and "Q3 2026"',
-    tasks: [TASK_C],
-    expect: {
-      // Server normalizes — but does the model emit something the
-      // server will accept? Just check name; normalization is server-side.
-      tools: [{ name: 'updateTask', args: { taskId: TASK_C.id } }],
-    },
-  },
-
-  // ── STATUS / SNOOZE ───────────────────────────────────────────────
-  {
-    category: 'STATUS',
-    prompt: 'I already cancelled the gym membership, mark that done',
-    tasks: [TASK_A],
-    expect: {
-      tools: [{ name: 'completeTask', args: { taskId: TASK_A.id } }],
-    },
-  },
-  {
-    category: 'SNOOZE',
-    prompt: 'push the water bill task to next Monday, I cannot deal with it this week',
-    tasks: [TASK_B],
-    expect: {
-      tools: [{ name: 'snoozeTask', args: { taskId: TASK_B.id } }],
-    },
-  },
-  {
-    category: 'DELETE',
-    prompt: "actually scratch the gym task — I'm not doing it anymore, just delete it",
-    tasks: [TASK_A],
-    expect: {
-      tools: [{ name: 'deleteTask', args: { taskId: TASK_A.id } }],
-    },
-  },
-
-  // ── MULTI-FIELD COMBO ────────────────────────────────────────────
-  {
-    category: 'MULTI_FIELD',
-    prompt: 'rush job — fix the leaky pipe under the kitchen sink, water everywhere, need it done today',
-    expect: {
-      tools: [
-        {
-          name: 'createTask',
-          args: { domain: 'home', priority: 'urgent' },
-        },
-      ],
-    },
-  },
-  {
-    category: 'MULTI_FIELD',
-    prompt: 'add a task to grab birthday gift for mom, no rush, her birthday is November 15th',
-    expect: {
-      tools: [
-        {
-          name: 'createTask',
-          args: { domain: 'family', priority: 'low' },
-        },
-      ],
-    },
-  },
-
-  // ── MULTI-STEP (the Phase 8 fix) ────────────────────────────────
-  {
-    category: 'MULTI_STEP',
-    prompt:
-      'delete the gym task — I cancelled it last week. And add a new one to schedule dentist cleaning, due next Tuesday at 10am.',
-    tasks: [TASK_A],
-    expect: {
-      // Both tools should be planned in this turn. createTask may run inline
-      // OR be queued; we accept either ordering.
-      tools: [
-        { name: 'deleteTask', args: { taskId: TASK_A.id } },
-        { name: 'createTask', args: { domain: 'health' } },
-      ],
-    },
-  },
-  {
-    category: 'MULTI_STEP',
-    prompt: 'mark the water bill task urgent and tag it recurring',
-    tasks: [TASK_B],
-    expect: {
-      // Both updates SHOULD collapse into a single updateTask with both
-      // fields. Accept either one call with both fields, or two calls.
-      tools: [{ name: 'updateTask', args: { taskId: TASK_B.id, priority: 'urgent' } }],
-    },
-  },
-
-  // ── NEGATIVE / NO-TOOL ───────────────────────────────────────────
-  {
-    category: 'NEGATIVE',
-    prompt: "my task list feels overwhelming, I can't keep up",
-    expect: { tools: [] }, // no tool — this is a vent, not a request
-  },
-  {
-    category: 'NEGATIVE',
-    prompt: "what's the difference between snoozing a task and marking it done?",
-    expect: { tools: [] }, // chitchat, no tool
-  },
-  {
-    category: 'QUERY',
-    prompt: 'show me everything due this week',
-    tasks: [TASK_A, TASK_B, TASK_C],
-    expect: {
-      tools: [{ name: 'queryTasks' }],
-    },
-  },
-
-  // ── UNCERTAINTY: hold-and-ask, never guess ──────────────────────
-  // The core trust feature. An uncertain item must be HELD (holdForClarification)
-  // and asked about — NEVER silently created with a guessed value. And a casual
-  // item must NOT be held (over-asking makes admin more stressful, not less).
-  {
-    category: 'CLARIFY_UNSURE_DATE',
-    prompt: "i should see the doctor on the 17th or the 19th, im not sure",
-    expect: {
-      // Must hold and ask which date; must NOT pick one and "save" it.
-      tools: [{ name: 'holdForClarification', args: { kind: 'date' } }],
-      forbidTools: ['createTask'],
-    },
-  },
-  {
-    category: 'CLARIFY_UNSURE_DATE',
-    prompt: 'renew the car registration — next friday or the friday after, cant remember which',
-    expect: {
-      tools: [{ name: 'holdForClarification', args: { kind: 'date' } }],
-      forbidTools: ['createTask'],
-    },
-  },
-  {
-    category: 'CLARIFY_MISSING_TIME',
-    prompt: 'remind me to call the dentist to book a cleaning',
-    expect: {
-      // Time-sensitive (appointment) with no time → ask "when?", don't save dateless.
-      tools: [{ name: 'holdForClarification' }],
-      forbidTools: ['createTask'],
-    },
-  },
-  {
-    category: 'CLARIFY_ANTI_OVERASK',
-    prompt: 'add buy bread, no rush',
-    expect: {
-      // Casual, no time → just create. Asking "when?" here would be over-asking.
-      tools: [{ name: 'createTask', args: { domain: 'home' } }],
-      forbidTools: ['holdForClarification'],
-    },
-  },
-  {
-    category: 'CLARIFY_ANTI_OVERASK',
-    prompt: 'add a task to wash the car this weekend sometime',
-    expect: {
-      // Soft-but-single date is CLEAR → create with a best date, do not hold.
-      tools: [{ name: 'createTask', args: { domain: 'car' } }],
-      forbidTools: ['holdForClarification'],
-    },
-  },
-  {
-    category: 'CLARIFY_MIX',
-    prompt:
-      'pay the rent on the first, and renew my gym membership — i think july? or maybe august, not sure',
-    expect: {
-      // Create the clear one (rent) AND hold the unsure one (gym), same turn.
-      tools: [
-        { name: 'createTask', args: { domain: 'finance' } },
-        { name: 'holdForClarification', args: { kind: 'date' } },
-      ],
-    },
-  },
-
-  // ── HOLD-OUT CASES ──────────────────────────────────────────────
-  // Added AFTER prefill tuning to detect overfitting. Each case tests the
-  // SAME principle as a tuned-for failure, but with different surface
-  // wording, topic, and verbs. If the prefill is learning the principle
-  // (not memorizing examples) these should pass at a similar rate to the
-  // organic categories above.
-
-  {
-    // Principle: low-priority cue + dated future event (analog to PRIORITY #4
-    // and prefill turn 5). Different wording: "take your time" + "deadline" +
-    // domain that's NOT family/home.
-    category: 'HOLDOUT_PRIORITY_DATE',
-    prompt:
-      'add submit my expense report, take your time on it, deadline is end of next month',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'finance', priority: 'low' } }],
-    },
-  },
-  {
-    // Principle: same as above. Different wording: "low key" + future date.
-    category: 'HOLDOUT_PRIORITY_DATE',
-    prompt:
-      'add a task to schedule my annual physical, low key whenever, anytime in the next three months',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'health', priority: 'low' } }],
-    },
-  },
-  {
-    // Principle: open-ended "what do I need to prep" → multiple addSubtask
-    // (analog to SUBTASKS #1 and prefill turn 6). Different topic (dinner
-    // party not passport/move), different verb ("prep" not "list out").
-    category: 'HOLDOUT_SUBTASKS',
-    prompt: "for the renew passport task, what do I need to prep? walk me through it",
-    tasks: [TASK_C],
-    expect: {
-      tools: [
-        { name: 'addSubtask', args: { taskId: TASK_C.id } },
-        { name: 'addSubtask', args: { taskId: TASK_C.id } },
-        { name: 'addSubtask', args: { taskId: TASK_C.id } },
-      ],
-    },
-  },
-  {
-    // Principle: priority paraphrase NOT in prefill. "don't drop the ball"
-    // should map to high (urgent-leaning).
-    category: 'HOLDOUT_PRIORITY_PARAPHRASE',
-    prompt: "add pay rent — don't drop the ball on this one",
-    expect: {
-      // Either high or urgent is acceptable — both signal "important". The
-      // matcher will FAIL this if Kitto picks normal/low.
-      tools: [{ name: 'createTask', args: { domain: 'finance', priority: 'high' } }],
-    },
-  },
-  {
-    // Principle: domain inference for a niche concrete item.
-    category: 'HOLDOUT_DOMAIN',
-    prompt: 'add a task to buy formula for the baby',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'family' } }],
-    },
-  },
-  {
-    // Principle: tag inference when user EXPLICITLY names tags. Should
-    // emit both — not just one — and apply lowercase-kebab.
-    category: 'HOLDOUT_TAGS',
-    prompt:
-      'add finish the Q3 quarterly report, tag it as work and reporting, priority high',
-    expect: {
-      tools: [
-        {
-          name: 'createTask',
-          args: {
-            priority: 'high',
-            tags: ['work', 'reporting'],
-          },
-        },
-      ],
-    },
-  },
-
-  // ── MULTI-LANGUAGE CASES ────────────────────────────────────────
-  // Phase 1 baseline: zero prompt tuning for non-English. We're
-  // measuring what Gemini does out of the box so the Phase 2 prompt
-  // changes can target real failures. Per research (arxiv 2601.05101),
-  // tool schemas stay English; argument VALUES (titles, notes) should
-  // preserve in user's language but we don't assert that here — we
-  // assert the structured fields (domain enum, priority enum) which
-  // ARE supposed to stay English per our schema.
-
-  // ── Spanish ─────────────────────────────────────────────────────
-  {
-    category: 'ES_PRIORITY_LOW',
-    prompt: 'agregar tarea: comprar pan, no hay prisa',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'home', priority: 'low' } }],
-    },
-  },
-  {
-    category: 'ES_DOMAIN',
-    prompt: 'agendar cita con el dentista mañana a las 10',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'health' } }],
-    },
-  },
-  {
-    category: 'ES_QUERY',
-    prompt: '¿qué tengo pendiente esta semana?',
-    tasks: [TASK_A, TASK_B, TASK_C],
-    expect: {
-      tools: [{ name: 'queryTasks' }],
-    },
-  },
-  {
-    category: 'ES_PRIORITY_URGENT',
-    prompt:
-      'agregar pagar el alquiler — esto es urgente, vence mañana',
-    expect: {
-      tools: [
-        { name: 'createTask', args: { domain: 'finance', priority: 'urgent' } },
-      ],
-    },
-  },
-  {
-    category: 'ES_MULTI_STEP',
-    prompt: 'borra la tarea del gimnasio y agrega una nueva: llamar al dentista mañana',
-    tasks: [TASK_A],
-    expect: {
-      tools: [
-        { name: 'deleteTask', args: { taskId: TASK_A.id } },
-        { name: 'createTask', args: { domain: 'health' } },
-      ],
-    },
-  },
-
-  // ── French ──────────────────────────────────────────────────────
-  {
-    category: 'FR_PRIORITY_LOW',
-    prompt: 'ajoute une tâche pour acheter du pain, pas pressé',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'home', priority: 'low' } }],
-    },
-  },
-  {
-    category: 'FR_DOMAIN',
-    prompt: 'prendre rendez-vous chez le médecin demain à 10h',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'health' } }],
-    },
-  },
-  {
-    category: 'FR_QUERY',
-    prompt: "qu'est-ce que j'ai cette semaine?",
-    expect: {
-      tools: [{ name: 'queryTasks' }],
-    },
-  },
-  {
-    category: 'FR_PRIORITY_URGENT',
-    prompt:
-      "payer la facture d'électricité avant qu'ils coupent le courant",
-    expect: {
-      tools: [
-        { name: 'createTask', args: { domain: 'finance', priority: 'urgent' } },
-      ],
-    },
-  },
-  {
-    category: 'FR_DATE',
-    prompt: "rappelle-moi d'appeler maman le 15 novembre",
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'family' } }],
-    },
-  },
-
-  // ── Arabic (MSA) ────────────────────────────────────────────────
-  {
-    category: 'AR_PRIORITY_LOW',
-    prompt: 'أضف مهمة لشراء الخبز، لا داعي للعجلة',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'home', priority: 'low' } }],
-    },
-  },
-  {
-    category: 'AR_DOMAIN',
-    prompt: 'حدد موعداً مع الطبيب غداً الساعة العاشرة صباحاً',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'health' } }],
-    },
-  },
-  {
-    category: 'AR_QUERY',
-    prompt: 'ماذا لدي من مهام هذا الأسبوع؟',
-    expect: {
-      tools: [{ name: 'queryTasks' }],
-    },
-  },
-  {
-    category: 'AR_PRIORITY_URGENT',
-    prompt: 'ادفع فاتورة الكهرباء قبل أن ينقطع التيار',
-    expect: {
-      tools: [
-        { name: 'createTask', args: { domain: 'finance', priority: 'urgent' } },
-      ],
-    },
-  },
-  {
-    category: 'AR_DATE',
-    prompt: 'ذكّرني بشراء هدية لأمي يوم ١٥ نوفمبر',
-    expect: {
-      // Eastern Arabic numerals (١٥) in the date — Phase 3 will
-      // normalize these server-side, but we check now if Gemini already
-      // does it implicitly.
-      tools: [{ name: 'createTask', args: { domain: 'family' } }],
-    },
-  },
-
-  // ── Code-switched (mixed English mid-sentence) ─────────────────
-  {
-    category: 'CS_ES_EN',
-    prompt: 'agregar task para llamar al doctor mañana',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'health' } }],
-    },
-  },
-  {
-    category: 'CS_AR_EN',
-    prompt: 'اضف task جديدة لمراجعة الطبيب غداً',
-    expect: {
-      tools: [{ name: 'createTask', args: { domain: 'health' } }],
-    },
-  },
-  {
-    category: 'CS_AR_EN_PRIORITY',
-    prompt: 'اعمل remind لي ان ادفع فاتورة الكهرباء، urgent',
-    expect: {
-      tools: [
-        { name: 'createTask', args: { domain: 'finance', priority: 'urgent' } },
-      ],
-    },
-  },
-]
+import { DEFAULT_AI_LOCALE } from '../src/modules/ai/promptLanguage'
+import type { CaseOutcome, EvalCase, ExpectedTool, FakeTask } from './nlEval/types'
+import { CORE_CASES } from './nlEval/cases.core'
+import { HARD_CASES } from './nlEval/cases.hard'
 
 // ─── Context builder (mirrors the production scaffold) ───────────────────
 
@@ -708,7 +72,14 @@ function buildContents(c: EvalCase): Content[] {
     c.prompt,
   ].join('\n')
 
-  return [...getPrefillContents(), { role: 'user', parts: [{ text: user }] }]
+  // Prior turns sit between the prefill and the live turn, exactly where the
+  // real conversation history goes.
+  const history: Content[] = (c.history ?? []).map((h) => ({
+    role: h.role,
+    parts: [{ text: h.text }],
+  }))
+
+  return [...getPrefillContents(), ...history, { role: 'user', parts: [{ text: user }] }]
 }
 
 // ─── Matcher ─────────────────────────────────────────────────────────────
@@ -721,6 +92,9 @@ const SERVER_DEFAULTS: Record<string, unknown> = {
   status: 'open',
 }
 
+/** Expected-value sentinel: the key must be present, any value. */
+const ANY_VALUE = '*'
+
 function argsMatch(
   expected: Record<string, unknown>,
   actual: Record<string, unknown>,
@@ -728,10 +102,28 @@ function argsMatch(
   for (const [key, want] of Object.entries(expected)) {
     const got = actual[key]
 
+    // "Must be present at all" — what the urgent-with-no-date and
+    // default-a-date cases are really asserting. The VALUE is the model's to
+    // choose; its absence is the bug.
+    if (want === ANY_VALUE) {
+      if (got === undefined || got === null || got === '') {
+        return { ok: false, reason: `${key}: expected a value, got nothing` }
+      }
+      continue
+    }
+
     if (key === 'title' && typeof want === 'string') {
       // Case-insensitive substring match.
       if (typeof got !== 'string' || !got.toLowerCase().includes(want.toLowerCase())) {
         return { ok: false, reason: `title "${String(got)}" missing "${want}"` }
+      }
+      continue
+    }
+
+    if (key === 'text' && typeof want === 'string') {
+      // Subtask body — same substring rule as title.
+      if (typeof got !== 'string' || !got.toLowerCase().includes(want.toLowerCase())) {
+        return { ok: false, reason: `text "${String(got)}" missing "${want}"` }
       }
       continue
     }
@@ -764,9 +156,11 @@ function argsMatch(
   return { ok: true }
 }
 
+type ActualCall = { name: string; args: Record<string, unknown> }
+
 function matchTools(
   expected: ExpectedTool[],
-  actual: Array<{ name: string; args: Record<string, unknown> }>,
+  actual: ActualCall[],
 ): { ok: true } | { ok: false; reasons: string[] } {
   const reasons: string[] = []
 
@@ -810,26 +204,80 @@ function matchTools(
   return reasons.length === 0 ? { ok: true } : { ok: false, reasons }
 }
 
-// ─── Runner ──────────────────────────────────────────────────────────────
+// What `tools` structurally cannot say. `tools` is an AT-LEAST assertion, so it
+// passes just as happily when the model fires a duplicate createTask for an
+// item it already held, or splits one bulk wipe into twelve deletes.
+function checkCounts(
+  bounds: NonNullable<EvalCase['expect']['toolCounts']>,
+  actual: ActualCall[],
+): string[] {
+  const reasons: string[] = []
+  for (const [name, bound] of Object.entries(bounds)) {
+    const n = actual.filter((a) => a.name === name).length
+    if (bound.min !== undefined && n < bound.min) {
+      reasons.push(`${name}: expected at least ${bound.min}, got ${n}`)
+    }
+    if (bound.max !== undefined && n > bound.max) {
+      reasons.push(`${name}: expected at most ${bound.max}, got ${n}`)
+    }
+  }
+  return reasons
+}
 
-async function runCase(c: EvalCase): Promise<CaseOutcome> {
-  const client = getGeminiClient()
-  const contents = buildContents(c)
+// A call that must NOT exist with these args — the retraction cases, where the
+// abandoned value is the one being checked for.
+function checkForbiddenArgs(forbidden: ExpectedTool[], actual: ActualCall[]): string[] {
+  const reasons: string[] = []
+  for (const bad of forbidden) {
+    const hit = actual.find(
+      (a) => a.name === bad.name && (!bad.args || argsMatch(bad.args, a.args).ok),
+    )
+    if (hit) {
+      reasons.push(`${bad.name} must NOT carry ${JSON.stringify(bad.args)} — got ${JSON.stringify(hit.args)}`)
+    }
+  }
+  return reasons
+}
 
-  const toolCalls: Array<{ name: string; args: Record<string, unknown> }> = []
-  let text = ''
+const ARABIC = /[؀-ۿ]/g
+const LATIN_RUN = /[A-Za-z]{4,}/g
 
-  for await (const ev of streamPersonal({
-    client,
-    systemInstruction: getSystemPrompt(),
-    contents,
-  })) {
-    if (ev.kind === 'token') text += ev.text
-    else if (ev.kind === 'tool_call') toolCalls.push({ name: ev.name, args: ev.args })
+// Script check for the reply prose. Deliberately lenient about a stray token:
+// a preserved proper noun is REQUIRED to stay in its original script
+// (promptLanguage.verbatimClause), so the test is "which language is this
+// written in", not "does one foreign character appear".
+function checkReplyScript(want: 'arabic' | 'latin', text: string): string[] {
+  const arabicChars = (text.match(ARABIC) ?? []).length
+  const latinWords = (text.match(LATIN_RUN) ?? []).length
+
+  if (want === 'arabic') {
+    if (arabicChars === 0) return ['reply is not in Arabic (no Arabic characters)']
+    if (latinWords >= 6) return [`reply drifts to English (${latinWords} Latin words)`]
+    return []
+  }
+  if (latinWords === 0) return ['reply is not in English (no Latin words)']
+  if (arabicChars >= 10) return [`reply drifts to Arabic (${arabicChars} Arabic characters)`]
+  return []
+}
+
+function evaluate(c: EvalCase, toolCalls: ActualCall[], text: string): string[] {
+  const reasons: string[] = []
+
+  if (c.expect.tools) {
+    const m = matchTools(c.expect.tools, toolCalls)
+    if (!m.ok) reasons.push(...m.reasons)
   }
 
-  const m = matchTools(c.expect.tools ?? [], toolCalls)
-  const reasons: string[] = m.ok ? [] : m.reasons
+  // Alternative sanctioned answers — pass if ANY group is fully satisfied.
+  if (c.expect.anyOf && c.expect.anyOf.length > 0) {
+    const anyHit = c.expect.anyOf.some((group) => matchTools(group, toolCalls).ok)
+    if (!anyHit) {
+      const shapes = c.expect.anyOf
+        .map((g) => g.map((t) => t.name).join('+'))
+        .join('  OR  ')
+      reasons.push(`none of the accepted shapes matched (${shapes})`)
+    }
+  }
 
   for (const name of c.expect.forbidTools ?? []) {
     if (toolCalls.some((t) => t.name === name)) {
@@ -837,12 +285,41 @@ async function runCase(c: EvalCase): Promise<CaseOutcome> {
     }
   }
 
+  if (c.expect.toolCounts) reasons.push(...checkCounts(c.expect.toolCounts, toolCalls))
+  if (c.expect.forbidArgs) reasons.push(...checkForbiddenArgs(c.expect.forbidArgs, toolCalls))
+
   if (c.expect.textIncludes) {
     if (!text.toLowerCase().includes(c.expect.textIncludes.toLowerCase())) {
       reasons.push(`text missing "${c.expect.textIncludes}"`)
     }
   }
 
+  if (c.expect.replyScript) reasons.push(...checkReplyScript(c.expect.replyScript, text))
+
+  return reasons
+}
+
+// ─── Runner ──────────────────────────────────────────────────────────────
+
+async function runCase(c: EvalCase): Promise<CaseOutcome> {
+  const client = getGeminiClient()
+  const contents = buildContents(c)
+
+  const toolCalls: ActualCall[] = []
+  let text = ''
+
+  // The locale is what the LANGUAGE rule is built from. This used to be called
+  // with no argument at all, which rendered the rule as "Write every word the
+  // user will read in undefined." — every multi-language case was graded
+  // against a malformed prompt.
+  const systemInstruction = getSystemPrompt(c.locale ?? DEFAULT_AI_LOCALE)
+
+  for await (const ev of streamPersonal({ client, systemInstruction, contents })) {
+    if (ev.kind === 'token') text += ev.text
+    else if (ev.kind === 'tool_call') toolCalls.push({ name: ev.name, args: ev.args })
+  }
+
+  const reasons = evaluate(c, toolCalls, text)
   return { case: c, toolCalls, text, pass: reasons.length === 0, reasons }
 }
 
@@ -860,7 +337,9 @@ function printCase(i: number, total: number, out: CaseOutcome) {
   const verdict = out.pass ? COLORS.green('PASS') : COLORS.red('FAIL')
   const cat = out.case.category.padEnd(20)
   console.log(`\n[${i + 1}/${total}] ${cat} ${verdict}`)
-  console.log(`  ${COLORS.dim('prompt:')} ${out.case.prompt}`)
+  const prompt =
+    out.case.prompt.length > 200 ? `${out.case.prompt.slice(0, 200)}…` : out.case.prompt
+  console.log(`  ${COLORS.dim('prompt:')} ${prompt}`)
 
   if (out.toolCalls.length === 0) {
     console.log(`  ${COLORS.dim('tools: ')} ${COLORS.yellow('(none)')}`)
@@ -876,6 +355,10 @@ function printCase(i: number, total: number, out: CaseOutcome) {
   }
 
   if (!out.pass) {
+    // The trap first — it says what the case was defending against, which is
+    // the context you need to judge whether the failure is real or the
+    // assertion is too tight.
+    if (out.case.trap) console.log(`  ${COLORS.yellow('trap:  ')} ${out.case.trap}`)
     for (const r of out.reasons) {
       console.log(`  ${COLORS.red('✗')} ${r}`)
     }
@@ -907,39 +390,116 @@ function printSummary(outcomes: CaseOutcome[]) {
   console.log(
     `\n  ${COLORS.bold('OVERALL'.padEnd(22))} ${passed}/${total}  ${overallColor(`${overall}%`)}\n`,
   )
+
+  const failed = outcomes.filter((o) => !o.pass)
+  if (failed.length > 0) {
+    console.log(COLORS.bold('  Failed cases:'))
+    for (const f of failed) {
+      console.log(`    ${COLORS.red('✗')} ${f.case.category}  ${COLORS.dim(f.case.prompt.slice(0, 70))}`)
+    }
+    console.log()
+  }
+}
+
+// ─── CLI ─────────────────────────────────────────────────────────────────
+
+function flag(name: string, fallback: string): string {
+  const hit = process.argv.find((a) => a.startsWith(`--${name}=`))
+  return hit ? hit.slice(name.length + 3) : fallback
+}
+
+function selectCases(): { cases: EvalCase[]; label: string } {
+  const suite = flag('suite', 'core')
+  const filter = flag('filter', '')
+
+  const base =
+    suite === 'hard' ? HARD_CASES : suite === 'all' ? [...CORE_CASES, ...HARD_CASES] : CORE_CASES
+
+  const cases = filter
+    ? base.filter((c) => c.category.toLowerCase().includes(filter.toLowerCase()))
+    : base
+
+  return { cases, label: filter ? `${suite} (filter: ${filter})` : suite }
+}
+
+// Bounded pool. Cases are independent, so the only reason this was sequential
+// was that nothing had needed the wall-clock back. Results print IN ORDER as
+// they settle — an out-of-order dump of 111 cases is unreadable.
+async function runPool(
+  cases: EvalCase[],
+  concurrency: number,
+  onSettled: (i: number, out: CaseOutcome) => void,
+): Promise<CaseOutcome[]> {
+  const results: Array<CaseOutcome | undefined> = new Array(cases.length)
+  let next = 0
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const i = next++
+      if (i >= cases.length) return
+      const c = cases[i]
+      if (!c) continue
+      try {
+        results[i] = await runCase(c)
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        results[i] = { case: c, toolCalls: [], text: '', pass: false, reasons: [message] }
+      }
+      const out = results[i]
+      if (out) onSettled(i, out)
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, cases.length) }, () => worker()),
+  )
+  return results.filter((r): r is CaseOutcome => r !== undefined)
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────
 
 async function main() {
   if (!isAiConfigured()) {
-    console.error(
-      COLORS.red('GEMINI_API_KEY is not set in server/.env. Aborting.'),
-    )
+    console.error(COLORS.red('GEMINI_API_KEY is not set in server/.env. Aborting.'))
     process.exit(1)
   }
 
-  console.log(COLORS.bold(`\nRunning ${CASES.length} natural-language cases against real Gemini…\n`))
-  console.log(COLORS.dim(`(temperature=default, prompt+prefill = production)\n`))
+  const { cases, label } = selectCases()
+  if (cases.length === 0) {
+    console.error(COLORS.red(`No cases matched suite "${label}".`))
+    process.exit(1)
+  }
 
-  const outcomes: CaseOutcome[] = []
-  for (let i = 0; i < CASES.length; i++) {
-    const c = CASES[i]
-    if (!c) continue
-    try {
-      const out = await runCase(c)
-      outcomes.push(out)
-      printCase(i, CASES.length, out)
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err)
-      console.log(`\n[${i + 1}/${CASES.length}] ${c.category} ${COLORS.red('ERROR')}`)
-      console.log(`  ${COLORS.dim('prompt:')} ${c.prompt}`)
-      console.log(`  ${COLORS.red('✗')} ${message}`)
-      outcomes.push({ case: c, toolCalls: [], text: '', pass: false, reasons: [message] })
+  const concurrency = Math.max(1, Number(flag('concurrency', '4')) || 4)
+
+  console.log(
+    COLORS.bold(`\nRunning ${cases.length} ${label} cases against real Gemini…\n`),
+  )
+  console.log(
+    COLORS.dim(`(temperature=default, prompt+prefill = production, concurrency=${concurrency})\n`),
+  )
+
+  // Print in index order even though completion order is arbitrary: hold each
+  // result until every case before it has settled, then flush the run.
+  const pending = new Map<number, CaseOutcome>()
+  let cursor = 0
+  const flush = () => {
+    for (;;) {
+      const out = pending.get(cursor)
+      if (!out) return
+      printCase(cursor, cases.length, out)
+      pending.delete(cursor)
+      cursor++
     }
   }
 
+  const outcomes = await runPool(cases, concurrency, (i, out) => {
+    pending.set(i, out)
+    flush()
+  })
+
   printSummary(outcomes)
+  process.exit(outcomes.every((o) => o.pass) ? 0 : 1)
 }
 
 main().catch((err: unknown) => {

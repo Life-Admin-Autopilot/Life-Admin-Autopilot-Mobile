@@ -14,6 +14,7 @@ import type { Content } from '@google/genai'
 import { isAiConfigured, getGeminiClient } from '../src/modules/ai/provider/geminiClient'
 import { streamPersonal } from '../src/modules/ai/provider/streamPersonal'
 import { getPrefillContents, getSystemPrompt } from '../src/modules/ai/voice'
+import { DEFAULT_AI_LOCALE } from '../src/modules/ai/promptLanguage'
 
 const COLORS = {
   red: (s: string) => `\x1b[31m${s}\x1b[0m`,
@@ -161,7 +162,7 @@ async function main() {
 
   for await (const ev of streamPersonal({
     client,
-    systemInstruction: getSystemPrompt(),
+    systemInstruction: getSystemPrompt(DEFAULT_AI_LOCALE),
     contents,
   })) {
     if (ev.kind === 'token') {

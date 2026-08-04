@@ -15,7 +15,10 @@
     "nl-eval": "tsx scripts/nl-eval.ts",
     "nl-probe": "tsx scripts/nl-probe.ts",
     "nl-probe-loop": "tsx scripts/nl-probe-loop.ts",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "nl-eval:hard": "tsx scripts/nl-eval.ts --suite=hard",
+    "nl-eval:all": "tsx scripts/nl-eval.ts --suite=all",
+    "type-check:scripts": "tsc -p tsconfig.scripts.json"
   },
   "dependencies": {
     "@google/genai": "^2.6.0",
