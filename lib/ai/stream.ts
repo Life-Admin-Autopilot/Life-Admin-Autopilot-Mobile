@@ -12,9 +12,17 @@ import { resolveApiBaseUrl } from '@/lib/api/baseUrl'
 import { useSessionStore } from '@/lib/auth/sessionStore'
 import type { AskEvent } from '@/lib/ai/types'
 
+// Which entry path a turn came from. Every path in the product converges on one
+// planning agent, and the agent handles the same sentence differently depending
+// on how it arrived: typed text is a request, a dictated transcript is raw
+// speech to be parsed, and document text was extracted from a scan. Omitted ⇒
+// the server defaults to 'chat'.
+export type AskMode = 'chat' | 'transcript' | 'document' | 'clarification'
+
 export interface AskArgs {
   question: string
   timezone?: string
+  mode?: AskMode
   signal?: AbortSignal
 }
 
@@ -22,7 +30,9 @@ export interface AskArgs {
 export async function* askStream(args: AskArgs): AsyncGenerator<AskEvent> {
   yield* streamSse({
     url: `${resolveApiBaseUrl()}/ai/ask`,
-    body: { question: args.question, timezone: args.timezone },
+    // `mode` is omitted rather than sent as 'chat' when absent, so the request
+    // stays byte-identical to what shipped for every existing caller.
+    body: { question: args.question, timezone: args.timezone, ...(args.mode ? { mode: args.mode } : {}) },
     signal: args.signal,
   })
 }

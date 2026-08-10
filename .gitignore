@@ -46,3 +46,6 @@ coverage/
 # TypeScript / Next
 *.tsbuildinfo
 next-env.d.ts
+
+# Agent scratch worktrees — a nested git repo, never ours to commit.
+.claude/worktrees/

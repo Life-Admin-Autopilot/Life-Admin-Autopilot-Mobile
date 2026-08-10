@@ -65,6 +65,12 @@ export function buildClarifications(args: {
     out.push({
       _id: new Types.ObjectId(),
       userId,
+      // The Task the question is about. Required since 080373e made a held item
+      // impossible without something the user can see and act on — this seeder
+      // predates that and only ever set `createdTaskId`, so every run died on
+      // the first clarification. `source` is already the task this hold was
+      // built from, which is exactly what the field means.
+      taskId: source._id,
       status,
       draft: {
         title: source.title,

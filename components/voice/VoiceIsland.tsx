@@ -177,7 +177,15 @@ export function VoiceIsland() {
     const controller = new AbortController()
     abortRef.current = controller
     try {
-      for await (const ev of askStream({ question: text, timezone, signal: controller.signal })) {
+      // 'transcript', not 'chat': this text is a raw dictation the user never
+      // read back, so the agent parses it for intent rather than answering it as
+      // a typed message.
+      for await (const ev of askStream({
+        question: text,
+        timezone,
+        mode: 'transcript',
+        signal: controller.signal,
+      })) {
         if (ev.type === 'token') setReply((r) => r + ev.text)
         else if (ev.type === 'sources') setSources((prev) => [...prev, ...ev.sources])
         else if (ev.type === 'error') {
