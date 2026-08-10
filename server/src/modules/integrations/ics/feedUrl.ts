@@ -80,13 +80,81 @@ function ipv4IsPrivate(ip: string): boolean {
   return false
 }
 
+/**
+ * Expand any IPv6 form — `::` compression, a trailing dotted quad — into its
+ * eight 16-bit groups. Returns null for anything unparseable, which callers
+ * treat as "no embedded v4" rather than as safe.
+ */
+function expandIpv6(ip: string): number[] | null {
+  let s = ip.toLowerCase().split('%')[0] ?? ''
+
+  const dotted = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.exec(s)
+  if (dotted?.[1]) {
+    const o = dotted[1].split('.').map(Number)
+    if (o.some((n) => n > 255)) return null
+    s =
+      s.slice(0, dotted.index) +
+      (((o[0] as number) << 8) | (o[1] as number)).toString(16) +
+      ':' +
+      (((o[2] as number) << 8) | (o[3] as number)).toString(16)
+  }
+
+  const halves = s.split('::')
+  if (halves.length > 2) return null
+  const head = halves[0] ? (halves[0] as string).split(':') : []
+  const tail = halves.length === 2 && halves[1] ? (halves[1] as string).split(':') : []
+  if (halves.length === 1 && head.length !== 8) return null
+
+  const fill = 8 - head.length - tail.length
+  if (fill < 0) return null
+  const groups = [...head, ...(halves.length === 2 ? Array(fill).fill('0') : []), ...tail]
+  if (groups.length !== 8) return null
+
+  const out = groups.map((g) => (g === '' ? 0 : parseInt(g, 16)))
+  return out.some((n) => Number.isNaN(n) || n < 0 || n > 0xffff) ? null : out
+}
+
+/**
+ * Every IPv4 address an IPv6 address can carry.
+ *
+ * Unwrapping ONLY `::ffff:` — which is what this did before — leaves three other
+ * transition formats that also embed IPv4, so `64:ff9b::a9fe:a9fe` is
+ * 169.254.169.254 (the cloud metadata endpoint) in an IPv6 costume and the guard
+ * waved it through. Each embedded address is put through the v4 rules.
+ */
+function embeddedIpv4(ip: string): string[] {
+  const g = expandIpv6(ip)
+  if (!g) return []
+  const v4 = (hi: number, lo: number) => `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`
+  const found: string[] = []
+
+  // ::ffff:a.b.c.d (mapped) and ::a.b.c.d (compatible — deprecated but routable)
+  if (g[0] === 0 && g[1] === 0 && g[2] === 0 && g[3] === 0 && g[4] === 0) {
+    if (g[5] === 0xffff || g[5] === 0) found.push(v4(g[6] as number, g[7] as number))
+  }
+  // NAT64 well-known prefix, RFC 6052
+  if (g[0] === 0x0064 && g[1] === 0xff9b && !g[2] && !g[3] && !g[4] && !g[5]) {
+    found.push(v4(g[6] as number, g[7] as number))
+  }
+  // 6to4, RFC 3056 — the IPv4 sits in groups 1..2
+  if (g[0] === 0x2002) found.push(v4(g[1] as number, g[2] as number))
+  // Teredo, RFC 4380 — client IPv4 is the last 32 bits, XOR'd with all-ones
+  if (g[0] === 0x2001 && g[1] === 0x0000) {
+    found.push(v4(~(g[6] as number) & 0xffff, ~(g[7] as number) & 0xffff))
+  }
+
+  return found
+}
+
 function ipv6IsPrivate(ip: string): boolean {
   const lower = ip.toLowerCase()
   if (lower === '::' || lower === '::1') return true // unspecified, loopback
 
-  // IPv4-mapped (::ffff:10.0.0.1) must be unwrapped or it bypasses the v4 rules.
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(lower)
-  if (mapped?.[1]) return ipv4IsPrivate(mapped[1])
+  // Any transition format that carries an IPv4 must be unwrapped, or it bypasses
+  // the v4 rules entirely. See embeddedIpv4 — `::ffff:` alone is not enough.
+  for (const v4 of embeddedIpv4(lower)) {
+    if (ipv4IsPrivate(v4)) return true
+  }
 
   const head = lower.split(':')[0] ?? ''
   if (/^f[cd]/.test(head)) return true // unique local
