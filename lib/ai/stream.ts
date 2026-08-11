@@ -46,7 +46,13 @@ export async function* confirmStream(
   signal?: AbortSignal,
 ): AsyncGenerator<AskEvent> {
   yield* streamSse({
-    url: `${resolveApiBaseUrl()}/ai/tools/confirm/${callId}`,
+    // ENCODED, always. A call id is server-minted and has contained a '#',
+    // which a browser treats as the start of a fragment — everything after it
+    // never leaves the client, the server looks up a truncated id, and the
+    // confirmation answers "This confirmation has expired." The server no
+    // longer mints '#', but a client must not depend on the shape of an
+    // opaque id it did not create.
+    url: `${resolveApiBaseUrl()}/ai/tools/confirm/${encodeURIComponent(callId)}`,
     body: { action },
     signal,
   })
