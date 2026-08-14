@@ -1,6 +1,7 @@
 'use client'
 
 import { QueryClientProvider } from '@tanstack/react-query'
+import { usePathname, useRouter } from 'next/navigation'
 import { ThemeProvider } from 'next-themes'
 import { useEffect, useState } from 'react'
 
@@ -11,7 +12,8 @@ import { PhoneFrame } from '@/components/layout/PhoneFrame'
 import { ChatIsland } from '@/components/chat/ChatIsland'
 import { LocaleProvider } from '@/components/i18n/LocaleProvider'
 import { VoiceIsland } from '@/components/voice/VoiceIsland'
-import { bootSessionStore, useSessionStore } from '@/lib/auth/sessionStore'
+import { bootSessionStore, selectStatus, useSessionStore } from '@/lib/auth/sessionStore'
+import { deviceTimeZone } from '@/lib/i18n/dateFormat'
 import { adoptUserLocale, deviceLocale } from '@/lib/i18n/localeStore'
 import { useNotificationActions } from '@/lib/notifications/useNotificationActions'
 import { createQueryClient } from '@/queries/client'
@@ -66,6 +68,74 @@ function SyncAccountLocale() {
   return null
 }
 
+/**
+ * Store the device's timezone on the account when it has none.
+ *
+ * The client never needed this — every screen formats against
+ * `deviceTimeZone()`, and Profile even renders `user.timezone ?? detectedZone`,
+ * so the row reads "Africa/Cairo" whether or not anything was ever saved. That
+ * fallback is why nobody noticed the account field was empty on all 33 of them.
+ *
+ * The SERVER has no device to fall back to. A background worker resolving a
+ * date-only Google Task, or writing a digest at 7am local, has nothing to
+ * resolve "local" against — so the Google sync refuses outright with
+ * "Set your timezone", and refused for every user who ever connected an account.
+ *
+ * Only fills a BLANK. The picker in Settings writes an explicit choice, and
+ * someone who deliberately set Europe/Berlin while travelling must not have it
+ * silently pulled back to wherever the phone is — the same rule
+ * SyncAccountLocale follows for an explicitly chosen language.
+ */
+function SyncAccountTimezone() {
+  const signedIn = useSessionStore((s) => s.user != null)
+  const timezone = useSessionStore((s) => s.user?.timezone ?? null)
+  const update = useUpdateProfile()
+
+  useEffect(() => {
+    if (!signedIn || timezone) return
+    const device = deviceTimeZone()
+    if (!device) return
+    // Converges: the write lands in the session store, this runs again, and the
+    // `timezone` guard stops it. A failure leaves the field blank to retry.
+    update.mutate({ timezone: device })
+    // `update` is a stable mutation handle; listing it would re-fire on its own
+    // internal state changes rather than on a real timezone change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedIn, timezone])
+
+  return null
+}
+
+// Routes reachable without a session. Everything else requires one.
+const PUBLIC_ROUTES = ['/welcome', '/sign-in', '/sign-up']
+
+/**
+ * Send the user to sign-in when the session ends — from wherever they are.
+ *
+ * `app/page.tsx` already did this, but only for `/`. A session that expired
+ * while the user was on /dashboard or /matters left them sitting on a screen
+ * whose every query answered 401, with an error toast and no way out but a
+ * manual reload. Guarding at the shell means the redirect follows the session,
+ * not the route.
+ *
+ * `status === 'loading'` is deliberately excluded: that is the state during boot
+ * hydration, and redirecting on it would bounce every cold start to /welcome
+ * before the stored tokens have even been read.
+ */
+function RedirectOnSignOut() {
+  const status = useSessionStore(selectStatus)
+  const router = useRouter()
+  const pathname = usePathname()
+
+  useEffect(() => {
+    if (status !== 'unauthenticated') return
+    if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) return
+    router.replace('/welcome')
+  }, [status, pathname, router])
+
+  return null
+}
+
 // App-root providers. Created once on the client (useState initializer) so the
 // QueryClient survives re-renders. Hydrates the auth session from storage on
 // mount. Toaster is mounted here so lib/toast.ts has a host everywhere.
@@ -84,6 +154,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <QueryClientProvider client={queryClient}>
           <NativeNotifications />
           <SyncAccountLocale />
+          <SyncAccountTimezone />
+          <RedirectOnSignOut />
           <PhoneFrame>
             {/* Only the routed page animates. The tab bar, the islands and the
                 toaster are siblings, not children, so they stay mounted and
