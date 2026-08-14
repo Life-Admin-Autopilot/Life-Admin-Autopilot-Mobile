@@ -21,6 +21,7 @@ import { X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
 import { SketchCameraGlyph, SketchCheckGlyph, SketchUploadGlyph } from '@/components/icons/sketch/flowGlyphs'
+import { toViewportSpace, useMorphViewport } from '@/lib/useMorphViewport'
 import { ScanningDocumentGlyph } from '@/components/icons/sketch/ScanningDocumentGlyph'
 import { ScanReviewCard } from '@/components/scan/ScanReviewCard'
 import { TaskOverview } from '@/components/scan/TaskOverview'
@@ -88,10 +89,19 @@ export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureF
   // start on the same frame as the shell's collapse.
   const isPresent = useIsPresent()
   const { surface, canvas } = useMorphColors()
-  const [vp] = useState(() => ({
-    w: typeof window === 'undefined' ? 400 : window.innerWidth,
-    h: typeof window === 'undefined' ? 800 : window.innerHeight,
-  }))
+  // The box this fixed surface is actually positioned against — the PHONE on
+  // desktop, not the browser window. Reading `window.innerWidth` here put the
+  // sheet's left edge at roughly (1536 - 440) / 2 = 548px inside a 410px-wide
+  // frame with `overflow-hidden`, so the whole flow opened off-device and was
+  // clipped away: tapping the button looked like it did nothing.
+  const { vp: box, measure, remeasure } = useMorphViewport()
+  const vp = { w: box?.width ?? 0, h: box?.height ?? 0 }
+
+  // Measure on mount as well as via the observer, so the first open never waits
+  // on an observer callback that may not have landed yet.
+  useEffect(() => {
+    remeasure()
+  }, [remeasure])
 
   const [activeDocId, setActiveDocId] = useState<string | null>(
     trigger.mode === 'open' ? trigger.documentId : null,
@@ -107,6 +117,20 @@ export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureF
   const fileInputRef = useRef<HTMLInputElement>(null)
   const capture = useCaptureSource(fileInputRef, (doc) => setActiveDocId(doc.id))
   const currentDoc = activeDocId ? docs.find((d) => d.id === activeDocId) : undefined
+
+  // The entry gate must not be able to stick.
+  //
+  // `entrySettled` is set by the shell's onAnimationComplete, and while that
+  // callback is pending BOTH capture buttons are disabled — so if it never
+  // fires, the only two actions on the screen are dead at 50% opacity and the
+  // sheet reads as "scanning is the only option". A morph interrupted by a
+  // reopen, an unmount race, or a spring that never reports settling all land
+  // there. The animation is ~300ms, so this only ever acts as a backstop.
+  useEffect(() => {
+    if (entrySettled) return
+    const t = setTimeout(() => setEntrySettled(true), 600)
+    return () => clearTimeout(t)
+  }, [entrySettled])
 
   // A fresh doc starts its minimum-dwell clock the moment it's known, so a
   // sub-second extraction doesn't flash the "processing" copy for <500ms.
@@ -156,11 +180,15 @@ export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureF
     background: surface,
   }
   const fullscreenShape = { top: 0, left: 0, width: vp.w, height: vp.h, radius: 0, background: canvas }
+  // The trigger rect came from getBoundingClientRect(), which is window-relative;
+  // this surface is positioned against the containing block. Without the offset
+  // the morph starts exactly one frame-origin away from the button it grew from.
+  const originRect = box
+    ? toViewportSpace(trigger.rect, box)
+    : { top: trigger.rect.top, left: trigger.rect.left, width: trigger.rect.width, height: trigger.rect.height }
+
   const originShape = {
-    top: trigger.rect.top,
-    left: trigger.rect.left,
-    width: trigger.rect.width,
-    height: trigger.rect.height,
+    ...originRect,
     radius: 18,
     background: trigger.originColor ?? surface,
   }
@@ -178,8 +206,22 @@ export function DocumentCaptureFlow({ docs, trigger, onClose }: DocumentCaptureF
     capture.dismissRetry()
   }
 
+  // Nothing is positionable until the containing block has been measured, and a
+  // shell rendered against a 0x0 box would animate toward zero width before
+  // correcting. Mount the probe alone for that one commit; the measurement lands
+  // in the same commit via the ref callback, so the full tree follows
+  // immediately. Every hook above this line runs unconditionally.
+  if (!box) {
+    return <div ref={measure} aria-hidden className="pointer-events-none fixed inset-0 -z-50" />
+  }
+
   return (
     <>
+      {/* Always mounted, never painted. Reports the box that fixed children are
+          positioned against — the phone shell on desktop, the browser viewport
+          on mobile — because the two differ and only this can tell them apart. */}
+      <div ref={measure} aria-hidden className="pointer-events-none fixed inset-0 -z-50" />
+
       {/* Dismissal retargets `animate` rather than unmounting this: an exiting
           presence child is a FROZEN snapshot of the props it had while
           present, so a backdrop dropped here on the way out would keep its
@@ -367,7 +409,18 @@ function ChoosePhase({
       </div>
 
       {capture.error ? <p className="text-caption text-danger">{capture.error}</p> : null}
-      <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => void capture.onFileChosen(e)} />
+      {/* Mirrors DocumentScanUploadEndpoint.AllowedMime exactly. Without it the
+          picker offers every file on the device, so a .docx or a .txt can be
+          chosen and only fails after the upload — and, worse on Android, the
+          picker leads with photos and buries PDFs, which reads as "this only
+          takes pictures". Naming the types is what makes PDF visibly on offer. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf,image/jpeg,image/png,image/heic,image/webp"
+        className="hidden"
+        onChange={(e) => void capture.onFileChosen(e)}
+      />
     </div>
   )
 }

@@ -1,14 +1,14 @@
 {
   "header": {
     "title": "Documents",
-    "scan": "Scan a document",
+    "scan": "Add a document",
     "selectionSubject": "documents"
   },
   "list": {
     "loadFailedTitle": "Couldn't load your documents.",
     "loadFailedBody": "Check your connection and try again.",
-    "emptyTitle": "Nothing scanned yet",
-    "emptyBody": "Scan a bill, letter, or form and {appName} will pull out anything actionable."
+    "emptyTitle": "Nothing added yet",
+    "emptyBody": "Scan a bill, letter or form — or upload a photo or PDF — and {appName} will pull out anything actionable."
   },
   "toast": {
     "deleted": "{count, plural, =0 {Nothing was deleted.} one {Document deleted.} other {# documents deleted.}}",
@@ -66,7 +66,7 @@
   "capture": {
     "chooseTitle": "Add a bill, letter, or form",
     "takePhoto": "Take a photo",
-    "chooseFile": "Choose a file",
+    "chooseFile": "Upload a photo or PDF",
     "uploading": "Getting your document ready…",
     "processing": {
       "reading": "Reading your document…",
