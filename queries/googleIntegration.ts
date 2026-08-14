@@ -56,6 +56,16 @@ export interface GoogleSyncResult {
 export const SCOPE_CALENDAR = 'https://www.googleapis.com/auth/calendar.readonly'
 export const SCOPE_TASKS = 'https://www.googleapis.com/auth/tasks.readonly'
 
+/**
+ * Write access, restricted by Google to calendars this app itself created.
+ *
+ * Accounts connected before the outbound mirror shipped do not carry it, and
+ * nothing about them looks broken — they import fine and simply never push. The
+ * sheet asks those users to reconnect rather than leaving them to wonder why
+ * their matters are not in Google.
+ */
+export const SCOPE_CALENDAR_APP = 'https://www.googleapis.com/auth/calendar.app.created'
+
 export function useGoogleIntegration() {
   return useQuery({
     queryKey: queryKeys.googleIntegration,

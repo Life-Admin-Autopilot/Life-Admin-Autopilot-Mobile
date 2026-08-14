@@ -145,7 +145,7 @@
   },
   "google": {
     "title": "Google",
-    "eyebrow": "Read-only",
+    "eyebrow": "Two-way",
     "account": "Account",
     "fallbackAccount": "Google account",
     "nothingNew": "Nothing new",
@@ -168,7 +168,8 @@
     "syncUpdated": "{count, plural, one {# updated} other {# updated}}",
     "syncMeetingsLeft": "{count, plural, one {# meeting left alone — it already reminds you.} other {# meetings left alone — they already remind you.}}",
     "lastImport": "Last import {date}",
-    "explainer": "Kitto reads your calendar and tasks, turns them into matters, and reminds you. It never changes anything in Google.",
+    "explainer": "Kitto reads your calendar and tasks, turns them into matters, and reminds you. Your dated matters go back into a calendar called Kitto — your own calendars are never touched.",
+    "pushBlocked": "Reconnect to let Kitto add your matters to a “Kitto” calendar in your Google account.",
     "notEnabled": "Connecting a Google account isn’t switched on yet.",
     "disconnect": "Disconnect",
     "reauthExplainer": "Google stopped accepting Kitto’s access — usually because it was removed from your Google account, or a password changed.",

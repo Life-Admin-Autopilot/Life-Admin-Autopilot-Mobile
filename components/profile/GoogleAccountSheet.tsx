@@ -13,6 +13,7 @@ import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
 import {
   SCOPE_CALENDAR,
+  SCOPE_CALENDAR_APP,
   SCOPE_TASKS,
   useDisconnectGoogle,
   useGoogleAuthorizeUrl,
@@ -57,6 +58,12 @@ function lastSyncLabel(integration: GoogleIntegration, t: GoogleT, intlTag: stri
   if (integration.status === 'needs_reauth') {
     return integration.lastError ?? t('reconnectHint')
   }
+  // An ACTIVE integration can still be failing every run, and this line used to
+  // hide it. The background worker stamps calendarSyncedAt even when it imports
+  // nothing — it is a "do not retry yet" marker, not a receipt — so a connection
+  // blocked on a missing timezone rendered as "Last import 14 Aug" while nothing
+  // had ever been imported. The error is the truer answer whenever there is one.
+  if (integration.lastError) return integration.lastError
   if (!integration.calendarSyncedAt) return t('notImported')
   return t('lastImport', {
     date: new Date(integration.calendarSyncedAt).toLocaleDateString(intlTag, {
@@ -111,16 +118,34 @@ export function GoogleAccountSheet({
     }
   }, [isNative, state, t])
 
-  // Web has no deep link, so returning focus is the only signal the tab is done.
+  // Web has no deep link, so coming back to this tab is the only signal the
+  // consent flow is done.
+  //
+  // `focus` alone was not enough. It fires when the WINDOW regains focus, which
+  // is not what happens when someone switches back between tabs of the same
+  // window — the reliable signal there is visibilitychange. Missing it left the
+  // sheet showing the Connect button after the account was already connected,
+  // until a navigation remounted the query.
+  //
+  // Not gated on `connecting` either: the consent tab can outlive this sheet
+  // being open, and a listener that only exists mid-connect is exactly the one
+  // that is gone when the answer arrives.
   useEffect(() => {
-    if (isNative || !connecting) return
-    const onFocus = (): void => {
+    if (isNative) return
+
+    const settle = (): void => {
+      if (document.visibilityState === 'hidden') return
       setConnecting(false)
       void state.refetch()
     }
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [isNative, connecting, state])
+
+    window.addEventListener('focus', settle)
+    document.addEventListener('visibilitychange', settle)
+    return () => {
+      window.removeEventListener('focus', settle)
+      document.removeEventListener('visibilitychange', settle)
+    }
+  }, [isNative, state])
 
   const startConnect = (): void => {
     authorize.mutate(!isNative, {
@@ -144,6 +169,11 @@ export function GoogleAccountSheet({
   const hasCalendar = integration?.grantedScopes.includes(SCOPE_CALENDAR) ?? false
   const hasTasks = integration?.grantedScopes.includes(SCOPE_TASKS) ?? false
 
+  // An account connected before the write scope existed imports normally and
+  // silently never pushes — the one failure with no symptom, so it gets said out
+  // loud rather than left for the user to deduce.
+  const canPush = integration?.grantedScopes.includes(SCOPE_CALENDAR_APP) ?? false
+
   return (
     <Sheet open={open} onClose={onClose} trigger={trigger} title={t('title')} eyebrow={t('eyebrow')}>
       <SheetSection label={t('account')}>
@@ -163,7 +193,7 @@ export function GoogleAccountSheet({
               </span>
               <span
                 className={
-                  integration.status === 'active'
+                  integration.status === 'active' && !integration.lastError
                     ? 'text-body-sm text-ink-muted'
                     : 'text-body-sm text-danger'
                 }
@@ -229,6 +259,13 @@ export function GoogleAccountSheet({
         <SheetSection label={t('reconnect')}>
           <p className="text-caption text-ink-subtle">{t('reauthExplainer')}</p>
           <Button variant="solid" className="w-full" onClick={startConnect}>
+            {t('reconnectAction')}
+          </Button>
+        </SheetSection>
+      ) : integration?.status === 'active' && !canPush ? (
+        <SheetSection label={t('reconnect')}>
+          <p className="text-caption text-ink-subtle">{t('pushBlocked')}</p>
+          <Button variant="outline" className="w-full" onClick={startConnect}>
             {t('reconnectAction')}
           </Button>
         </SheetSection>
