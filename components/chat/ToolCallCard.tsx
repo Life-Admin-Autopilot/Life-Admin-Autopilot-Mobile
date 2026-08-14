@@ -23,7 +23,8 @@
 // Institutional voice: state the action, no chatter — the product noun is
 // "matter". A completion is a status change, not an event.
 
-import { BellOff, CalendarDays, Check, X } from 'lucide-react'
+import { AlertTriangle, BellOff, CalendarDays, Check, X } from 'lucide-react'
+import { DraftConfirm } from '@/components/chat/DraftConfirm'
 import { useTranslations } from 'next-intl'
 
 import { DomainIcon } from '@/components/icons/DomainIcon'
@@ -47,6 +48,22 @@ interface ToolCallCardProps {
 
 // The matter a row refers to: prefer the persisted task title from the result,
 // fall back to the call args, then a short id, then the bulk-delete summary.
+/**
+ * The clashing matters from a tool call that declined to write.
+ *
+ * Reads `status`/`conflicts` off the tool RESULT rather than inferring anything
+ * from the call's own status, because "the server said no on purpose" and "the
+ * call broke" are the same `failed` to everything upstream — the difference only
+ * exists in the payload the tool sent back.
+ */
+function heldForConflicts(call: AiToolCall): { taskId: string; title: string; reason: string }[] | null {
+  const result = call.result as
+    | { status?: string; conflicts?: { taskId: string; title: string; reason: string }[] }
+    | null
+  if (result?.status !== 'awaiting_confirmation') return null
+  return result.conflicts?.length ? result.conflicts : null
+}
+
 function matterLabel(call: AiToolCall): string {
   if (call.name === 'deleteAllTasks') return summarizeBulkDelete(call)
   const result = (call.result ?? {}) as Record<string, unknown>
@@ -133,6 +150,31 @@ export function ToolCallCard({ call, onConfirm, onDecline, pendingAction = null 
     )
   }
 
+  // HELD BACK, not failed. `updateTask` refuses to move a matter onto another
+  // one until the user has been told, and returns the clashing matters instead of
+  // writing. That arrives as an unsuccessful tool result, so without this branch
+  // it renders as "Action failed" — which is untrue twice over: nothing failed,
+  // and the reason the user needs is thrown away. Checked BEFORE the failed row
+  // for exactly that reason.
+  const held = heldForConflicts(call)
+  if (held) {
+    return (
+      <div className="flex flex-col gap-1.5 rounded-2xl bg-warning/10 p-3">
+        <div className="flex items-center gap-1.5">
+          <AlertTriangle size={13} className="shrink-0 text-warning" />
+          <span className="text-label uppercase tracking-wide text-warning">Not saved</span>
+        </div>
+        <ul className="flex flex-col gap-1">
+          {held.map((conflict) => (
+            <li key={conflict.taskId} className="text-caption text-ink" dir="auto">
+              {conflict.reason} <span className="text-ink-muted">“{conflict.title}”</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+
   // failed / declined — a muted ledger row.
   if (call.status === 'failed' || call.status === 'declined') {
     return (
@@ -144,6 +186,14 @@ export function ToolCallCard({ call, onConfirm, onDecline, pendingAction = null 
       </div>
     )
   }
+
+  // A DRAFT, not a receipt. The chat agent's createTask now calls
+  // /me/tasks/draft, which saves nothing — so this branch has to come before the
+  // "filed" card, or the user is shown a receipt for a matter that only exists
+  // as a proposal. Confirming routes through /api/planning/commit, exactly like
+  // the voice capture flow.
+  const draft = (call.result as { draft?: unknown } | null)?.draft
+  if (draft) return <DraftConfirm draft={draft as never} />
 
   const verb = tChat(`ledger.verb.${call.name}`)
   const matter = matterLabel(call)

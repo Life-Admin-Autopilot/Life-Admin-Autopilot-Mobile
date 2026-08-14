@@ -162,7 +162,9 @@
     "dueLabel": "Due date",
     "stepsCount": "Steps · {count}",
     "rescheduled": "{count, plural, one {You've moved this once. Still worth keeping?} other {You've moved this # times. Still worth keeping?}}",
-    "saveFailed": "Couldn't save that change. Try again."
+    "saveFailed": "Couldn't save that change. Try again.",
+    "saveAnyway": "Save anyway",
+    "clashNotSaved": "Not saved — scheduling clash"
   },
   "row": {
     "select": "Select {title}",

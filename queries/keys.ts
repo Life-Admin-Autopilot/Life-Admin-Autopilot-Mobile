@@ -8,6 +8,13 @@ export const queryKeys = {
   },
   notifications: ['notifications'] as const,
   clarifications: ['clarifications'] as const,
+  /** The Knowledge Agent's daily briefing. */
+  briefing: () => ['briefing', 'today'] as const,
+  /** Conflicts re-checked for one saved task. */
+  taskConflicts: (id: string) => ['tasks', 'conflicts', id] as const,
+  /** Every task's conflicts. A clash is symmetric, so moving one matter changes
+   *  the answer for the matter it was clashing WITH, not just for itself. */
+  taskConflictsAll: ['tasks', 'conflicts'] as const,
   // A factory, not a flat key: the Matters list caches per filter set, so the
   // list needs its own namespace while `all` stays the blunt invalidation
   // handle every task mutation reaches for.

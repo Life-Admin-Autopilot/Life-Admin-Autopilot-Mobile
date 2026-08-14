@@ -233,6 +233,9 @@ export function invalidateTasks(qc: QueryClient) {
   // Its counts no longer matter here — the dashboard reads those from
   // tasks.counts, which the blunt tasks.all handle above already covers.
   void qc.invalidateQueries({ queryKey: queryKeys.digestAll })
+  // The Knowledge Agent's briefing summarises the same matters, and its clash
+  // list is derived from them — a write can create or resolve a conflict.
+  void qc.invalidateQueries({ queryKey: queryKeys.briefing() })
 }
 
 export interface CreateTaskBody {
@@ -272,7 +275,22 @@ export function useUpdateTask() {
   return useMutation({
     mutationFn: ({ taskId, body }: { taskId: string; body: UpdateTaskBody }) =>
       api<{ task: Task }>(`/me/tasks/${taskId}`, { method: 'PATCH', body }).then((r) => r.task),
-    onSuccess: () => invalidateTasks(qc),
+    onSuccess: (task) => {
+      invalidateTasks(qc)
+      // The Knowledge Agent's conflict re-check — the "Task Edited Later" arrow.
+      // Moving a matter can drop it on top of another one, and without this the
+      // clash is only discovered the next time the user happens to look.
+      // Invalidate rather than refetch: the detail screen subscribes and pulls
+      // it, and an edit made from a list row should not pay for a check nobody
+      // is watching.
+      //
+      // EVERY task's conflicts, not just this one. A clash is a statement about
+      // a PAIR, so moving this matter off another one makes the other one's
+      // answer wrong too — and that task's cached "Scheduled within two hours of
+      // this" banner would keep accusing it of a collision that no longer
+      // exists, until something else happened to refetch it.
+      void qc.invalidateQueries({ queryKey: queryKeys.taskConflictsAll })
+    },
   })
 }
 

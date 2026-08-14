@@ -1,11 +1,12 @@
 'use client'
 
-import { Check, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, Trash2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
 import { useDomainLabels } from '@/hooks/useDomainLabels'
 import { useState } from 'react'
 
+import { ConflictNotice } from '@/components/matters/ConflictNotice'
 import { MatterSteps } from '@/components/matters/MatterSteps'
 import { TimeProvenance } from '@/components/matters/TimeProvenance'
 import { Button } from '@/components/ui/button'
@@ -26,6 +27,7 @@ import {
   type UpdateTaskBody,
 } from '@/queries/tasks'
 import { ChipToggle, Sheet, SheetSection } from '@/components/ui/Sheet'
+import { previewConflicts, type DraftConflict } from '@/queries/planning'
 
 // The single matter editor. Same field set and chip vocabulary as the document
 // scan review (components/scan/TaskOverview), so editing a matter feels the
@@ -129,9 +131,20 @@ function Editor({
   const updateTask = useUpdateTask()
   const deleteTask = useDeleteTask()
 
-  const patch = (p: Partial<Draft>) => setDraft((d) => ({ ...d, ...p }))
+  // The pre-save clash check: what it found, and whether the user has now seen it.
+  const [clashes, setClashes] = useState<DraftConflict[]>([])
+  const [overrideClash, setOverrideClash] = useState(false)
+  const [checking, setChecking] = useState(false)
 
-  const save = () => {
+  const patch = (p: Partial<Draft>) => {
+    setDraft((d) => ({ ...d, ...p }))
+    // Any further edit is a different change, so a warning about the previous one
+    // must not still be standing — and must not count as consent to this one.
+    setClashes([])
+    setOverrideClash(false)
+  }
+
+  const save = async () => {
     const body: UpdateTaskBody = {}
     const title = draft.title.trim()
     if (title && title !== task.title) body.title = title
@@ -145,6 +158,27 @@ function Editor({
       onClose()
       return
     }
+
+    // Ask before writing, not after.
+    //
+    // ConflictNotice below already reports a clash — but only once the edit has
+    // landed, which makes it a report on damage rather than a chance to avoid it.
+    // Moving a matter onto another one is the case the user is least likely to
+    // have intended and most likely to want back, so the first Save on a
+    // newly-clashing time shows what it collides with and asks again. The second
+    // tap is the decision.
+    const movingInTime = body.dueAt !== undefined && body.dueAt !== null
+    if (movingInTime && !overrideClash) {
+      setChecking(true)
+      const found = await previewConflicts(task.id, { dueAt: body.dueAt, title })
+      setChecking(false)
+      if (found.length > 0) {
+        setClashes(found)
+        setOverrideClash(true)
+        return
+      }
+    }
+
     updateTask.mutate({ taskId: task.id, body }, { onSuccess: onClose })
   }
 
@@ -194,18 +228,46 @@ function Editor({
               {tCommon('cancel')}
             </button>
             <Button
-              className="h-8 gap-1 px-3 text-caption"
-              disabled={updateTask.isPending || !draft.title.trim()}
-              onClick={save}
+              className={cn('h-8 gap-1 px-3 text-caption', overrideClash && 'bg-warning')}
+              disabled={updateTask.isPending || checking || !draft.title.trim()}
+              onClick={() => void save()}
             >
               <Check size={14} />
-              {updateTask.isPending ? tCommon('saving') : tCommon('save')}
+              {updateTask.isPending || checking
+                ? tCommon('saving')
+                : overrideClash
+                  ? t('detail.saveAnyway')
+                  : tCommon('save')}
             </Button>
           </div>
         </div>
       }
     >
-   
+      {/* What THIS unsaved edit would collide with. Takes the place of the
+          saved-state notice while it is showing, so the user reads one warning
+          about the change in front of them rather than two about different
+          moments in time. */}
+      {clashes.length > 0 ? (
+        <div className="mb-3 rounded-2xl bg-warning/10 p-3">
+          <div className="flex items-center gap-1.5">
+            <AlertTriangle size={14} className="shrink-0 text-warning" />
+            <p className="text-label uppercase tracking-wide text-warning">
+              {t('detail.clashNotSaved')}
+            </p>
+          </div>
+          <ul className="mt-1.5 flex flex-col gap-1">
+            {clashes.map((conflict) => (
+              <li key={conflict.taskId} className="text-body-sm text-ink" dir="auto">
+                {conflict.reason} <span className="text-ink-muted">“{conflict.title}”</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        /* The Knowledge Agent's re-check. Sits above the fields that cause a
+           clash, so an edit that creates one is answered where it was made. */
+        <ConflictNotice taskId={task.id} />
+      )}
 
       <SheetSection label={t('section.domain')}>
         <div className="flex flex-wrap gap-1.5">
