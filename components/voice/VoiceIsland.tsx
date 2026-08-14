@@ -1,17 +1,18 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { AnimatePresence, motion, type MotionValue } from 'framer-motion'
 import { Mic, X, Square, Check } from 'lucide-react'
 
 import { AssistantText } from '@/components/chat/AssistantText'
-import { askStream } from '@/lib/ai/stream'
 import { transcribeAudio } from '@/lib/ai/transcribe'
 import { useVoiceRecorder } from '@/lib/ai/useVoiceRecorder'
 import { micFailureMessage } from '@/lib/ai/micFailure'
 import { useVoiceCapture } from '@/lib/voice/captureStore'
+import { DraftReview } from '@/components/planning/DraftReview'
+import { useProposeTasks, type TaskDraft } from '@/queries/planning'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
 import { BACKDROP_BLUR_FADE, BACKDROP_BLUR_STYLE } from '@/lib/motion-backdrop'
@@ -37,7 +38,10 @@ const MIC_START_FALLBACK_MS = 600
  */
 const MORPH_CSS = springToLinearEasing({ stiffness: 240, damping: 30, mass: 0.9 })
 
-type Phase = 'recording' | 'review' | 'transcribing' | 'thinking' | 'done' | 'error'
+// 'confirming' is the propose/commit review step: Kitto has understood the
+// transcript and produced drafts, but NOTHING is saved until the user confirms
+// each one. It sits where the old direct-write agent used to simply reply.
+type Phase = 'recording' | 'review' | 'transcribing' | 'thinking' | 'confirming' | 'done' | 'error'
 
 // Voice capture — the bridge to the assistant by voice. Opened from the TabBar mic, it
 // rises from the bar into an ~80% surface with a live, voice-reactive meter. The
@@ -50,7 +54,6 @@ export function VoiceIsland() {
   const close = useVoiceCapture((s) => s.close)
   const pathname = usePathname()
   const recorder = useVoiceRecorder()
-  const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, [])
 
   const [phase, setPhase] = useState<Phase>('recording')
   const [capturedMs, setCapturedMs] = useState(0)
@@ -59,6 +62,8 @@ export function VoiceIsland() {
   const [reply, setReply] = useState('')
   const [sources, setSources] = useState<AiSource[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [drafts, setDrafts] = useState<TaskDraft[]>([])
+  const propose = useProposeTasks()
   const abortRef = useRef<AbortController | null>(null)
 
   // CSS-morph path (probe mode) — declared before the open effect that latches
@@ -91,6 +96,7 @@ export function VoiceIsland() {
       setTranscript('')
       setReply('')
       setSources([])
+      setDrafts([])
       setError(null)
     } else {
       abortRef.current?.abort()
@@ -171,32 +177,25 @@ export function VoiceIsland() {
     setPhase('review')
   }
 
-  const askKitto = async (text: string) => {
+  /**
+   * Transcript → drafts. Replaces the old askStream() call, which routed the
+   * dictation into the chat agent whose tools write immediately. Capture now goes
+   * through propose/commit so the user sees what will be created — with any
+   * conflicts against existing matters — before anything exists.
+   */
+  const planFrom = async (text: string) => {
     setPhase('thinking')
     setReply('')
-    const controller = new AbortController()
-    abortRef.current = controller
     try {
-      // 'transcript', not 'chat': this text is a raw dictation the user never
-      // read back, so the agent parses it for intent rather than answering it as
-      // a typed message.
-      for await (const ev of askStream({
-        question: text,
-        timezone,
-        mode: 'transcript',
-        signal: controller.signal,
-      })) {
-        if (ev.type === 'token') setReply((r) => r + ev.text)
-        else if (ev.type === 'sources') setSources((prev) => [...prev, ...ev.sources])
-        else if (ev.type === 'error') {
-          setError(ev.message)
-          setPhase('error')
-          return
-        }
+      const proposed = await propose.mutateAsync(text)
+      if (proposed.length === 0) {
+        toast.info(t('nothingCaptured'))
+        close()
+        return
       }
-      setPhase('done')
+      setDrafts(proposed)
+      setPhase('confirming')
     } catch (err) {
-      if (controller.signal.aborted) return
       setError(translateBackendError(err, `${env.appName} could not be reached.`))
       setPhase('error')
     }
@@ -213,7 +212,7 @@ export function VoiceIsland() {
         return
       }
       setTranscript(text)
-      await askKitto(text)
+      await planFrom(text)
     } catch (err) {
       setError(translateBackendError(err, t('transcribeFailed')))
       setPhase('error')
@@ -281,6 +280,13 @@ export function VoiceIsland() {
                   </>
                 ) : phase === 'transcribing' ? (
                   <p className="text-body text-ink-muted">{t('transcribingEllipsis')}</p>
+                ) : phase === 'confirming' ? (
+                  <div className="w-full overflow-y-auto">
+                    {transcript ? (
+                      <p className="mb-3 text-body-sm italic text-ink-subtle">“{transcript}”</p>
+                    ) : null}
+                    <DraftReview drafts={drafts} onFinished={close} />
+                  </div>
                 ) : phase === 'thinking' || phase === 'done' ? (
                   <div className="w-full overflow-y-auto">
                     {transcript ? (
