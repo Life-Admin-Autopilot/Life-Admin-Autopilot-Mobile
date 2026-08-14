@@ -153,6 +153,80 @@ export const useSessionStore = create<SessionState>((set) => ({
   },
 }))
 
+// ---- Rotation ------------------------------------------------------------
+//
+// THE server rotates refresh tokens and invalidates the old one immediately, so
+// a refresh token is single-use. Two callers presenting the same one is not a
+// theoretical race: measured against the live server, concurrent refreshes with
+// one token return 200 and 401 — exactly one wins.
+//
+// That matters because losing the race used to sign the user out. The loser saw
+// a 401, treated it as "your session is dead", and wiped storage — while the
+// winner had just installed a perfectly good pair. The user was ejected
+// mid-session for a condition that had already resolved itself.
+//
+// Rotation therefore lives HERE, next to the tokens, and there is exactly one
+// implementation. Boot hydration and the API layer both call it, so they can no
+// longer race each other.
+let rotation: Promise<boolean> | null = null
+
+/**
+ * Exchange the stored refresh token for a new pair.
+ *
+ * Returns true when the store now holds a usable access token — which includes
+ * the case where THIS call failed but a concurrent one already succeeded.
+ * Callers should re-read `accessToken` and retry rather than assuming the token
+ * they started with.
+ */
+export function refreshSession(): Promise<boolean> {
+  if (rotation) return rotation
+
+  rotation = (async () => {
+    const before = useSessionStore.getState().refreshToken
+    if (!before) return false
+
+    try {
+      const res = await fetch(`${resolveApiBaseUrl()}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: before }),
+      })
+
+      if (res.ok) {
+        const data = (await res.json()) as { tokens: { accessToken: string; refreshToken: string } }
+        storageSet(ACCESS_KEY, data.tokens.accessToken)
+        storageSet(REFRESH_KEY, data.tokens.refreshToken)
+        useSessionStore.setState({
+          accessToken: data.tokens.accessToken,
+          refreshToken: data.tokens.refreshToken,
+        })
+        return true
+      }
+
+      // Someone else got there first. The token we presented was spent by a
+      // concurrent rotation that succeeded, so the session is healthy and this
+      // 401 says nothing about it — signing the user out here is the bug.
+      if (useSessionStore.getState().refreshToken !== before) return true
+
+      // Only now is it genuinely dead: the server rejected the CURRENT token and
+      // nobody replaced it. A 5xx is not that, and must not cost a session.
+      if (res.status === 401 || res.status === 403) {
+        await useSessionStore.getState().clear()
+      }
+      return false
+    } catch (err: unknown) {
+      // Offline or DNS failure. The tokens are almost certainly still valid, so
+      // this fails the request without touching the session.
+      logger.warn('sessionStore:refresh-failed', err)
+      return false
+    } finally {
+      rotation = null
+    }
+  })()
+
+  return rotation
+}
+
 let booted = false
 
 // Hydrate the session from storage once, on the client. Validates the access
@@ -181,19 +255,17 @@ export function bootSessionStore(): void {
         return
       }
 
-      // Access likely expired — try refresh once.
-      const rotated = await tryRefresh(refreshToken)
+      // Access likely expired — rotate through the SHARED path.
+      //
+      // This used to be its own fetch, which meant boot and the first component
+      // query could present the same single-use refresh token at the same
+      // moment. One won, one 401'd, and the loser wiped the session — a cold
+      // start with an expired access token could log you out at random.
+      const rotated = await refreshSession()
       if (rotated) {
-        const me = await tryFetchMe(rotated.accessToken)
+        const me = await tryFetchMe(useSessionStore.getState().accessToken ?? '')
         if (me) {
-          storageSet(ACCESS_KEY, rotated.accessToken)
-          storageSet(REFRESH_KEY, rotated.refreshToken)
-          useSessionStore.setState({
-            accessToken: rotated.accessToken,
-            refreshToken: rotated.refreshToken,
-            user: me,
-            status: 'authenticated',
-          })
+          useSessionStore.setState({ user: me, status: 'authenticated' })
           return
         }
       }
@@ -227,24 +299,8 @@ async function tryFetchMe(accessToken: string): Promise<AuthUser | null> {
   }
 }
 
-async function tryRefresh(
-  refreshToken: string,
-): Promise<{ accessToken: string; refreshToken: string } | null> {
-  try {
-    const res = await fetch(`${resolveApiBaseUrl()}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    })
-    if (!res.ok) return null
-    const data = (await res.json()) as {
-      tokens: { accessToken: string; refreshToken: string }
-    }
-    return data.tokens
-  } catch {
-    return null
-  }
-}
+// (tryRefresh removed — a second, undeduped rotation path was the whole bug.
+//  Everything now goes through refreshSession above.)
 
 export const selectStatus = (s: SessionState): SessionStatus => s.status
 export const selectUser = (s: SessionState): AuthUser | null => s.user

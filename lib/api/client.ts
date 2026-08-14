@@ -13,7 +13,7 @@
 import { resolveApiBaseUrl } from '@/lib/api/baseUrl'
 import { staticMessages } from '@/lib/i18n/staticMessages'
 import { logger } from '@/lib/logger'
-import { useSessionStore } from '@/lib/auth/sessionStore'
+import { refreshSession, useSessionStore } from '@/lib/auth/sessionStore'
 
 export class ApiError extends Error {
   readonly code: string
@@ -31,10 +31,6 @@ export class ApiError extends Error {
 
 interface ErrorBody {
   error: { code: string; message: string; details?: unknown }
-}
-
-interface RefreshBody {
-  tokens: { accessToken: string; refreshToken: string }
 }
 
 export interface ApiOptions {
@@ -57,41 +53,18 @@ function genericErrorMessage(): string {
   return staticMessages().errors.generic
 }
 
-let refreshPromise: Promise<boolean> | null = null
-
+/**
+ * Rotate the session. Kept as a named export because the SSE seam calls it too.
+ *
+ * The implementation lives in the session store, which owns the tokens. It used
+ * to live here as well — two independent rotations against a SINGLE-USE refresh
+ * token, which is how a cold start with an expired access token could sign the
+ * user out: boot hydration and the first component query presented the same
+ * token, one won, and the loser read its 401 as "session dead" and wiped
+ * storage.
+ */
 export async function refreshAccessToken(): Promise<boolean> {
-  if (refreshPromise) return refreshPromise
-
-  refreshPromise = (async () => {
-    try {
-      const refreshToken = useSessionStore.getState().refreshToken
-      if (!refreshToken) return false
-
-      const res = await fetch(`${resolveApiBaseUrl()}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      })
-
-      if (!res.ok) {
-        await useSessionStore.getState().clear()
-        return false
-      }
-
-      const data = (await res.json()) as RefreshBody
-      await useSessionStore
-        .getState()
-        .setTokens(data.tokens.accessToken, data.tokens.refreshToken)
-      return true
-    } catch (err: unknown) {
-      logger.warn('api:refresh-failed', err)
-      return false
-    } finally {
-      refreshPromise = null
-    }
-  })()
-
-  return refreshPromise
+  return refreshSession()
 }
 
 // Serialize a filter object into a querystring. `api()` takes the query baked
@@ -215,6 +188,54 @@ export async function apiBinary<T>(path: string, options: ApiBinaryOptions): Pro
       err?.message ?? genericErrorMessage(),
       res.status,
       err?.details,
+    )
+  }
+  return data as T
+}
+
+// multipart/form-data variant of api(), for the endpoints that take an
+// IFormFile rather than a JSON body (currently only /api/speech/transcribe).
+// Shares the refresh mutex, so a 401 mid-upload gets the same one-shot
+// refresh-and-retry.
+//
+// Note what is NOT set: Content-Type. The browser must write it itself so it
+// can append the multipart boundary — setting it by hand produces a body the
+// server cannot split.
+export async function apiForm<T>(
+  path: string,
+  form: FormData,
+  options: { method?: 'POST' | 'PUT' | 'PATCH'; authenticated?: boolean; signal?: AbortSignal } = {},
+): Promise<T> {
+  const { method = 'POST', authenticated = true, signal } = options
+
+  const send = async (): Promise<Response> => {
+    const headers: Record<string, string> = {}
+    if (authenticated) {
+      const access = useSessionStore.getState().accessToken
+      if (access) headers.Authorization = `Bearer ${access}`
+    }
+    return fetch(`${resolveApiBaseUrl()}${path}`, { method, headers, body: form, signal })
+  }
+
+  let res = await send()
+  if (res.status === 401 && authenticated) {
+    const refreshed = await refreshAccessToken()
+    if (refreshed) res = await send()
+  }
+
+  if (res.status === 204) return undefined as T
+
+  const data = (await res.json().catch(() => null)) as unknown
+  if (!res.ok) {
+    const err = (data as ErrorBody | null)?.error
+    // The MVC controllers predate the kernel envelope and answer with their own
+    // DTO, so the parsed body is carried through as `details` when there is no
+    // `error` key to read — otherwise the caller has no way to see why it failed.
+    throw new ApiError(
+      err?.code ?? 'unknown_error',
+      err?.message ?? genericErrorMessage(),
+      res.status,
+      err?.details ?? data,
     )
   }
   return data as T
