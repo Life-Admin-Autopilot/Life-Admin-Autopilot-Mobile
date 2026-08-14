@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { askStream, confirmStream } from '@/lib/ai/stream'
 import { fetchConversation, fetchQuota, resetConversation } from '@/lib/ai/conversation'
 import { ApiError } from '@/lib/api/client'
+import { staticMessages } from '@/lib/i18n/staticMessages'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
 import { queryKeys } from '@/queries/keys'
@@ -65,6 +66,17 @@ export interface UseAskAiResult {
 
 function emptyMessage(role: 'user' | 'assistant'): AiMessage {
   return { role, text: '', sources: [], toolCalls: [], createdAt: new Date().toISOString() }
+}
+
+/**
+ * An assistant turn that neither said nor did anything.
+ *
+ * Sources are deliberately NOT counted as content: retrieval running is not an
+ * answer, and a turn that cited three matters and then said nothing is exactly
+ * as silent to the user as one that cited none.
+ */
+function isSilent(message: Pick<AiMessage, 'text' | 'toolCalls'>): boolean {
+  return message.text.trim().length === 0 && message.toolCalls.length === 0
 }
 
 // Tell the rest of the app what a chat turn just changed.
@@ -137,8 +149,12 @@ export function useAskAi(): UseAskAiResult {
     if (seededRef.current) return
     if (!conv.data) return
     seededRef.current = true
-    setLocalMessages(conv.data.messages)
-    optimisticFloorRef.current = conv.data.messages.length
+    // Silent turns are also PERSISTED, so reopening the panel would resurrect the
+    // blank bubbles this hook now refuses to create. Dropping them on the way in
+    // keeps history honest without needing the rows deleted server-side.
+    const history = conv.data.messages.filter((m) => m.role !== 'assistant' || !isSilent(m))
+    setLocalMessages(history)
+    optimisticFloorRef.current = history.length
   }, [conv.data])
 
   // Abort the active stream on unmount.
@@ -218,6 +234,27 @@ export function useAskAi(): UseAskAiResult {
             setStatus('error')
           }
         }
+        setPending(null)
+
+        // A turn that said nothing and did nothing is a FAILURE, not a message.
+        //
+        // The stream can complete cleanly — sources, done, quota — with no token
+        // and no tool call: the agent's model call fails inside Langflow (a daily
+        // quota is the usual reason) and the flow answers a healthy 200 carrying an
+        // empty envelope, so nothing anywhere reports an error. Appending the draft
+        // regardless rendered an empty bubble, which reads to the user as Kitto
+        // ignoring them — they re-ask, spend another turn, and get the same silence.
+        //
+        // Routed into the existing error state instead, so it says so and offers the
+        // one-tap Retry that already exists for a turn that threw.
+        if (isSilent(draft)) {
+          setStatus('error')
+          setError(staticMessages().errors.aiSilentTurn)
+          setFailedQuestion(trimmed)
+          await qc.invalidateQueries({ queryKey: queryKeys.ai.quota() })
+          return
+        }
+
         // Finalize: drop the in-flight draft and refetch the server conversation
         // so persisted state is authoritative. Raise the optimistic floor so a
         // lagged refetch can't shrink the list back below this streamed turn.
@@ -226,7 +263,6 @@ export function useAskAi(): UseAskAiResult {
           optimisticFloorRef.current = next.length
           return next
         })
-        setPending(null)
         await qc.invalidateQueries({ queryKey: queryKeys.ai.conversation() })
         await qc.invalidateQueries({ queryKey: queryKeys.ai.quota() })
         await invalidateAfterTools(qc, executed)

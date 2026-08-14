@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 
 import { DayProgress } from '@/components/dashboard/DayProgress'
 import { FirstRunState } from '@/components/dashboard/FirstRunState'
+import { BriefingCard } from '@/components/dashboard/BriefingCard'
 import { HomeHero } from '@/components/dashboard/HomeHero'
 import { MatterRow } from '@/components/dashboard/MatterRow'
 import { NeedsYouStrip } from '@/components/dashboard/NeedsYouStrip'
@@ -143,6 +144,9 @@ export function DashboardView({
       />
 
       {firstRun ? <FirstRunState /> : null}
+
+      {/* Below the hero, above the plate: it frames the day the rows then detail. */}
+      <BriefingCard />
 
       {focus ? (
         <>

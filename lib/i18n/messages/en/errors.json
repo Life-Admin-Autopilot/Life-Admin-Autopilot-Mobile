@@ -5,6 +5,7 @@
   "signInAgain": "Sign in again to continue.",
   "notFound": "Couldn't find that — it may have been removed.",
   "reauthPassword": "That password is incorrect.",
+  "aiSilentTurn": "Kitto didn't answer that one. Tap Retry.",
   "byCode": {
     "invalid_credentials": "Wrong email or password.",
     "email_taken": "An account with this email already exists.",
@@ -35,6 +36,7 @@
     "clarification_not_found": "That question is no longer here.",
     "feed_not_found": "That calendar is not connected.",
     "not_connected": "No Google account is connected.",
+    "timezone_required": "Set your timezone in Profile first — imported items have no timezone of their own.",
     "pending_call_not_found": "This confirmation has expired.",
     "proposal_not_found": "That suggestion has expired.",
     "scanned_document_not_found": "Scanned document no longer exists.",
