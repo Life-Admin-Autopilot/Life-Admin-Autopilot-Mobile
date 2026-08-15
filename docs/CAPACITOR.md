@@ -25,14 +25,13 @@ Targets resolve "your dev machine" differently:
 - **iOS Simulator** shares the host's network stack → `localhost` works.
 - **Physical iPhone** and **Android emulator/device** cannot reach the host via `localhost` → each needs the host's real **LAN IP**, and must be on the same network as the Mac.
 
-Find your LAN IP with `npm run lan:ip` (macOS — resolves via the default route, so it is correct on Wi-Fi, wired, and tethering alike). On Windows: `ipconfig` → the active adapter's **IPv4 Address**.
+Find your LAN IP with `npm run lan:ip`. It runs `scripts/lan-ip.mjs`, which works on macOS, Windows and Linux and skips virtual adapters — a machine with WSL or Docker Desktop advertises a `172.x` address no phone can reach, and picking it produces an app that builds cleanly and then talks to nothing.
 
 It changes when you switch networks. When it does, update:
 1. `.env.native-dev.local` → `NEXT_PUBLIC_API_URL`
-2. `server/.env` → the LAN entry in `CORS_ORIGINS` (live-reload only), then restart the server
-3. the `android:dev` script's hardcoded `CAP_LIVE_RELOAD_URL` in `package.json`
+2. the backend's `Kernel__Cors__Origins` (live-reload only), then restart it
 
-`ios:dev` reads the IP dynamically via `npm run lan:ip`, so it needs no edit.
+Neither `ios:dev` nor `android:dev` needs an edit — both resolve the IP at run time. Override with `KITTO_DEV_HOST` when you need a specific one (`KITTO_DEV_HOST=10.0.2.2 npm run android:dev` for the Android emulator).
 
 ### Physical iPhone, backend on the Mac
 
@@ -91,11 +90,16 @@ Windows Firewall may prompt for a one-time inbound-rule allowance on the **priva
 ### Static build → native IDE
 
 ```bash
-npm run ios:open       # syncs a prod-flavored build, opens Xcode (macOS only)
-npm run android:open   # syncs a prod-flavored build, opens Android Studio
+npm run ios:open           # prod-flavored build, opens Xcode (macOS only)
+npm run android:open       # dev-flavored build, opens Android Studio
+npm run android:open:prod  # prod-flavored build, opens Android Studio
 ```
 
 iOS builds require Xcode on macOS — not possible from a Windows machine directly. Android builds/runs work fully on Windows via Android Studio.
+
+`android:open` and `android:open:prod` go through `cap:sync:android:*`, which sync **only** the Android platform. The general `cap:sync:dev` / `cap:sync:prod` end in `patch-ios-plist.sh`, which needs macOS `PlistBuddy` and exits 1 without an `ios/` folder — on Windows the Android sync succeeds and then the `&&` chain dies before the IDE opens, which reads as a failed build rather than a missing platform. Use the Android-specific scripts off macOS.
+
+`cap:sync:android:dev` first runs `scripts/check-native-env.mjs`, which refuses a build whose `NEXT_PUBLIC_API_URL` is missing or points at `localhost`. That value is inlined at build time, so getting it wrong ships an APK that can only reach the phone itself — a spinner and a network error on the device, never a config error.
 
 ## Preflight: is the build actually wired to the backend?
 
