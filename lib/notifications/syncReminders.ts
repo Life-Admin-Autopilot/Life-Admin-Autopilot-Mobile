@@ -17,6 +17,22 @@ import { staticMessages } from '@/lib/i18n/staticMessages'
 // SCHEDULED while the app is running. So this runs on launch and on resume, and
 // re-syncs the whole window each time rather than trying to diff.
 
+// iOS keeps only the 64 soonest-firing pending local notifications per app and
+// silently discards the rest — there is no error and no callback. The server's
+// horizon is 30 days (ReminderTaskRepository.HorizonDays), which a busy account
+// can exceed, so the slice is done HERE, sorted, rather than left to iOS: the
+// order it keeps is the order we want, but relying on that would mean the app's
+// entire delivery path on iOS depends on undocumented truncation behaviour.
+//
+// This is the whole delivery mechanism on iOS — push needs an APNs key, which
+// needs a paid Apple membership (docs/CAPACITOR.md) — so it is worth being
+// explicit about. Android is capped too: its local path is only the fallback for
+// a build with no google-services.json, where 64 pending is far past useful.
+//
+// A re-sync happens on every launch and resume, so the window rolls forward as
+// the near reminders fire.
+const IOS_PENDING_LIMIT = 64
+
 interface UpcomingReminder {
   id: string
   taskId: string
@@ -90,7 +106,10 @@ export async function syncReminders(): Promise<{ scheduled: number } | null> {
 
   const copy = staticMessages().notifications
   const now = Date.now()
-  const due = reminders.filter((r) => new Date(r.at).getTime() > now)
+  const due = reminders
+    .filter((r) => new Date(r.at).getTime() > now)
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime())
+    .slice(0, IOS_PENDING_LIMIT)
   if (due.length === 0) return { scheduled: 0 }
 
   await LocalNotifications.schedule({
