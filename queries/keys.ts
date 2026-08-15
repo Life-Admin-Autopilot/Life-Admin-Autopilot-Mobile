@@ -3,7 +3,11 @@ export const queryKeys = {
   me: ['me'] as const,
   health: ['health'] as const,
   ai: {
-    conversation: () => ['ai', 'conversation'] as const,
+    /** Every thread, for the history drawer. */
+    threads: () => ['ai', 'threads'] as const,
+    /** One thread's transcript. Keyed by id so switching threads is a cache
+     *  read, not a refetch of whatever the last thread happened to be. */
+    thread: (id: string) => ['ai', 'thread', id] as const,
     quota: () => ['ai', 'quota'] as const,
   },
   notifications: ['notifications'] as const,

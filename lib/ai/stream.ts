@@ -23,6 +23,12 @@ export interface AskArgs {
   question: string
   timezone?: string
   mode?: AskMode
+  /**
+   * Which thread to append to. Omitted ⇒ the server picks the most recent one
+   * (or opens the user's first). Either way the resolved id comes back as the
+   * stream's opening `conversation` event, so the client never has to guess.
+   */
+  conversationId?: string | null
   signal?: AbortSignal
 }
 
@@ -32,7 +38,12 @@ export async function* askStream(args: AskArgs): AsyncGenerator<AskEvent> {
     url: `${resolveApiBaseUrl()}/ai/ask`,
     // `mode` is omitted rather than sent as 'chat' when absent, so the request
     // stays byte-identical to what shipped for every existing caller.
-    body: { question: args.question, timezone: args.timezone, ...(args.mode ? { mode: args.mode } : {}) },
+    body: {
+      question: args.question,
+      timezone: args.timezone,
+      ...(args.mode ? { mode: args.mode } : {}),
+      ...(args.conversationId ? { conversationId: args.conversationId } : {}),
+    },
     signal: args.signal,
   })
 }

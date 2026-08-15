@@ -48,6 +48,24 @@ export interface AiConversation {
   messages: AiMessage[]
 }
 
+/** One thread's transcript (GET /ai/conversations/:id). */
+export interface AiThread {
+  id: string
+  scope: 'personal'
+  title: string | null
+  messages: AiMessage[]
+}
+
+/** A row in the history drawer (GET /ai/conversations). */
+export interface AiThreadSummary {
+  id: string
+  /** Auto-set from the first message; null on a thread with nothing in it. */
+  title: string | null
+  preview: string
+  messageCount: number
+  updatedAt: string
+}
+
 export interface AiQuotaRow {
   kind: 'message'
   limit: number
@@ -60,6 +78,17 @@ export interface AiQuotaRow {
 export type AskEvent =
   | { type: 'sources'; sources: AiSource[] }
   | { type: 'token'; text: string }
+  /** Which thread this turn landed in — always the stream's first event. */
+  | { type: 'conversation'; conversationId: string }
+  /**
+   * Drop the text streamed for this turn so far.
+   *
+   * Tokens arrive live, so a round that guessed before its tools ran has
+   * already been shown. The server retracts it rather than leaving the guess
+   * standing next to the correction. Replaying token/text_reset in order
+   * always ends at the text the server persisted.
+   */
+  | { type: 'text_reset' }
   | {
       type: 'tool_call'
       callId: string
