@@ -79,6 +79,29 @@ read_env() {
 
 url_host() { printf '%s' "$1" | sed -E 's#^[a-z]+://##; s#/.*##; s#:[0-9]+$##'; }
 
+# The API URL a RUNNING `next dev` is actually serving, read out of the JS it
+# emits. Next inlines NEXT_PUBLIC_* at build time, so the chunks are the only
+# place that reflects process-env overrides (what `npm run app` uses) as well as
+# .env files. Prints nothing if the server is down or nothing matches.
+served_api_url() {
+  local origin="$1" html chunk found
+  html=$(curl -sf -m 5 "$origin/" 2>/dev/null) || return 0
+
+  # App-code chunks only. Vendor bundles carry unrelated http:// literals, and
+  # the first match across everything would be a coin flip.
+  for chunk in $(printf '%s' "$html" \
+    | grep -oE '/_next/static/chunks/[a-zA-Z0-9_./-]+\.js' \
+    | grep -vE '/chunks/(0w8k|turbopack)' | sort -u); do
+    found=$(curl -sf -m 5 "$origin$chunk" 2>/dev/null \
+      | grep -oE 'https?://[a-zA-Z0-9._-]+(:[0-9]+)?/?"' \
+      | sed -E 's#/?"$##' \
+      | grep -E ':[0-9]{2,5}$' \
+      | grep -v ":$(printf '%s' "$origin" | sed -nE 's#.*:([0-9]+)$#\1#p')\$" \
+      | sort -u | head -1)
+    [ -n "$found" ] && { printf '%s' "${found%/}"; return 0; }
+  done
+}
+
 url_port() {
   local url="$1" port
   port=$(printf '%s' "$url" | sed -nE 's#^[a-z]+://[^/]*:([0-9]+).*#\1#p')
@@ -139,17 +162,36 @@ elif [ -n "$LIVE_RELOAD_URL" ]; then
   # Live-reload: the webview loads from `next dev`, so the API URL comes from
   # whatever env file that RUNNING server read at startup — not from the bundle.
   info "Live-reload is active — webview loads from $LIVE_RELOAD_URL"
-  for f in .env.local .env; do
-    v=$(read_env NEXT_PUBLIC_API_URL "$f") || continue
-    API_URL="${v%/}"; API_SOURCE="$f (served by \`next dev\`)"
-    break
-  done
-  if [ -z "$API_URL" ]; then
-    fail "No NEXT_PUBLIC_API_URL in .env.local or .env — the dev server has nothing to serve"
-    hint "Set NEXT_PUBLIC_API_URL in .env.local"
+
+  # Ask the RUNNING dev server, not the env files. `npm run app` passes
+  # NEXT_PUBLIC_API_URL as a process env var (which Next prefers over .env
+  # files) precisely so it never has to rewrite .env.local — so a file read here
+  # reports localhost and invents two blocking failures that do not exist.
+  # Next inlines NEXT_PUBLIC_* into the JS chunks, so the served bundle is the
+  # only ground truth, exactly like the bundle grep the static branch does below.
+  API_URL=$(served_api_url "$LIVE_RELOAD_URL")
+
+  if [ -n "$API_URL" ]; then
+    API_SOURCE='served by the running `next dev`'
+    pass "API URL: ${BOLD}${API_URL}${RESET}  ${DIM}(${API_SOURCE})${RESET}"
   else
-    pass "API URL: ${BOLD}${API_URL}${RESET}  ${DIM}(from ${API_SOURCE})${RESET}"
-    hint "\`next dev\` reads env at startup — restart it after editing $API_SOURCE"
+    # Falling back to the files is still worth doing — the dev server may simply
+    # not be running yet — but say so, so a stale answer is never mistaken for a
+    # measured one.
+    for f in .env.local .env; do
+      v=$(read_env NEXT_PUBLIC_API_URL "$f") || continue
+      API_URL="${v%/}"; API_SOURCE="$f"
+      break
+    done
+
+    if [ -z "$API_URL" ]; then
+      fail "No NEXT_PUBLIC_API_URL in .env.local or .env — the dev server has nothing to serve"
+      hint "Set NEXT_PUBLIC_API_URL in .env.local"
+    else
+      warn "Could not read the API URL from the running dev server — falling back to $API_SOURCE"
+      hint "Start it with \`npm run app\` (or \`npm run dev\`) for a measured answer instead of a guessed one"
+      pass "API URL: ${BOLD}${API_URL}${RESET}  ${DIM}(from ${API_SOURCE}, NOT verified against the running server)${RESET}"
+    fi
   fi
 else
   [ -d "$IOS_PUBLIC" ] || die "No $IOS_PUBLIC — the web build was never synced. Run: npm run cap:sync:dev"
@@ -216,11 +258,18 @@ if [ "$IS_LOCAL_BACKEND" -eq 0 ]; then
     fail "${API_URL}/health returned HTTP ${REMOTE_CODE}"
   fi
 else
-  if [ "$SERVER_PORT" != "$API_PORT" ]; then
-    fail "Port mismatch: the app calls :${API_PORT}, but server/.env says PORT=${SERVER_PORT}"
-    hint "Change PORT in server/.env to ${API_PORT}, or point NEXT_PUBLIC_API_URL at :${SERVER_PORT} and re-sync"
-  else
+  # server/.env describes the NODE backend. The .NET port (docs/TESTING.md, and
+  # what `npm run app` starts) is a different server on a different port, so a
+  # disagreement is only a failure when nothing is actually listening — if the
+  # app's port answers /health, the app's port is right regardless of what
+  # server/.env wants.
+  if [ "$SERVER_PORT" = "$API_PORT" ]; then
     pass "App port :${API_PORT} matches server/.env PORT=${SERVER_PORT}"
+  elif [ "$(probe_health "http://127.0.0.1:${API_PORT}")" = "200" ]; then
+    info "App calls :${API_PORT}; server/.env says PORT=${SERVER_PORT} — a different backend is on :${API_PORT}, and it is answering"
+  else
+    fail "Port mismatch: the app calls :${API_PORT}, nothing is listening there, and server/.env says PORT=${SERVER_PORT}"
+    hint "Start the backend on :${API_PORT}, or point NEXT_PUBLIC_API_URL at :${SERVER_PORT} and re-sync"
   fi
 
   HEALTH_BODY=$(curl -sS -m 4 "http://127.0.0.1:${API_PORT}/health" 2>/dev/null)
