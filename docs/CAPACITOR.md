@@ -19,6 +19,46 @@ How the Next.js static export gets wrapped into iOS/Android native shells, and h
 | `npm run build:native:dev` | `.env.native-dev.local` | Bake your LAN IP into a static native build (no live-reload). |
 | `npm run build:native:prod` / `cap:sync:prod` | `.env.production` | Prod-flavored native build. |
 
+## One command: `npm run app`
+
+```bash
+npm run app
+```
+
+Brings up the backend, the site, and the phone in one go, and picks the native
+target from the host OS — **macOS → iOS/Xcode**, **anything else → Android/Android
+Studio**, because iOS builds require Xcode and Xcode requires macOS.
+
+What it does, in order (`scripts/app.mjs`):
+
+1. Detects this machine's LAN IP (the cross-platform twin of `scripts/lan-ip.sh`,
+   resolved via the default route so VPN tunnels and Docker bridges don't win).
+2. Starts the .NET backend on the port `.env.local`'s `NEXT_PUBLIC_API_URL`
+   names — via the backend repo's `tools/dev/stack.sh` on macOS, which also
+   brings up the isolated Mongo (`:27018`) and Langflow (`:7860`). Skipped if
+   something already answers `/health`.
+3. Probes `http://<LAN-IP>:<port>/health` — **not** localhost, since that is the
+   only probe that proves a phone can reach it — and asks the running server
+   whether CORS accepts the live-reload origin.
+4. Starts `next dev -H 0.0.0.0` with `NEXT_PUBLIC_API_URL` set to the LAN
+   backend. Passed as a real env var, which Next prefers over `.env` files, so
+   `.env.local` is never rewritten.
+5. `cap sync` with `CAP_LIVE_RELOAD_URL=http://<LAN-IP>:3000`, adds the native
+   project if missing, applies the iOS plist patches, and opens the IDE.
+
+Then press ▶ in Xcode / Android Studio. The phone must be on the same Wi-Fi.
+
+| Flag | |
+|---|---|
+| `--web` | Site only — no native shell, no IDE. |
+| `--ios` / `--android` | Force a target instead of inferring from the OS. |
+| `--skip-backend` | The backend is already running somewhere else. |
+| `--host <ip>` | Override LAN IP detection. |
+| `--no-open` | Prepare everything, don't launch the IDE. |
+
+Everything below is what this automates, and is still the way to run any single
+piece on its own.
+
 ## Running on a device/simulator
 
 Targets resolve "your dev machine" differently:
@@ -100,6 +140,43 @@ iOS builds require Xcode on macOS — not possible from a Windows machine direct
 `android:open` and `android:open:prod` go through `cap:sync:android:*`, which sync **only** the Android platform. The general `cap:sync:dev` / `cap:sync:prod` end in `patch-ios-plist.sh`, which needs macOS `PlistBuddy` and exits 1 without an `ios/` folder — on Windows the Android sync succeeds and then the `&&` chain dies before the IDE opens, which reads as a failed build rather than a missing platform. Use the Android-specific scripts off macOS.
 
 `cap:sync:android:dev` first runs `scripts/check-native-env.mjs`, which refuses a build whose `NEXT_PUBLIC_API_URL` is missing or points at `localhost`. That value is inlined at build time, so getting it wrong ships an APK that can only reach the phone itself — a spinner and a network error on the device, never a config error.
+
+## Notifications: FCM push on Android, local on iOS
+
+**The split is not a code branch.** `useNotificationActions` offers the device to
+the server, and `registerPushDevice()`'s answer decides the channel:
+
+- **Android** — with `google-services.json` present it gets an FCM token, the
+  server delivers, and any local schedule is cancelled so nothing buzzes twice.
+- **iOS** — registration answers `unavailable` (no APNs), so
+  `lib/notifications/syncReminders.ts` keeps scheduling on the device. It fires
+  with the app closed, **no certificate and no paid Apple membership**.
+
+Adding an iPhone to push needs an APNs `.p8`, which needs a **paid** Apple
+Developer membership — FCM reaches iOS *via* APNs, so Firebase does not route
+around that. Until then iOS local is the design, not a degradation.
+
+### Android setup
+
+`android/` is gitignored and regenerated, so the Firebase config lives at
+`native/android/google-services.json` and
+`scripts/patch-android-firebase.mjs` copies it in — same pattern as
+`patch-ios-plist.sh`. It runs from `npm run app`, `cap:sync:android:*` and
+`android:dev`, so a regenerate cannot silently drop push.
+
+No Gradle edits are needed: Capacitor's `android/app/build.gradle` already
+applies `com.google.gms.google-services` only when the file exists, which is
+also why a missing file warns instead of failing. `package_name` in the JSON
+must match `applicationId` (`com.kitto.app`) or the plugin fails the build.
+
+The file is **not committed** (see `.gitignore`) — get it from the Firebase
+console → Project settings → Your apps → Android.
+
+**The server needs a different file.** `google-services.json` is client-only;
+delivery also needs a service-account key in the backend's
+`FCM_SERVICE_ACCOUNT_FILE` / `FCM_SERVICE_ACCOUNT_JSON` (Firebase console →
+Project settings → **Service accounts**). Without it the device registers and
+nothing is ever sent.
 
 ## Preflight: is the build actually wired to the backend?
 

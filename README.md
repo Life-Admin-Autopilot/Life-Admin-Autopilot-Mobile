@@ -32,6 +32,17 @@ Next:
 3. Build auth (login UI + authenticated `GET /auth/me`), then feature screens against [`docs/design.md`](docs/design.md) + [`docs/primitives.md`](docs/primitives.md).
 4. Add Capacitor (`npm i @capacitor/core @capacitor/cli && npx cap init`) once the web app feels right.
 
+## Running everything
+
+```bash
+npm run app
+```
+
+Backend + site + phone, one command. Picks the native target from the host OS —
+macOS opens Xcode, everything else opens Android Studio — wires the phone to the
+local backend over the LAN, and live-reloads from the dev server. Add `--web` for
+the site alone. See [`docs/CAPACITOR.md`](docs/CAPACITOR.md#one-command-npm-run-app).
+
 ## Running the backend
 
 The backend is intact. To run it:
