@@ -13,6 +13,23 @@ const nextConfig: NextConfig = {
   trailingSlash: true,
   images: { unoptimized: true },
   reactStrictMode: true,
+
+  // Dev-only. `npm run app` serves `next dev` on the LAN so a phone can load it
+  // via Capacitor live-reload, and Next blocks dev-asset requests from origins
+  // it does not recognise — localhost is trusted, a LAN IP is not.
+  //
+  // The failure is silent and looks like a backend outage: the first paint
+  // succeeds, then the client-side navigation off the boot splash fetches its
+  // route payload from /_next, that request is blocked, and the app sits on the
+  // splash forever. Nothing errors in the UI. The HMR WebSocket failing is the
+  // visible tell.
+  //
+  // scripts/app.mjs passes the detected LAN IP; empty for plain `npm run dev`,
+  // which only ever serves localhost.
+  allowedDevOrigins: (process.env.NEXT_DEV_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
 }
 
 export default nextConfig

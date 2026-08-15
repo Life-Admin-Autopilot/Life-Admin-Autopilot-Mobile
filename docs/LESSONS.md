@@ -34,3 +34,10 @@ The briefing/home showed stale tasks until v1 unified everything onto one `useOp
 
 ## 9. Date handling
 Store/transmit ISO 8601 UTC; format via `Intl.DateTimeFormat`. v1 banned `Intl.RelativeTimeFormat` because it **crashed under Hermes (RN)** — that's not a web problem, so it's safe in v2. Still keep `lib/dueLabel.ts` so relative labels are pure and testable.
+
+## 10. `next dev` on a LAN IP silently breaks client-side navigation
+Capacitor live-reload serves the webview from `http://<LAN-IP>:3000`, and Next treats any non-localhost origin as untrusted in dev: the first paint succeeds, then the client-side navigation off the boot splash fetches its route payload from `/_next`, that request is blocked, and **the app sits on `AppSplash` forever with nothing in the UI to say why**. It reads exactly like a dead backend — but it reproduces with no tokens in storage, where no backend call is made at all.
+
+Two things make it expensive to diagnose. The screen you get is the web app's own splash, not the iOS launch storyboard (they look nearly identical — the storyboard asset has no "Kitto" wordmark, which is how to tell them apart). And it does not reproduce at `localhost:3000`, so "works on web" is not evidence.
+
+**Fix:** `allowedDevOrigins` in `next.config.ts`, fed the detected LAN IP by `scripts/app.mjs`. **Diagnosis shortcut:** load the LAN URL and a `localhost` URL in the same browser with empty storage — if only the LAN one hangs, it is origin trust, not the network. A failing `/_next/webpack-hmr` WebSocket is the visible tell.
