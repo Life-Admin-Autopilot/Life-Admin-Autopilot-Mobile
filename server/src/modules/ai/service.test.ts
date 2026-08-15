@@ -21,6 +21,9 @@ import type { StreamEvent } from './provider/streamPersonal'
 // toolRunner against Mongo) runs for real, so the assertions reflect the
 // FINAL wired behavior end-to-end inside the service.
 
+// Every test drives one thread; ask() now requires the id explicitly.
+const THREAD = 'test-thread'
+
 const SENTINEL_CLIENT = { __sentinel: true } as const
 
 vi.mock('./provider/geminiClient', () => ({
@@ -97,7 +100,7 @@ describe('ask() — single round, no tools', () => {
       ],
     ]
 
-    const events = await drain(ask({ userId: session.userId, question: 'hi there friend' }))
+    const events = await drain(ask({ userId: session.userId, conversationId: THREAD, question: 'hi there friend' }))
 
     const kinds = events.map((e) => e.kind)
     expect(kinds).toContain('sources')
@@ -111,7 +114,7 @@ describe('ask() — single round, no tools', () => {
     expect(streamCalls).toHaveLength(1)
 
     // Assistant text was persisted to the conversation.
-    const turns = await recentTurns({ userId: session.userId, scope: 'personal' }, 10)
+    const turns = await recentTurns({ userId: session.userId, scope: 'personal', scopeId: THREAD }, 10)
     const assistant = turns.find((t) => t.role === 'assistant')
     expect(assistant?.text).toBe('Hello there.')
   })
@@ -138,7 +141,7 @@ describe('ask() — tool round-trip feeds functionResponse back', () => {
     ]
 
     const events = await drain(
-      ask({ userId: session.userId, question: 'remind me to renew my passport' }),
+      ask({ userId: session.userId, conversationId: THREAD, question: 'remind me to renew my passport' }),
     )
 
     // Two model rounds: the second only happens because the first emitted a
@@ -160,7 +163,7 @@ describe('ask() — tool round-trip feeds functionResponse back', () => {
     expect(serialized).toContain('createTask')
 
     // The follow-up prose was streamed and persisted.
-    const turns = await recentTurns({ userId: session.userId, scope: 'personal' }, 10)
+    const turns = await recentTurns({ userId: session.userId, scope: 'personal', scopeId: THREAD }, 10)
     const assistant = turns.find((t) => t.role === 'assistant')
     expect(assistant?.text).toBe('Added it.')
   })
@@ -185,7 +188,7 @@ describe('ask() — freshly-created task id is a citable source', () => {
     ]
 
     const events = await drain(
-      ask({ userId: session.userId, question: 'add a task to book the dentist' }),
+      ask({ userId: session.userId, conversationId: THREAD, question: 'add a task to book the dentist' }),
     )
 
     const task = await Task.findOne({ userId: session.userId, title: 'Book dentist' })
@@ -201,7 +204,7 @@ describe('ask() — freshly-created task id is a citable source', () => {
     expect(allSourceIds).toContain(createdId)
 
     // It must also be merged into the persisted assistant turn's sources.
-    const turns = await recentTurns({ userId: session.userId, scope: 'personal' }, 10)
+    const turns = await recentTurns({ userId: session.userId, scope: 'personal', scopeId: THREAD }, 10)
     const assistant = turns.find((t) => t.role === 'assistant')
     const persistedIds = (assistant?.sources ?? []).map((s) => s.id)
     expect(persistedIds).toContain(createdId)
@@ -228,7 +231,7 @@ describe('ask() — bulk delete is the one remaining confirmation guard', () => 
     ]
 
     const events = await drain(
-      ask({ userId: session.userId, question: 'delete everything' }),
+      ask({ userId: session.userId, conversationId: THREAD, question: 'delete everything' }),
     )
 
     // Exactly one model round — the loop stopped at the deferred wipe.
@@ -248,7 +251,7 @@ describe('ask() — bulk delete is the one remaining confirmation guard', () => 
     expect(await Task.countDocuments({ userId: session.userId })).toBe(1)
 
     const recorded = await findPendingToolCall({
-      key: { userId: session.userId, scope: 'personal' },
+      key: { userId: session.userId, scope: 'personal', scopeId: THREAD },
       callId: toolCall!.callId,
     })
     expect(recorded?.status).toBe('pending_confirmation')
@@ -275,7 +278,7 @@ describe('ask() — bulk delete is the one remaining confirmation guard', () => 
     ]
 
     const events = await drain(
-      ask({ userId: session.userId, question: 'rename that task' }),
+      ask({ userId: session.userId, conversationId: THREAD, question: 'rename that task' }),
     )
 
     const toolCall = events.find((e) => e.kind === 'tool_call') as
@@ -302,7 +305,7 @@ describe('ask() — unknown tool', () => {
     ]
 
     const events = await drain(
-      ask({ userId: session.userId, question: 'do something weird' }),
+      ask({ userId: session.userId, conversationId: THREAD, question: 'do something weird' }),
     )
 
     const err = events.find((e) => e.kind === 'error') as
@@ -339,7 +342,7 @@ describe('ask() — tool error is fed back, not swallowed', () => {
     ]
 
     const events = await drain(
-      ask({ userId: session.userId, question: 'mark that done' }),
+      ask({ userId: session.userId, conversationId: THREAD, question: 'mark that done' }),
     )
 
     const toolResult = events.find((e) => e.kind === 'tool_result') as
@@ -372,7 +375,7 @@ describe('ask() — MAX_TOOL_ROUND_TRIPS termination', () => {
       infiniteRound.map((e) => ({ ...e })),
     )
 
-    await drain(ask({ userId: session.userId, question: 'show my tasks repeatedly' }))
+    await drain(ask({ userId: session.userId, conversationId: THREAD, question: 'show my tasks repeatedly' }))
 
     // MAX_TOOL_ROUND_TRIPS = 4 → the for-loop runs rounds 0..4 inclusive = 5
     // stream calls. It must not have consumed the whole 20-round queue.
@@ -387,12 +390,14 @@ describe('continueAfterConfirm() — reconstructs args from the confirmed call',
     await appendTurn({
       userId: session.userId,
       scope: 'personal',
+      scopeId: THREAD,
       role: 'user',
       text: 'delete that task',
     })
     await appendTurn({
       userId: session.userId,
       scope: 'personal',
+      scopeId: THREAD,
       role: 'assistant',
       text: "I'll remove that.",
     })
@@ -409,6 +414,7 @@ describe('continueAfterConfirm() — reconstructs args from the confirmed call',
     const events = await drain(
       continueAfterConfirm({
         userId: session.userId,
+        conversationId: THREAD,
         callId: 'call-xyz',
         toolName: 'deleteTask',
         toolArgs: { taskId: deletedId },
@@ -430,7 +436,7 @@ describe('continueAfterConfirm() — reconstructs args from the confirmed call',
     expect(serialized).toContain(deletedId)
 
     // The continuation's prose was persisted as a new assistant turn.
-    const turns = await recentTurns({ userId: session.userId, scope: 'personal' }, 10)
+    const turns = await recentTurns({ userId: session.userId, scope: 'personal', scopeId: THREAD }, 10)
     const assistant = [...turns].reverse().find((t) => t.role === 'assistant')
     expect(assistant?.text).toBe('Removed it for you.')
   })
@@ -440,6 +446,7 @@ describe('continueAfterConfirm() — reconstructs args from the confirmed call',
     await appendTurn({
       userId: session.userId,
       scope: 'personal',
+      scopeId: THREAD,
       role: 'user',
       text: 'delete it',
     })
@@ -453,6 +460,7 @@ describe('continueAfterConfirm() — reconstructs args from the confirmed call',
     await drain(
       continueAfterConfirm({
         userId: session.userId,
+        conversationId: THREAD,
         callId: 'call-err',
         toolName: 'deleteTask',
         toolArgs: { taskId: '507f1f77bcf86cd799439011' },
@@ -465,5 +473,117 @@ describe('continueAfterConfirm() — reconstructs args from the confirmed call',
     // model can react to the failure.
     const serialized = JSON.stringify(streamCalls[0]?.contents)
     expect(serialized).toContain('Task no longer exists.')
+  })
+})
+
+// The turn's text reaches the user WHILE the model is writing it, but a round
+// that also called tools was guessing — its narration is retracted rather than
+// left standing next to the corrected answer. The contract the client relies
+// on: replaying (token | text_reset) in order must end at exactly the text the
+// turn persisted.
+describe('ask() — live token streaming and retraction', () => {
+  // Replay the stream the way the client does, so the assertion is about what
+  // the user is left looking at rather than about event bookkeeping.
+  function renderedText(events: Array<{ kind: string; [k: string]: unknown }>): string {
+    let text = ''
+    for (const ev of events) {
+      if (ev.kind === 'token') text += ev.text as string
+      else if (ev.kind === 'text_reset') text = ''
+    }
+    return text
+  }
+
+  it('emits each delta as it arrives instead of one buffered blob', async () => {
+    const session = await signUp()
+    roundScripts = [
+      [
+        { kind: 'token', text: 'Your passport ' },
+        { kind: 'token', text: 'expires in June.' },
+        { kind: 'done', usage: {} },
+      ],
+    ]
+
+    const events = await drain(
+      ask({ userId: session.userId, conversationId: THREAD, question: 'when does it expire' }),
+    )
+
+    const tokens = events.filter((e) => e.kind === 'token')
+    expect(tokens).toHaveLength(2)
+    expect(tokens[0]?.text).toBe('Your passport ')
+    expect(renderedText(events)).toBe('Your passport expires in June.')
+    // Nothing to retract — the round never called a tool.
+    expect(events.some((e) => e.kind === 'text_reset')).toBe(false)
+  })
+
+  it('retracts a tool-calling round\'s narration and keeps the post-tool answer', async () => {
+    const session = await signUp()
+    const task = await Task.create({
+      userId: session.userId,
+      title: 'old name',
+      domain: 'home',
+      status: 'open',
+    })
+    roundScripts = [
+      [
+        // The guess, made before the tool ran.
+        { kind: 'token', text: 'I think that one is already renamed.' },
+        {
+          kind: 'tool_call',
+          name: 'updateTask',
+          args: { taskId: task.id, title: 'new name' },
+        },
+        { kind: 'done', usage: {} },
+      ],
+      [{ kind: 'token', text: 'Renamed.' }, { kind: 'done', usage: {} }],
+    ]
+
+    const events = await drain(
+      ask({ userId: session.userId, conversationId: THREAD, question: 'rename that task' }),
+    )
+
+    expect(events.some((e) => e.kind === 'text_reset')).toBe(true)
+    // The guess is gone; only the answer written after the tool ran remains.
+    expect(renderedText(events)).toBe('Renamed.')
+
+    // And what the user is left looking at is what we persisted.
+    const turns = await recentTurns(
+      { userId: session.userId, scope: 'personal', scopeId: THREAD },
+      10,
+    )
+    const assistant = [...turns].reverse().find((t) => t.role === 'assistant')
+    expect(assistant?.text).toBe('Renamed.')
+  })
+
+  it('restores retracted text when the final round adds none of its own', async () => {
+    const session = await signUp()
+    await Task.create({
+      userId: session.userId,
+      title: 'keep me',
+      domain: 'home',
+      status: 'open',
+    })
+    // Round 1 narrates AND defers a destructive tool, which ends the loop — so
+    // no later round ever streams a replacement. The retracted text is still
+    // the turn's answer, so it has to come back before `done`.
+    roundScripts = [
+      [
+        { kind: 'token', text: 'That will clear everything.' },
+        { kind: 'tool_call', name: 'deleteAllTasks', args: {} },
+        { kind: 'done', usage: {} },
+      ],
+    ]
+
+    const events = await drain(
+      ask({ userId: session.userId, conversationId: THREAD, question: 'delete everything' }),
+    )
+
+    expect(renderedText(events)).toBe('That will clear everything.')
+
+    const turns = await recentTurns(
+      { userId: session.userId, scope: 'personal', scopeId: THREAD },
+      10,
+    )
+    const assistant = [...turns].reverse().find((t) => t.role === 'assistant')
+    expect(assistant?.text).toBe('That will clear everything.')
   })
 })

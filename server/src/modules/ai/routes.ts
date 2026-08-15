@@ -7,13 +7,27 @@ import { requireAuth } from '../../middleware/auth'
 import { utcDateBucket } from '../../models/AiUsageCounter'
 import {
   appendTurn,
-  findPendingToolCall,
+  findPendingToolCallAcrossThreads,
   loadConversation,
   resetConversation,
   resolveToolCall,
 } from './conversationService'
+import {
+  createThread,
+  deleteThread,
+  listThreads,
+  renameThread,
+  resolveThreadId,
+  threadExists,
+} from './conversationThreads'
 import { isAiConfigured } from './provider/geminiClient'
-import { askBodySchema, confirmToolBodySchema } from './schemas'
+import {
+  askBodySchema,
+  confirmToolBodySchema,
+  createConversationBodySchema,
+  renameConversationBodySchema,
+} from './schemas'
+import type { AiConversationMessage } from '../../models/AiConversation'
 import { ask, continueAfterConfirm, type AskEvent } from './service'
 import { admitWithinQuota, getQuotaStatus, recordUsage, releaseUsageSlot } from './quota'
 import { consumePendingCall, peekPendingCall } from './pendingToolStore'
@@ -29,27 +43,124 @@ function resolveTier(): 'free' | 'pro' {
   return 'free'
 }
 
+// Serialize one thread's messages for the wire.
+function serializeMessages(messages: AiConversationMessage[]): unknown[] {
+  return messages.map((m) => ({
+    role: m.role,
+    text: m.text,
+    sources: m.sources ?? [],
+    toolCalls: m.toolCalls ?? [],
+    createdAt: m.createdAt.toISOString(),
+  }))
+}
+
+// GET /ai/conversations — every thread, most recently active first.
+aiRouter.get(
+  '/ai/conversations',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const auth = req.auth
+    if (!auth) throw Unauthorized()
+    res.status(200).json({ conversations: await listThreads(auth.sub) })
+  }),
+)
+
+// POST /ai/conversations — start a thread.
+aiRouter.post(
+  '/ai/conversations',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const auth = req.auth
+    if (!auth) throw Unauthorized()
+    const parsed = createConversationBodySchema.safeParse(req.body ?? {})
+    if (!parsed.success) {
+      throw BadRequest('invalid_body', 'Invalid conversation payload.', parsed.error.flatten())
+    }
+    const created = await createThread(auth.sub, parsed.data.title ?? null)
+    res.status(201).json(created)
+  }),
+)
+
+// GET /ai/conversations/:id — one thread's transcript.
+aiRouter.get(
+  '/ai/conversations/:id',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const auth = req.auth
+    if (!auth) throw Unauthorized()
+    const conversationId = String(req.params.id ?? '')
+    if (!(await threadExists(auth.sub, conversationId))) {
+      throw NotFound('conversation_not_found', 'This conversation no longer exists.')
+    }
+    const conversation = await loadConversation({
+      userId: auth.sub,
+      scope: 'personal',
+      scopeId: conversationId,
+    })
+    res.status(200).json({
+      id: conversationId,
+      scope: 'personal' as const,
+      title: conversation.title ?? null,
+      messages: serializeMessages(conversation.messages),
+    })
+  }),
+)
+
+// PATCH /ai/conversations/:id — rename.
+aiRouter.patch(
+  '/ai/conversations/:id',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const auth = req.auth
+    if (!auth) throw Unauthorized()
+    const parsed = renameConversationBodySchema.safeParse(req.body)
+    if (!parsed.success) {
+      throw BadRequest('invalid_body', 'Invalid rename payload.', parsed.error.flatten())
+    }
+    const conversationId = String(req.params.id ?? '')
+    const renamed = await renameThread(auth.sub, conversationId, parsed.data.title)
+    if (!renamed) {
+      throw NotFound('conversation_not_found', 'This conversation no longer exists.')
+    }
+    res.status(200).json({ id: conversationId, title: parsed.data.title })
+  }),
+)
+
+// DELETE /ai/conversations/:id — drop a thread and its transcript.
+aiRouter.delete(
+  '/ai/conversations/:id',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const auth = req.auth
+    if (!auth) throw Unauthorized()
+    const conversationId = String(req.params.id ?? '')
+    const deleted = await deleteThread(auth.sub, conversationId)
+    if (!deleted) {
+      throw NotFound('conversation_not_found', 'This conversation no longer exists.')
+    }
+    res.status(204).end()
+  }),
+)
+
+// GET /ai/conversation — the pre-threads endpoint. A shipped Capacitor build
+// still calls it, and an app-store binary cannot be recalled, so it keeps
+// answering: it resolves to the user's most recent thread.
 aiRouter.get(
   '/ai/conversation',
   requireAuth,
   asyncHandler(async (req, res) => {
     const auth = req.auth
     if (!auth) throw Unauthorized()
+    const conversationId = await resolveThreadId(auth.sub)
     const conversation = await loadConversation({
       userId: auth.sub,
       scope: 'personal',
-      scopeId: null,
+      scopeId: conversationId,
     })
     res.status(200).json({
       scope: 'personal' as const,
-      scopeId: null,
-      messages: conversation.messages.map((m) => ({
-        role: m.role,
-        text: m.text,
-        sources: m.sources ?? [],
-        toolCalls: m.toolCalls ?? [],
-        createdAt: m.createdAt.toISOString(),
-      })),
+      scopeId: conversationId,
+      messages: serializeMessages(conversation.messages),
     })
   }),
 )
@@ -60,8 +171,9 @@ aiRouter.post(
   asyncHandler(async (req, res) => {
     const auth = req.auth
     if (!auth) throw Unauthorized()
-    await resetConversation({ userId: auth.sub, scope: 'personal', scopeId: null })
-    res.status(200).json({ scope: 'personal' as const, scopeId: null, messages: [] })
+    const conversationId = await resolveThreadId(auth.sub)
+    await resetConversation({ userId: auth.sub, scope: 'personal', scopeId: conversationId })
+    res.status(200).json({ scope: 'personal' as const, scopeId: conversationId, messages: [] })
   }),
 )
 
@@ -110,6 +222,11 @@ aiRouter.post(
     // reaches `done`, so a crashed stream doesn't permanently burn quota.
     await admitWithinQuota({ userId: auth.sub, tier, kind: 'message', today })
 
+    // Resolve the thread BEFORE SSE opens, so a client that sent no id (or a
+    // stale one) still gets a usable id back as the stream's first event
+    // rather than discovering it after the transcript has already landed.
+    const conversationId = await resolveThreadId(auth.sub, parsed.data.conversationId)
+
     // Open SSE.
     res.status(200)
     res.setHeader('Content-Type', 'text/event-stream')
@@ -132,10 +249,15 @@ aiRouter.post(
       res.write(`data: ${JSON.stringify(normalized)}\n\n`)
     }
 
+    // Tells the client which thread this turn landed in — the only way it can
+    // learn the id of a thread the server just created for it.
+    send({ type: 'conversation', conversationId })
+
     let reachedDone = false
     try {
       for await (const event of ask({
         userId: auth.sub,
+        conversationId,
         question: parsed.data.question,
         timezone: parsed.data.timezone,
       })) {
@@ -198,13 +320,21 @@ aiRouter.post(
     // outlives a deploy used to 404 forever. We reconstruct the call from the
     // durable record instead. The map is still consulted for the one field
     // we don't persist on the record (the caller's timezone).
-    const recorded = await findPendingToolCall({
-      key: { userId: auth.sub, scope: 'personal' },
+    //
+    // The thread is DERIVED from the record rather than taken from the request:
+    // a callId is server-minted and unique across threads, so asking the client
+    // which thread it belongs to would only add a way to be wrong (a reload, a
+    // second device, or the user switching threads while the card is open).
+    const found = await findPendingToolCallAcrossThreads({
+      userId: auth.sub,
+      scope: 'personal',
       callId,
     })
-    if (!recorded) {
+    if (!found) {
       throw NotFound('pending_call_not_found', 'This confirmation has expired.')
     }
+    const recorded = found.call
+    const conversationId = found.conversationId
     // Already resolved (confirmed/declined elsewhere, or expired-and-swept to
     // declined). Only a still-pending call may be confirmed — prevents a
     // double-confirm replaying a destructive op.
@@ -256,7 +386,7 @@ aiRouter.post(
     try {
       if (parsed.data.action === 'decline') {
         await resolveToolCall({
-          key: { userId: auth.sub, scope: 'personal' },
+          key: { userId: auth.sub, scope: 'personal', scopeId: conversationId },
           callId,
           status: 'declined',
         })
@@ -282,7 +412,7 @@ aiRouter.post(
         })
         toolResult = out.result
         await resolveToolCall({
-          key: { userId: auth.sub, scope: 'personal' },
+          key: { userId: auth.sub, scope: 'personal', scopeId: conversationId },
           callId,
           status: 'executed',
           result: out.result,
@@ -295,7 +425,7 @@ aiRouter.post(
               ? err.message
               : 'tool failed'
         await resolveToolCall({
-          key: { userId: auth.sub, scope: 'personal' },
+          key: { userId: auth.sub, scope: 'personal', scopeId: conversationId },
           callId,
           status: 'failed',
           error: toolError,
@@ -322,6 +452,7 @@ aiRouter.post(
       // as the original ask, the user already paid for it.
       for await (const event of continueAfterConfirm({
         userId: auth.sub,
+        conversationId,
         callId,
         toolName: recoveredName,
         toolArgs: recoveredArgs,

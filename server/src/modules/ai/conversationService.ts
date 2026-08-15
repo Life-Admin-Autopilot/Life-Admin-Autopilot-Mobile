@@ -165,9 +165,40 @@ export async function findPendingToolCall(args: {
     },
   })
   if (!doc) return null
+  return findCallIn(doc, args.callId)
+}
+
+/**
+ * Locate a pending call across ALL of a user's threads, returning the thread it
+ * lives in.
+ *
+ * The confirm route uses this instead of trusting a client-supplied thread id.
+ * A callId is server-minted and globally unique, so the thread is derivable —
+ * and deriving it means a confirmation cannot be lost by the user switching
+ * threads, opening a second device, or holding a "this cannot be undone" card
+ * across a reload that reset the client's idea of which thread is active.
+ */
+export async function findPendingToolCallAcrossThreads(args: {
+  userId: string | Types.ObjectId
+  scope: AiConversationScope
+  callId: string
+}): Promise<{ call: AiConversationToolCall; conversationId: string | null } | null> {
+  const doc = await AiConversation.findOne({
+    userId: typeof args.userId === 'string' ? new Types.ObjectId(args.userId) : args.userId,
+    scope: args.scope,
+    messages: {
+      $elemMatch: { toolCalls: { $elemMatch: { callId: args.callId } } },
+    },
+  })
+  if (!doc) return null
+  const call = findCallIn(doc, args.callId)
+  return call ? { call, conversationId: doc.scopeId ?? null } : null
+}
+
+function findCallIn(doc: AiConversationDoc, callId: string): AiConversationToolCall | null {
   for (const message of doc.messages) {
     if (!message.toolCalls) continue
-    const call = message.toolCalls.find((c) => c.callId === args.callId)
+    const call = message.toolCalls.find((c) => c.callId === callId)
     if (call) return call
   }
   return null

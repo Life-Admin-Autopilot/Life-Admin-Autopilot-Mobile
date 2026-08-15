@@ -10,6 +10,7 @@ import {
   expireStalePendingToolCalls,
   recentTurns,
 } from './conversationService'
+import { titleThreadFromFirstMessage } from './conversationThreads'
 import { getGeminiClient } from './provider/geminiClient'
 import { streamPersonal } from './provider/streamPersonal'
 import { getUserAiLocale } from './userLocale'
@@ -27,6 +28,15 @@ import {
 export type AskEvent =
   | { kind: 'sources'; sources: ContextSource[] }
   | { kind: 'token'; text: string }
+  /**
+   * Discard everything streamed for this turn so far.
+   *
+   * Tokens go out live, but a round that ALSO calls tools usually narrates a
+   * guess first ("You have three renewals coming up…") which the post-tool
+   * round then contradicts. That text is retracted rather than left standing —
+   * see runToolLoop, where this replaces the old buffer-everything approach.
+   */
+  | { kind: 'text_reset' }
   | {
       kind: 'tool_call'
       callId: string
@@ -66,12 +76,20 @@ const toolCallKey = (name: string, args: Record<string, unknown>): string =>
 
 interface AskArgs {
   userId: string
+  /** Which thread this turn belongs to. Routes resolve it before calling. */
+  conversationId: string
   question: string
   timezone?: string
 }
 
 interface ContinueAfterConfirmArgs {
   userId: string
+  /**
+   * Null when the pending call lives in a legacy thread that listThreads() has
+   * not adopted yet — the store treats null as a real key, so it is passed
+   * through rather than coerced.
+   */
+  conversationId: string | null
   callId: string
   toolName: ToolName
   toolArgs: Record<string, unknown>
@@ -90,7 +108,7 @@ export async function* ask(args: AskArgs): AsyncGenerator<AskEvent> {
   // Sweep stale pending calls before reading history so we never ship
   // unpaired functionCall parts into Gemini's contents array.
   await expireStalePendingToolCalls(
-    { userId: args.userId, scope: 'personal' },
+    { userId: args.userId, scope: 'personal', scopeId: args.conversationId },
     STALE_PENDING_MS,
   )
 
@@ -99,9 +117,14 @@ export async function* ask(args: AskArgs): AsyncGenerator<AskEvent> {
   await appendTurn({
     userId: args.userId,
     scope: 'personal',
+    scopeId: args.conversationId,
     role: 'user',
     text: args.question,
   })
+
+  // Name the thread from the sentence that opened it. No-op on every turn
+  // after the first, and on a thread the user has renamed themselves.
+  await titleThreadFromFirstMessage(args.userId, args.conversationId, args.question)
 
   const ctx = await buildPersonalContext({
     userId: args.userId,
@@ -114,7 +137,7 @@ export async function* ask(args: AskArgs): AsyncGenerator<AskEvent> {
 
   const historyN = ctx.mode === 'greeting' ? 0 : ctx.mode === 'conversation' ? 6 : 11
   const history = await recentTurns(
-    { userId: args.userId, scope: 'personal' },
+    { userId: args.userId, scope: 'personal', scopeId: args.conversationId },
     historyN + 1, // +1 so the user turn we just appended is included
   )
 
@@ -147,6 +170,7 @@ export async function* ask(args: AskArgs): AsyncGenerator<AskEvent> {
   await appendTurn({
     userId: args.userId,
     scope: 'personal',
+    scopeId: args.conversationId,
     role: 'assistant',
     text: loopOut.assistantText,
     sources: [...ctx.sources, ...loopOut.newSources],
@@ -174,7 +198,7 @@ export async function* continueAfterConfirm(
   args: ContinueAfterConfirmArgs,
 ): AsyncGenerator<AskEvent> {
   await expireStalePendingToolCalls(
-    { userId: args.userId, scope: 'personal' },
+    { userId: args.userId, scope: 'personal', scopeId: args.conversationId },
     STALE_PENDING_MS,
   )
 
@@ -183,7 +207,7 @@ export async function* continueAfterConfirm(
   // append a new user turn — the "user message" here is the synthetic
   // functionResponse we'll add below.
   const recent = await recentTurns(
-    { userId: args.userId, scope: 'personal' },
+    { userId: args.userId, scope: 'personal', scopeId: args.conversationId },
     12,
   )
   const lastUserTurn = [...recent].reverse().find((t) => t.role === 'user')
@@ -254,6 +278,7 @@ export async function* continueAfterConfirm(
   await appendTurn({
     userId: args.userId,
     scope: 'personal',
+    scopeId: args.conversationId,
     role: 'assistant',
     text: loopOut.assistantText,
     sources: [...ctx.sources, ...loopOut.newSources],
@@ -327,6 +352,10 @@ async function* runToolLoop(
 ): AsyncGenerator<AskEvent, ToolLoopOutput> {
   const client = getGeminiClient()
   let assistantText = ''
+  // What the client currently has on screen for this turn, after any
+  // retraction. Kept in step with every token/text_reset yielded below so the
+  // reconciliation at the end can compare it against the persisted answer.
+  let liveText = ''
   const toolCallsForTurn: ToolLoopOutput['toolCallsForTurn'] = []
   const newSources: ContextSource[] = []
   const seenSourceIds = new Set<string>()
@@ -354,17 +383,26 @@ async function* runToolLoop(
       args: Record<string, unknown>
     }> = []
     let toolDeferred = false
-    // Buffer this round's text instead of streaming it live. A round that ALSO
-    // calls tools usually emits a premature/guessed narration (the source of
-    // the "answers twice / contradicts itself" bug). We only surface the text
-    // of the LAST round that produced any — i.e. the real answer after the
-    // tools have run — yielded once after the loop.
+    // This round's text, streamed to the client as it arrives.
+    //
+    // Live streaming and "never show a guess then contradict it" used to be in
+    // conflict: a round that also calls tools usually narrates a premature
+    // answer, so the old code buffered EVERY round and emitted one token event
+    // at the very end — correct, but the user watched a spinner for the whole
+    // turn. Now the text goes out live and is RETRACTED (text_reset) the moment
+    // that round turns out to have called tools. The reconciliation after the
+    // loop guarantees the client ends up with exactly `assistantText`, which is
+    // what gets persisted.
     let roundText = ''
+    let roundStreamed = false
 
     for await (const ev of stream) {
       if (ev.kind === 'token') {
         roundText += ev.text
         roundParts.push({ text: ev.text })
+        yield { kind: 'token', text: ev.text }
+        liveText += ev.text
+        roundStreamed = true
       } else if (ev.kind === 'tool_call') {
         if (!isKnownTool(ev.name)) {
           yield {
@@ -387,6 +425,13 @@ async function* runToolLoop(
     if (roundText.trim().length > 0) assistantText = roundText
 
     if (toolInvocations.length === 0) break
+
+    // This round called tools, so whatever it said was a guess made before the
+    // facts landed. Retract it; the post-tool round streams the real answer.
+    if (roundStreamed) {
+      yield { kind: 'text_reset' }
+      liveText = ''
+    }
 
     args.contents.push({ role: 'model', parts: roundParts })
 
@@ -507,10 +552,17 @@ async function* runToolLoop(
     args.contents.push({ role: 'user', parts: responseParts })
   }
 
-  // Emit the final answer once, after all tool work — so the user sees a single
-  // clean reply instead of a premature guess plus a correction.
-  if (assistantText.trim().length > 0) {
-    yield { kind: 'token', text: assistantText }
+  // Reconcile: what the client is showing must equal what we persist.
+  //
+  // Normally these already match — the final round streamed the answer and
+  // nothing retracted it, so this is a no-op. It earns its keep in the corner
+  // where the LAST round produced no text of its own (a deferred confirmation,
+  // a tool-only round after a retraction): `assistantText` still holds an
+  // earlier round's text that the client was told to drop, and without this the
+  // turn would persist a reply the user never saw.
+  if (assistantText !== liveText) {
+    if (liveText.length > 0) yield { kind: 'text_reset' }
+    if (assistantText.length > 0) yield { kind: 'token', text: assistantText }
   }
 
   return { assistantText, toolCallsForTurn, newSources, usage }

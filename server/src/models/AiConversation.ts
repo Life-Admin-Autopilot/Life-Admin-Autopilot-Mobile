@@ -46,10 +46,25 @@ export interface AiConversationMessage {
 export const AI_CONVERSATION_SCOPES = ['personal'] as const
 export type AiConversationScope = (typeof AI_CONVERSATION_SCOPES)[number]
 
+// Title cap. Threads are auto-titled from their first user message, and the
+// drawer row is one line — anything longer is truncated on the way in rather
+// than clipped in every reader.
+export const AI_CONVERSATION_TITLE_MAX = 80
+
 export interface AiConversationAttrs {
   userId: Types.ObjectId
   scope: AiConversationScope
+  /**
+   * The conversation id — one thread per value.
+   *
+   * This field already keyed "which conversation" (the unique index below is
+   * the thread key); multi-thread support just stopped pinning it to null. A
+   * legacy single-thread doc still carries `null` until listThreads() adopts
+   * it, so readers must treat null as a real, addressable thread.
+   */
   scopeId: string | null
+  /** Auto-set from the first user message; user-editable. Null until then. */
+  title: string | null
   messages: AiConversationMessage[]
 }
 
@@ -93,6 +108,7 @@ const AiConversationSchema = new Schema<AiConversationAttrs>(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     scope: { type: String, enum: AI_CONVERSATION_SCOPES, required: true, default: 'personal' },
     scopeId: { type: String, default: null },
+    title: { type: String, default: null, maxlength: AI_CONVERSATION_TITLE_MAX },
     messages: { type: [MessageSchema], default: [] },
   },
   { timestamps: true },
