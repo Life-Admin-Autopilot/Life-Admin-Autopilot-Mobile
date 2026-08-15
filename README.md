@@ -41,7 +41,11 @@ npm run app
 Backend + site + phone, one command. Picks the native target from the host OS —
 macOS opens Xcode, everything else opens Android Studio — wires the phone to the
 local backend over the LAN, and live-reloads from the dev server. Add `--web` for
-the site alone. See [`docs/CAPACITOR.md`](docs/CAPACITOR.md#one-command-npm-run-app).
+the site alone.
+
+**New machine?** Start at [`docs/SETUP.md`](docs/SETUP.md) — it covers both
+repos, where they go, and the prerequisites. For how the native pipeline works,
+see [`docs/CAPACITOR.md`](docs/CAPACITOR.md#one-command-npm-run-app).
 
 ## Running the backend
 

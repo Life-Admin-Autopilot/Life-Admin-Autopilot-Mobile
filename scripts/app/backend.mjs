@@ -12,12 +12,16 @@
 //    origin has to be injected before the process starts or every request fails
 //    with an opaque network error in the webview.
 //
-// On macOS this delegates to the backend repo's own tools/dev/stack.sh, which
-// also brings up the isolated Mongo (:27018) and Langflow (:7860) the AI surface
-// needs. That script is bash, so other platforms get a direct `dotnet run` with
-// the equivalent environment and an explicit warning about what is NOT started.
+// The backend is started by its own launcher, picked by what can actually run:
+//
+//   tools/dev/up.sh    Docker + .NET SDK, works on Windows through Git Bash.
+//                      The documented path — see the backend's docs/RUNNING.md.
+//   tools/dev/stack.sh macOS only: Homebrew's mongod from a hard-coded path.
+//                      Kept for the machine this was built on.
+//   dotnet run         last resort. Mongo and Langflow are NOT started, and it
+//                      says so rather than failing later with an empty AI reply.
 
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { capture, isUp, onShutdown, run, start, waitForHttp } from './proc.mjs'
@@ -26,9 +30,32 @@ const DEFAULT_PORT = 5080
 
 /** Sibling checkout by default; override for a non-standard layout. */
 export function backendDir(repoRoot) {
-  return process.env.KITTO_BACKEND_DIR
-    ? resolve(process.env.KITTO_BACKEND_DIR)
-    : resolve(repoRoot, '..', 'Life-Admin-Autopilot-Backend')
+  if (process.env.KITTO_BACKEND_DIR) return resolve(process.env.KITTO_BACKEND_DIR)
+
+  // Identify the backend by a file only it has, rather than by folder name.
+  // People clone to whatever name they like — the repo is Life-Admin-Autopilot-
+  // Backend, this checkout is `Steward` — and a name check would send everyone
+  // to the same "clone it next to this repo" error while the thing sat right
+  // there under a different name.
+  const parent = resolve(repoRoot, '..')
+  let siblings = []
+  try {
+    siblings = readdirSync(parent, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+  } catch {
+    // An unreadable parent is not worth failing over — fall through to the
+    // conventional name so the error message stays the useful one.
+  }
+
+  // Conventional name first, so a machine with two checkouts is not decided by
+  // directory order.
+  const ordered = ['Life-Admin-Autopilot-Backend', ...siblings]
+  const found = ordered.find((name) =>
+    existsSync(join(parent, name, 'Life-Admin-Autopilot-Backend.slnx')),
+  )
+
+  return join(parent, found ?? 'Life-Admin-Autopilot-Backend')
 }
 
 /**
