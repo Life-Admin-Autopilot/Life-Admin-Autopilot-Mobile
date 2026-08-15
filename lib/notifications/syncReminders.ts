@@ -39,8 +39,40 @@ function stableId(key: string): number {
   return Math.abs(hash)
 }
 
+/**
+ * Set once push registration has answered.
+ *
+ * The comment above says the server "has no way to deliver them", which stopped
+ * being true when the reminder tick learned to send to registered devices. Both
+ * channels firing means every reminder buzzes the phone TWICE — the device's own
+ * copy and the server's — which reads as a bug and trains people to ignore it.
+ *
+ * Push wins when it is available: it needs no open app to schedule it, it
+ * survives a phone that has not been opened in a week, and it reaches every
+ * device the account has registered rather than only this one. Local scheduling
+ * stays as the fallback for a device with no push — no Firebase set up, an iOS
+ * build with no APNs key, or a refused permission — which is exactly how the app
+ * behaves today.
+ */
+let serverDelivers = false
+
+export function setServerDelivery(active: boolean): void {
+  serverDelivers = active
+}
+
 export async function syncReminders(): Promise<{ scheduled: number } | null> {
   if (!Capacitor.isNativePlatform()) return null
+
+  if (serverDelivers) {
+    // Drop anything scheduled before push came up, or the two channels would
+    // overlap for the length of the existing window.
+    const stale = await LocalNotifications.getPending()
+    if (stale.notifications.length > 0) {
+      await LocalNotifications.cancel({ notifications: stale.notifications })
+    }
+
+    return { scheduled: 0 }
+  }
 
   const permission = await LocalNotifications.checkPermissions()
   if (permission.display !== 'granted') return null

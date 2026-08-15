@@ -8,7 +8,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/queries/keys'
 import { REMINDER_ACTIONS, registerNotificationActions } from './actionTypes'
-import { requestNotificationPermission, syncReminders } from './syncReminders'
+import { registerPushDevice } from './registerPushDevice'
+import { requestNotificationPermission, setServerDelivery, syncReminders } from './syncReminders'
 
 // Answering a reminder from the Lock Screen, without opening the app.
 //
@@ -41,6 +42,13 @@ export function useNotificationActions(): void {
       await registerNotificationActions()
       const granted = await requestNotificationPermission()
       if (cancelled || !granted) return
+
+      // Offer this device to the server first. Its answer decides whether the
+      // local schedule below is the delivery mechanism or dead weight that would
+      // buzz the user a second time for every reminder.
+      const push = await registerPushDevice()
+      if (cancelled) return
+      setServerDelivery(push.status === 'active')
 
       const handle = await LocalNotifications.addListener(
         'localNotificationActionPerformed',
