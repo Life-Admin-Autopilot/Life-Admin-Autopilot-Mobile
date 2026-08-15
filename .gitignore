@@ -49,3 +49,11 @@ next-env.d.ts
 
 # Agent scratch worktrees — a nested git repo, never ours to commit.
 .claude/worktrees/
+
+# Firebase Android config. Not committed by default: it carries an API key, and
+# this repo has a secret purge in its history. Google treats it as non-secret
+# (it ships inside every APK, and the key is restricted to the package id), so
+# committing it is defensible — delete this line if the team prefers a clone
+# that works without a hand-over. scripts/patch-android-firebase.mjs copies it
+# into the regenerated android/ project.
+/native/android/google-services.json

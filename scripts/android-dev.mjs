@@ -12,7 +12,7 @@
 //
 // 10.0.2.2 is the emulator's alias for its host. A physical phone needs the
 // real LAN address instead, which is the default here.
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { lanIp } from './lan-ip.mjs'
 
@@ -24,12 +24,12 @@ if (!existsSync('android')) {
   process.exit(1)
 }
 
-if (!existsSync('android/app/google-services.json')) {
-  // Not fatal: everything except push works without it, and stopping here
-  // would block a teammate who only wants to see the app on a phone.
-  console.warn('android/app/google-services.json is missing —')
-  console.warn('push notifications will not register. Everything else works.\n')
-}
+// Self-healing rather than merely warning: the durable copy lives at
+// native/android/, because android/ is regenerated and loses anything put in it
+// by hand. Still not fatal when neither exists — everything except push works
+// without it, and stopping here would block a teammate who only wants to see
+// the app on a phone.
+spawnSync(process.execPath, ['scripts/patch-android-firebase.mjs'], { stdio: 'inherit' })
 
 const host = process.env.KITTO_DEV_HOST || lanIp()
 
