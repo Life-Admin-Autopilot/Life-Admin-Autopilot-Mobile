@@ -15,6 +15,17 @@ import { useBriefing } from '@/queries/planning'
  * The clash list is the visible half of conflict re-checking: a user who never
  * opens a task detail still finds out that two things collide today.
  */
+/** Collapse rows that say the same thing about the same matter. */
+function dedupeConflicts<T extends { taskId: string; reason: string }>(conflicts: T[]): T[] {
+  const seen = new Set<string>()
+  return conflicts.filter((c) => {
+    const key = `${c.taskId}:${c.reason}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export function BriefingCard() {
   const { data, isPending } = useBriefing()
 
@@ -31,8 +42,14 @@ export function BriefingCard() {
 
       {data.conflicts.length > 0 ? (
         <ul className="mt-3 flex flex-col gap-1.5 border-t border-hairline pt-3">
-          {data.conflicts.map((conflict) => (
-            <li key={conflict.taskId} className="flex items-start gap-1.5 text-body-sm text-warning">
+          {/* The server dedupes clash PAIRS, so one matter clashing with two
+              others appears twice with the same taskId — a different reason
+              each time is real information, but an identical row is not. */}
+          {dedupeConflicts(data.conflicts).map((conflict) => (
+            <li
+              key={`${conflict.taskId}:${conflict.reason}`}
+              className="flex items-start gap-1.5 text-body-sm text-warning"
+            >
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
               <Link href={`/matters/${conflict.taskId}`} className="underline-offset-2 hover:underline">
                 {conflict.reason} <span className="text-ink-muted">“{conflict.title}”</span>
