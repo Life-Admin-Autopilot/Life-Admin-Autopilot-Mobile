@@ -11,6 +11,7 @@
 // re-numbering the options client-side would silently answer a different
 // question than the one the user tapped.
 
+import { taskFieldsOf, type ToolCallTaskFields } from '@/lib/ai/toolCallSummary'
 import type { AiToolCall } from '@/lib/ai/types'
 import { TASK_DOMAINS, type TaskDomain } from '@/queries/tasks'
 
@@ -29,6 +30,14 @@ export interface ParsedHold {
   title: string
   domain: TaskDomain | null
   options: HoldOption[]
+  /**
+   * What was FILED when the question was raised — date, priority, domain, and
+   * whether the date will fire. A hold creates the task before it asks, so the
+   * card can show the guess it is asking about. Null when the tool call saved
+   * nothing (a failed hold, or history written before the task rode back on the
+   * result), and the card falls back to a title-only line.
+   */
+  facts: ToolCallTaskFields | null
 }
 
 const DOMAINS: ReadonlySet<string> = new Set(TASK_DOMAINS)
@@ -50,14 +59,20 @@ export function parseHold(call: AiToolCall): ParsedHold {
   const args = call.args
   const rawId = call.result?.clarificationId
   const domain = typeof args.domain === 'string' && DOMAINS.has(args.domain) ? args.domain : null
+  // Prefer the persisted title: the server normalizes it, and it is the title
+  // the matter now carries in the list.
+  const task = call.result?.task as Record<string, unknown> | undefined
+  const savedTitle = typeof task?.title === 'string' ? task.title.trim() : ''
+  const argTitle = typeof args.title === 'string' ? args.title.trim() : ''
 
   return {
     callId: call.callId,
     clarificationId: typeof rawId === 'string' && rawId.length > 0 ? rawId : null,
     question: typeof args.question === 'string' ? args.question.trim() : '',
-    title: typeof args.title === 'string' ? args.title.trim() : '',
+    title: savedTitle || argTitle,
     domain: domain as TaskDomain | null,
     options: optionsOf(args),
+    facts: taskFieldsOf(call),
   }
 }
 

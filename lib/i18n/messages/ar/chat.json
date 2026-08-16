@@ -43,10 +43,13 @@
     "replyPlaceholder": "اكتب ردًا…",
     "queueNote": "الأسئلة بلا إجابة تبقى في قائمتك.",
     "answersPrefix": "إجابات على أسئلتك:",
-    "saved": "{count, plural, zero {تم التحديث.} one {تم التحديث.} two {حُدّث أمران.} few {حُدّثت # أمور.} many {حُدّث # أمرًا.} other {حُدّث # أمر.}}"
+    "saved": "{count, plural, zero {تم التحديث} one {تم التحديث} two {حُدّث أمران} few {حُدّثت # أمور} many {حُدّث # أمرًا} other {حُدّث # أمر}}",
+    "filedEyebrow": "أُضيفت",
+    "noReminderUntil": "لن يُذكّر حتى تؤكّد"
   },
   "ledger": {
     "noReminder": "بدون تذكير",
+    "reminds": "يُذكّر {when}",
     "verb": {
       "createTask": "أُضيفت",
       "updateTask": "حُدّثت",

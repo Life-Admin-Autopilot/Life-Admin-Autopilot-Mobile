@@ -4,18 +4,24 @@
 // almost always a passive RECEIPT of what the assistant did. Two shapes carry
 // that, split on whether there is anything left to correct:
 //
-//   FILED (create / update / snooze / hold) — a real card. These verbs put a
-//     matter in the list with three values Kitto GUESSED on the user's behalf:
-//     when, how urgent, which part of your life. A ledger line rendered them at
-//     caption weight next to everything else, which is the uniform-emphasis
-//     failure — the eye skips the row, the wrong guess ships. The card gives the
-//     matter the same emoji-chip-and-title shape it will have in the list, so
-//     the receipt is recognisably the thing that was filed, and puts each guess
-//     in its own pill: legible at a glance, one message away from a correction.
+//   FILED (create / update / snooze) — a real card. These verbs put a matter in
+//     the list with three values Kitto GUESSED on the user's behalf: when, how
+//     urgent, which part of your life. A ledger line rendered them at caption
+//     weight next to everything else, which is the uniform-emphasis failure —
+//     the eye skips the row, the wrong guess ships. The card gives the matter
+//     the same emoji-chip-and-title shape it will have in the list, so the
+//     receipt is recognisably the thing that was filed, and puts each guess in
+//     its own pill: legible at a glance, one message away from a correction.
 //
-//   EVERYTHING ELSE (delete / resolve / query / subtasks) — the quiet ledger
-//     row it always was. These leave no guess behind, so a card would be a box
-//     around a fact nobody needs to check.
+//   EVERYTHING ELSE (delete / query / subtasks) — the quiet ledger row it
+//     always was. These leave no guess behind, so a card would be a box around
+//     a fact nobody needs to check.
+//
+// A HELD matter is filed too, but it never reaches this file: ChatMessage
+// routes `holdForClarification` to the clarification card, which renders the
+// same facts above its question. Two cards for one matter is what this split
+// used to produce, and the receipt half went on saying "needs a detail" after
+// the question had been answered.
 //
 // The single interactive exception is the bulk `deleteAllTasks` wipe, which
 // still pauses for a Confirm / Decline card because it is irreversible.
@@ -23,18 +29,14 @@
 // Institutional voice: state the action, no chatter — the product noun is
 // "matter". A completion is a status change, not an event.
 
-import { AlertTriangle, BellOff, CalendarDays, Check, X } from 'lucide-react'
+import { AlertTriangle, Check, X } from 'lucide-react'
 import { DraftConfirm } from '@/components/chat/DraftConfirm'
 import { useTranslations } from 'next-intl'
 
-import { DomainIcon } from '@/components/icons/DomainIcon'
+import { MatterFacts } from '@/components/chat/MatterFacts'
 import { Button } from '@/components/ui/button'
-import { Pill, type PillTone } from '@/components/ui/Pill'
 import { taskFieldsOf, type ToolCallTaskFields } from '@/lib/ai/toolCallSummary'
 import type { AiToolCall } from '@/lib/ai/types'
-import { useIntlTag } from '@/lib/i18n/localeStore'
-import { formatDue } from '@/lib/taskFormat'
-import type { TaskPriority } from '@/queries/tasks'
 
 type PendingAction = 'confirm' | 'decline' | null
 
@@ -75,18 +77,6 @@ function matterLabel(call: AiToolCall): string {
   const taskId = typeof call.args.taskId === 'string' ? call.args.taskId : undefined
   if (taskId) return `#${taskId.slice(-6)}`
   return ''
-}
-
-// Priority always earns a pill on the card — it is one of the three guesses the
-// card exists to expose — but not the same pill. Rendering "Urgent" and
-// "Normal" identically would put the level true of most matters at the weight of
-// the one that isn't, so only the loud two take a coloured wash; the quiet two
-// sit in `field`, the tone this app already uses for "a value that is set".
-const PRIORITY_TONE: Record<TaskPriority, PillTone> = {
-  urgent: 'high',
-  high: 'medium',
-  normal: 'field',
-  low: 'low',
 }
 
 // Bulk delete reads from a filter (domain/status) plus a count — either the
@@ -223,15 +213,12 @@ export function ToolCallCard({ call, onConfirm, onDecline, pendingAction = null 
 /**
  * The receipt for a matter that was filed.
  *
- * Deliberately echoes `MatterListRow` — same emoji chip, same title weight — so
- * the card in the conversation and the row in the list are recognisably the
- * same object. What the list row hides, this one states: every value here is a
- * real persisted field, so a follow-up message ("make it urgent", "that's car
- * not home") has something concrete to correct.
- *
- * The domain reads twice — as the chip and as a word — and that is deliberate:
- * the chip is how the matter is identified everywhere else in the app, the word
- * is what makes a wrong guess nameable in the next message.
+ * A card, not a ledger row: `createTask` / `updateTask` / `snoozeTask` put a
+ * matter in the list with three values Kitto guessed on the user's behalf, and
+ * a caption-weight line rendered them at the same emphasis as everything else —
+ * the eye skips the row, the wrong guess ships. The facts themselves come from
+ * `MatterFacts`, shared with the clarification card so a filed matter reads the
+ * same whether or not there is a question attached to it.
  */
 function FiledReceipt({
   verb,
@@ -242,72 +229,9 @@ function FiledReceipt({
   matter: string
   fields: ToolCallTaskFields
 }) {
-  const tMatters = useTranslations('matters')
-  const tDomain = useTranslations('domain')
-  const tChat = useTranslations('chat')
-  const tag = useIntlTag()
-
   return (
-    <div className="flex items-start gap-3 rounded-2xl bg-surface p-3.5 shadow-card">
-      <DomainIcon domain={fields.domain} size={40} className="mt-0.5" />
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        {/* Eyebrow, not a heading: what happened is the smallest thing on the
-            card because the matter is the thing being checked. `text-label`
-            rather than a literal tracking value — globals.css zeroes its
-            letter-spacing under Arabic, where spacing between letters breaks
-            the cursive join. */}
-        <span className="flex items-center gap-1.5 text-label uppercase text-ink-subtle">
-          <Check size={12} strokeWidth={3} className="shrink-0 text-accent" />
-          {verb}
-        </span>
-
-        {matter ? (
-          // Two lines, not a truncation: "Check health insurance rene…" hides
-          // the half of the title that says which renewal it is.
-          <span className="line-clamp-2 text-heading-sm text-ink" dir="auto">
-            {matter}
-          </span>
-        ) : null}
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          <MetaPill icon={<CalendarDays size={12} strokeWidth={2.25} />}>
-            <span className="tabular">{formatDue(fields.dueAt, { t: tMatters, tag })}</span>
-          </MetaPill>
-          <MetaPill tone={PRIORITY_TONE[fields.priority]}>
-            {tMatters(`priority.${fields.priority}`)}
-          </MetaPill>
-          {/* The word only. The emoji is already the chip on the left at 40px;
-              repeating it at 12px inside the pill added a second, murkier copy
-              of the one thing on the card that was never ambiguous. */}
-          <MetaPill>{tDomain(fields.domain)}</MetaPill>
-          {/* A date that is present but will never fire — the held high-stakes
-              case. Silence here would read the date pill as a promise Kitto has
-              not made. */}
-          {fields.dueAt && !fields.willRemind ? (
-            <MetaPill tone="warning" icon={<BellOff size={12} strokeWidth={2.25} />}>
-              {tChat('ledger.noReminder')}
-            </MetaPill>
-          ) : null}
-        </div>
-      </div>
+    <div className="rounded-2xl bg-surface p-3.5 shadow-card">
+      <MatterFacts eyebrow={verb} title={matter} fields={fields} />
     </div>
-  )
-}
-
-// Pills at meta scale. Same compact override the matter list row uses, so the
-// two surfaces read as one system rather than two sizes of the same component.
-function MetaPill({
-  tone = 'field',
-  icon,
-  children,
-}: {
-  tone?: PillTone
-  icon?: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <Pill tone={tone} icon={icon} className="gap-1 px-2.5 py-0.5 text-micro">
-      {children}
-    </Pill>
   )
 }

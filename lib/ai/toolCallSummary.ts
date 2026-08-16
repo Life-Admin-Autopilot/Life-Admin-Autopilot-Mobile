@@ -14,6 +14,11 @@
 import type { AiToolCall, AiToolName } from '@/lib/ai/types'
 import type { TaskDomain, TaskKind, TaskPriority } from '@/queries/tasks'
 
+// A task as it comes back on the wire — every field checked before it is
+// trusted, so a shape drift on the server degrades to "no meta line", never to
+// a crash mid-stream.
+type WireTask = Record<string, unknown>
+
 // Verbs that FILE something the user may want to correct. Deletes and reads
 // leave nothing to adjust, completions are past tense, and the subtask verbs are
 // about a step rather than the parent matter's own fields — a date/priority line
@@ -40,16 +45,25 @@ export interface ToolCallTaskFields {
 const PRIORITIES: ReadonlySet<string> = new Set(['low', 'normal', 'high', 'urgent'])
 const DOMAINS: ReadonlySet<string> = new Set(['health', 'home', 'car', 'finance', 'family', 'pets'])
 
-// The result bag is `Record<string, unknown>` on the wire, so every field is
-// checked before it is trusted — a shape drift on the server degrades to "no
-// meta line", never to a crash mid-stream.
 export function taskFieldsOf(call: AiToolCall): ToolCallTaskFields | null {
   if (!FILING_TOOLS.has(call.name)) return null
   if (call.status !== 'executed') return null
 
   const result = (call.result ?? {}) as Record<string, unknown>
-  const task = result.task as Record<string, unknown> | undefined
-  if (!task) return null
+  return taskFieldsFrom(result.task)
+}
+
+/**
+ * The same narrowing, from a task that did not arrive on a tool call.
+ *
+ * Answering a held question returns the PATCHED task from
+ * `POST /me/clarifications/:id/resolve`, and the card that asked the question
+ * has to redraw itself from that — otherwise it keeps showing the guess it was
+ * asking the user to correct, forever.
+ */
+export function taskFieldsFrom(value: unknown): ToolCallTaskFields | null {
+  if (!value || typeof value !== 'object') return null
+  const task = value as WireTask
 
   const priority = typeof task.priority === 'string' && PRIORITIES.has(task.priority)
     ? (task.priority as TaskPriority)

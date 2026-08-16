@@ -43,10 +43,13 @@
     "replyPlaceholder": "Type a reply…",
     "queueNote": "Unanswered questions stay in your queue.",
     "answersPrefix": "Answers to your questions:",
-    "saved": "{count, plural, one {Updated.} other {Updated # matters.}}"
+    "saved": "{count, plural, one {Updated} other {Updated # matters}}",
+    "filedEyebrow": "Filed",
+    "noReminderUntil": "Won't remind until you confirm"
   },
   "ledger": {
     "noReminder": "Won't remind",
+    "reminds": "Reminds {when}",
     "verb": {
       "createTask": "Created",
       "updateTask": "Updated",

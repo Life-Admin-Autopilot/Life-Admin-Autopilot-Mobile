@@ -39,6 +39,7 @@ import {
   type HoldOption,
   type ParsedHold,
 } from '@/lib/ai/clarificationHolds'
+import { taskFieldsFrom, type ToolCallTaskFields } from '@/lib/ai/toolCallSummary'
 import { useResolveClarification } from '@/queries/clarifications'
 import type { AiToolCall } from '@/lib/ai/types'
 
@@ -61,6 +62,12 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
   const [typing, setTyping] = useState<Record<string, boolean>>({})
   /** Rows already resolved by an earlier Save on this card. */
   const [saved, setSaved] = useState<Record<string, HoldAnswer>>({})
+  /**
+   * Each resolved row's matter as the server left it — the confirmed date, and
+   * whether it will now fire. Without this the row would keep rendering the
+   * guess it just asked the user to correct.
+   */
+  const [resolvedFacts, setResolvedFacts] = useState<Record<string, ToolCallTaskFields>>({})
 
   // A row's answer is whichever affordance it used last: picking an option
   // clears the typed draft and typing clears the pick, so the two can never
@@ -109,14 +116,24 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
       committed[hold.callId] = answer
 
       if (hold.clarificationId) {
-        resolve.mutate({
-          id: hold.clarificationId,
-          answer:
-            answer.optionIndex !== null
-              ? { type: 'option', index: answer.optionIndex }
-              : { type: 'custom', text: answer.label },
-          timezone: localTimezone(),
-        })
+        resolve
+          .mutateAsync({
+            id: hold.clarificationId,
+            answer:
+              answer.optionIndex !== null
+                ? { type: 'option', index: answer.optionIndex }
+                : { type: 'custom', text: answer.label },
+            timezone: localTimezone(),
+          })
+          .then((response) => {
+            const facts = taskFieldsFrom(response.task)
+            if (facts) setResolvedFacts((prev) => ({ ...prev, [hold.callId]: facts }))
+          })
+          // The mutation reports its own failures (toast + rollback); this only
+          // keeps a rejection from escaping as an unhandled promise. The row
+          // stays answered on screen either way — same optimism the card has
+          // always had, and the question is still open in /uncertainties.
+          .catch(() => {})
       } else {
         legacy.push(hold.title ? `${hold.title} → ${answer.label}` : answer.label)
       }
@@ -127,25 +144,23 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
     else if (legacy.length > 1) onAnswer(`${t('clarify.answersPrefix')}\n${legacy.join('\n')}`)
   }
 
-  // Everything answered → the card collapses to a receipt. Past tense, and about
-  // the CORRECTION rather than the filing: the matters were filed when the
+  if (holds.length === 0) return null
+
+  // Everything answered → the card STAYS, and states what it now holds. It used
+  // to collapse to a bare "Updated." chip, which threw away the receipt: the
+  // matter, its confirmed date, its priority. Past tense, and about the
+  // CORRECTION rather than the filing — the matters were filed when the
   // questions were raised, so anything in the future tense here describes work
   // that finished before the user read it.
-  if (holds.length > 0 && unsaved.length === 0) {
-    return (
-      <div className="flex items-center gap-2 rounded-xl bg-surface-field px-3 py-2">
-        <span className="text-caption font-medium text-ink">
-          {t('clarify.saved', { count: holds.length })}
-        </span>
-      </div>
-    )
-  }
-
-  if (holds.length === 0) return null
+  const settled = unsaved.length === 0
 
   return (
     <div className="flex w-full flex-col gap-3 rounded-2xl bg-surface p-4 shadow-card">
-      {holds.length > 1 ? (
+      {settled ? (
+        <span className="text-label uppercase text-ink-subtle">
+          {t('clarify.saved', { count: holds.length })}
+        </span>
+      ) : holds.length > 1 ? (
         <span className="text-label uppercase text-ink-subtle">
           {t('clarify.heading', { count: holds.length })}
         </span>
@@ -163,6 +178,7 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
             draft={drafts[hold.callId] ?? ''}
             typing={Boolean(typing[hold.callId])}
             saved={Boolean(saved[hold.callId])}
+            resolvedFacts={resolvedFacts[hold.callId] ?? null}
             disabled={disabled}
             onPick={(option) => pick(hold, option)}
             onDraft={(value) => draft(hold, value)}
@@ -172,22 +188,26 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
         ))}
       </ul>
 
-      <div className="flex items-center justify-between gap-3">
-        {/* The one line that makes a partial answer safe to give: nothing is
-            lost by leaving a question alone. */}
-        <span className="text-caption text-ink-subtle">
-          {openRows > 0 ? t('clarify.queueNote') : null}
-        </span>
-        <Button
-          variant="solid"
-          size="sm"
-          className="shrink-0"
-          disabled={disabled || stagedRows.length === 0}
-          onClick={save}
-        >
-          {tCommon('save')}
-        </Button>
-      </div>
+      {/* Nothing left open → no footer. A Save button with nothing to save is a
+          control that can only disappoint. */}
+      {settled ? null : (
+        <div className="flex items-center justify-between gap-3">
+          {/* The one line that makes a partial answer safe to give: nothing is
+              lost by leaving a question alone. */}
+          <span className="text-caption text-ink-subtle">
+            {openRows > 0 ? t('clarify.queueNote') : null}
+          </span>
+          <Button
+            variant="solid"
+            size="sm"
+            className="shrink-0"
+            disabled={disabled || stagedRows.length === 0}
+            onClick={save}
+          >
+            {tCommon('save')}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

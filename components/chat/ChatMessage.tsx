@@ -48,21 +48,18 @@ export function ChatMessage({
   // Receipts = executed/failed mutations → a card when a matter was filed,
   //            a quiet ledger row otherwise (ToolCallCard owns that split).
   // Confirms = the bulk-delete prompt (its own card).
-  // Clarifications = all held questions → ONE consolidated deck, not a stack.
+  // Clarifications = every held matter → ONE card, facts and questions together.
   //
-  // A held item is FILED like any other — the task exists the moment the hold
-  // runs — so it earns a receipt too, carrying the guess Kitto applied
-  // (date · priority · category, flagged when the date will not fire). It used
-  // to appear only as a deck card, which showed the question but never the
-  // guess, so the one thing the user was being asked to correct was invisible.
-  // The deck below still owns the question.
-  const receipts = message.toolCalls.filter((c) => {
-    if (c.status === 'pending_confirmation') return false
-    // A FAILED hold filed nothing and has no persisted question — the deck's
-    // fallback path already surfaces it, so a second "failed" row is noise.
-    if (c.name === 'holdForClarification') return c.status === 'executed'
-    return true
-  })
+  // A held matter gets NO receipt of its own. It briefly did: the hold files the
+  // task the moment it runs, so it looked like a filing that had earned one. But
+  // that put one matter on two surfaces — a receipt stating the guess, a card
+  // asking about it — and the receipt could not hear the answer. It went on
+  // reading "needs a detail", "won't remind", and the guessed time long after
+  // the user had corrected all three. The clarification card carries the facts
+  // now, and updates them when it is answered.
+  const receipts = message.toolCalls.filter(
+    (c) => c.status !== 'pending_confirmation' && c.name !== 'holdForClarification',
+  )
   const confirms = message.toolCalls.filter(
     (c) => c.name !== 'holdForClarification' && c.status === 'pending_confirmation',
   )
