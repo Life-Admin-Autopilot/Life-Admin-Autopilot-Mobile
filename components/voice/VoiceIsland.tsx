@@ -6,20 +6,17 @@ import { usePathname } from 'next/navigation'
 import { AnimatePresence, motion, type MotionValue } from 'framer-motion'
 import { Mic, X, Square, Check } from 'lucide-react'
 
-import { AssistantText } from '@/components/chat/AssistantText'
-import { transcribeAudio } from '@/lib/ai/transcribe'
 import { useVoiceRecorder } from '@/lib/ai/useVoiceRecorder'
 import { micFailureMessage } from '@/lib/ai/micFailure'
 import { useVoiceCapture } from '@/lib/voice/captureStore'
-import { DraftReview } from '@/components/planning/DraftReview'
-import { useProposeTasks, type TaskDraft } from '@/queries/planning'
+import { useUploadVoiceNote } from '@/queries/voiceNotes'
+import { useVoiceNoteFollowUp } from '@/queries/voiceNoteFollowUp'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
 import { BACKDROP_BLUR_FADE, BACKDROP_BLUR_STYLE } from '@/lib/motion-backdrop'
 import { MORPH_SPRING } from '@/lib/motion'
 import { springToLinearEasing } from '@/lib/springEasing'
 import { isAppChatRoute } from '@/lib/appRoutes'
-import type { AiSource } from '@/lib/ai/types'
 import { env } from '@/lib/env'
 
 /**
@@ -38,15 +35,19 @@ const MIC_START_FALLBACK_MS = 600
  */
 const MORPH_CSS = springToLinearEasing({ stiffness: 240, damping: 30, mass: 0.9 })
 
-// 'confirming' is the propose/commit review step: Kitto has understood the
-// transcript and produced drafts, but NOTHING is saved until the user confirms
-// each one. It sits where the old direct-write agent used to simply reply.
-type Phase = 'recording' | 'review' | 'transcribing' | 'thinking' | 'confirming' | 'done' | 'error'
+// 'saving' is the ONLY thing between Save and the island closing, and it is the
+// upload — nothing else. There is no transcribe step, no propose step and no
+// draft review here any more: the note is processed on the server and the
+// outcome arrives as a toast and a notification long after this surface is gone.
+//
+// 'error' is the one state that keeps the island open, and only for an upload
+// that failed. The blob is still in hand there, so the user retries rather than
+// re-records.
+type Phase = 'recording' | 'review' | 'saving' | 'error'
 
-// Voice capture — the bridge to the assistant by voice. Opened from the TabBar mic, it
-// rises from the bar into an ~80% surface with a live, voice-reactive meter. The
-// user can cancel, stop, then save: saving transcribes the audio and streams it
-// to the assistant, which records the matters and replies.
+// Voice capture — dictate, save, walk away. Opened from the TabBar mic, it rises
+// from the bar into an ~80% surface with a live, voice-reactive meter. The user
+// can cancel, stop, then save: saving hands the audio to the server and closes.
 export function VoiceIsland() {
   const t = useTranslations('voice')
   const tLib = useTranslations('lib')
@@ -58,12 +59,11 @@ export function VoiceIsland() {
   const [phase, setPhase] = useState<Phase>('recording')
   const [capturedMs, setCapturedMs] = useState(0)
   const [blob, setBlob] = useState<Blob | null>(null)
-  const [transcript, setTranscript] = useState('')
-  const [reply, setReply] = useState('')
-  const [sources, setSources] = useState<AiSource[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [drafts, setDrafts] = useState<TaskDraft[]>([])
-  const propose = useProposeTasks()
+  const upload = useUploadVoiceNote()
+  // Lives on the app shell, not on this surface — it has to keep polling after
+  // the island closes, which is the whole point.
+  const followUp = useVoiceNoteFollowUp()
   const abortRef = useRef<AbortController | null>(null)
 
   // CSS-morph path (probe mode) — declared before the open effect that latches
@@ -93,10 +93,6 @@ export function VoiceIsland() {
       setCssMorph(document.documentElement.dataset.perf?.includes('css-morph') ?? false)
       setPhase('recording')
       setBlob(null)
-      setTranscript('')
-      setReply('')
-      setSources([])
-      setDrafts([])
       setError(null)
     } else {
       abortRef.current?.abort()
@@ -178,44 +174,36 @@ export function VoiceIsland() {
   }
 
   /**
-   * Transcript → drafts. Replaces the old askStream() call, which routed the
-   * dictation into the chat agent whose tools write immediately. Capture now goes
-   * through propose/commit so the user sees what will be created — with any
-   * conflicts against existing matters — before anything exists.
+   * Save — upload the WAV and get out of the way.
+   *
+   * The only thing awaited is the upload's own 202. No transcription, no
+   * extraction, no review: the user's time on this surface after Save is the
+   * time it takes to send the bytes, and the outcome finds them later through
+   * the follow-up toast and the notification feed.
+   *
+   * The one case that keeps the island open is an upload that did NOT land. The
+   * blob is still held, so the control set becomes Retry / Discard rather than
+   * asking for the recording again.
    */
-  const planFrom = async (text: string) => {
-    setPhase('thinking')
-    setReply('')
-    try {
-      const proposed = await propose.mutateAsync(text)
-      if (proposed.length === 0) {
-        toast.info(t('nothingCaptured'))
-        close()
-        return
-      }
-      setDrafts(proposed)
-      setPhase('confirming')
-    } catch (err) {
-      setError(translateBackendError(err, `${env.appName} could not be reached.`))
-      setPhase('error')
-    }
-  }
-
   const save = async () => {
     if (!blob) return
-    setPhase('transcribing')
+    setPhase('saving')
+    setError(null)
+    const controller = new AbortController()
+    abortRef.current = controller
     try {
-      const text = await transcribeAudio(blob)
-      if (!text.trim()) {
-        toast.info(t('nothingCaptured'))
-        close()
-        return
-      }
-      setTranscript(text)
-      await planFrom(text)
+      const note = await upload.mutateAsync({ blob, durationMs: capturedMs, signal: controller.signal })
+      toast.success(t('savedFiling'))
+      followUp(note.id)
+      close()
     } catch (err) {
-      setError(translateBackendError(err, t('transcribeFailed')))
+      // A cancel/discard aborts the request on its way out; the panel is already
+      // closing, so there is nothing to report and nothing to retry.
+      if (controller.signal.aborted) return
+      setError(translateBackendError(err, t('uploadFailed')))
       setPhase('error')
+    } finally {
+      abortRef.current = null
     }
   }
 
@@ -278,26 +266,8 @@ export function VoiceIsland() {
                       {formatElapsed(phase === 'recording' ? recorder.elapsedMs : capturedMs)}
                     </span>
                   </>
-                ) : phase === 'transcribing' ? (
-                  <p className="text-body text-ink-muted">{t('transcribingEllipsis')}</p>
-                ) : phase === 'confirming' ? (
-                  <div className="w-full overflow-y-auto">
-                    {transcript ? (
-                      <p className="mb-3 text-body-sm italic text-ink-subtle">“{transcript}”</p>
-                    ) : null}
-                    <DraftReview drafts={drafts} onFinished={close} />
-                  </div>
-                ) : phase === 'thinking' || phase === 'done' ? (
-                  <div className="w-full overflow-y-auto">
-                    {transcript ? (
-                      <p className="mb-3 text-body-sm italic text-ink-subtle">“{transcript}”</p>
-                    ) : null}
-                    {reply ? (
-                      <AssistantText text={reply} sources={sources} streaming={phase === 'thinking'} />
-                    ) : (
-                      <p className="text-body text-ink-muted">{env.appName} is recording your matters…</p>
-                    )}
-                  </div>
+                ) : phase === 'saving' ? (
+                  <p className="text-body text-ink-muted">{t('savingEllipsis')}</p>
                 ) : (
                   <p className="text-body text-danger">{error}</p>
                 )}
@@ -305,6 +275,7 @@ export function VoiceIsland() {
 
               <Controls
                 phase={phase}
+                canRetry={blob != null}
                 onCancel={cancel}
                 onStop={() => void stop()}
                 onSave={() => void save()}
@@ -324,13 +295,9 @@ function Header({ phase }: { phase: Phase }) {
       ? t('listening')
       : phase === 'review'
         ? t('readyToSend')
-        : phase === 'transcribing'
-          ? t('transcribing')
-          : phase === 'thinking'
-            ? t('responds', { app: env.appName })
-            : phase === 'done'
-              ? t('orderFollows')
-              : t('somethingWrong')
+        : phase === 'saving'
+          ? t('saving')
+          : t('somethingWrong')
   return <span className="text-label uppercase tracking-wide text-accent">{label}</span>
 }
 
@@ -378,17 +345,22 @@ function Pulse({ level, active }: { level: MotionValue<number>; active: boolean 
 
 function Controls({
   phase,
+  canRetry,
   onCancel,
   onStop,
   onSave,
   onDone,
 }: {
   phase: Phase
+  /** The recording survived the failure, so the failure is retryable. */
+  canRetry: boolean
   onCancel: () => void
   onStop: () => void
   onSave: () => void
   onDone: () => void
 }) {
+  const t = useTranslations('voice')
+
   if (phase === 'recording') {
     return (
       <div className="flex items-center gap-4">
@@ -404,7 +376,7 @@ function Controls({
   if (phase === 'review') {
     return (
       <div className="flex items-center gap-4">
-        <CircleButton label="Discard" onClick={onCancel} variant="ghost">
+        <CircleButton label={t('discard')} onClick={onCancel} variant="ghost">
           <X size={22} />
         </CircleButton>
         <CircleButton label="Save" onClick={onSave} variant="accent">
@@ -413,7 +385,24 @@ function Controls({
       </div>
     )
   }
-  if (phase === 'done' || phase === 'error') {
+  if (phase === 'error') {
+    // An upload that failed still has its audio. Retry sends the SAME blob —
+    // discarding is the deliberate act, never the default.
+    if (canRetry) {
+      return (
+        <div className="flex items-center gap-4">
+          <CircleButton label={t('discard')} onClick={onCancel} variant="ghost">
+            <X size={22} />
+          </CircleButton>
+          <button
+            onClick={onSave}
+            className="rounded-pill bg-accent px-6 py-2.5 text-body-sm font-medium text-accent-ink"
+          >
+            {t('retry')}
+          </button>
+        </div>
+      )
+    }
     return (
       <button
         onClick={onDone}
@@ -423,7 +412,7 @@ function Controls({
       </button>
     )
   }
-  // transcribing / thinking — no controls (in flight).
+  // saving — no controls (in flight).
   return <div className="h-12" />
 }
 

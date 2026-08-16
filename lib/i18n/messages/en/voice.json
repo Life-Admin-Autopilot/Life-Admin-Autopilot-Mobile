@@ -8,5 +8,15 @@
   "tooShort": "Too short — nothing captured.",
   "nothingCaptured": "Nothing was captured.",
   "transcribeFailed": "Could not transcribe that.",
-  "responds": "{app} responds"
+  "responds": "{app} responds",
+  "saving": "Saving",
+  "savingEllipsis": "Saving…",
+  "savedFiling": "Saved. Filing your matters.",
+  "uploadFailed": "Could not save your recording. It is kept.",
+  "retry": "Retry",
+  "discard": "Discard",
+  "outcomeFiled": "{count, plural, =0 {No matters filed.} one {1 matter filed.} other {# matters filed.}}",
+  "outcomeNeedsInput": "{count, plural, one {1 needs your input.} other {# need your input.}}",
+  "outcomeNeedsInputUnknown": "Some matters need your input.",
+  "workerFailed": "Could not process your voice note. It is kept — retry from Notifications."
 }
