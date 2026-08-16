@@ -53,5 +53,10 @@
     "deleted": "Deleted “{title}”.",
     "restored": "Restored.",
     "undoFailed": "Could not undo that."
+  },
+  "briefing": {
+    "clashTimeSuffix": "within two hours of another matter",
+    "clashDuplicateSuffix": "duplicate of another matter",
+    "moreClashes": "{count, plural, one {# more clash} other {# more clashes}} in your list."
   }
 }
