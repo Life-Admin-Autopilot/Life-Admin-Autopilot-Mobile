@@ -50,6 +50,7 @@
   "ledger": {
     "noReminder": "بدون تذكير",
     "reminds": "يُذكّر {when}",
+    "matched": "{count, plural, =0 {لا نتائج} zero {لا نتائج} one {أمر واحد} two {أمران} few {# أمور} many {# أمرًا} other {# أمر}}",
     "verb": {
       "createTask": "أُضيفت",
       "updateTask": "حُدّثت",
@@ -57,10 +58,12 @@
       "deleteTask": "حُذفت",
       "deleteAllTasks": "مُسحت",
       "snoozeTask": "أُجّلت",
-      "queryTasks": "روجعت",
+      "queryTasks": "تم البحث",
       "addSubtask": "أُضيفت خطوة",
       "toggleSubtask": "حُدّثت خطوة",
-      "removeSubtask": "حُذفت خطوة",
+      "toggleSubtaskDone": "أُنجزت خطوة",
+      "toggleSubtaskOpen": "أُعيد فتح خطوة",
+      "removeSubtask": "حُذفت خطوة من",
       "holdForClarification": "أُضيفت — تحتاج تفصيلًا"
     }
   }

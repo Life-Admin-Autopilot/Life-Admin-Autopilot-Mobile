@@ -35,7 +35,13 @@ import { useTranslations } from 'next-intl'
 
 import { MatterFacts } from '@/components/chat/MatterFacts'
 import { Button } from '@/components/ui/button'
-import { taskFieldsOf, type ToolCallTaskFields } from '@/lib/ai/toolCallSummary'
+import {
+  ledgerVerbOf,
+  queryMatchCount,
+  subtaskTextOf,
+  taskFieldsOf,
+  type ToolCallTaskFields,
+} from '@/lib/ai/toolCallSummary'
 import type { AiToolCall } from '@/lib/ai/types'
 
 type PendingAction = 'confirm' | 'decline' | null
@@ -68,6 +74,10 @@ function heldForConflicts(call: AiToolCall): { taskId: string; title: string; re
 
 function matterLabel(call: AiToolCall): string {
   if (call.name === 'deleteAllTasks') return summarizeBulkDelete(call)
+  // The step, not its parent. `addSubtask` and `toggleSubtask` return the whole
+  // matter, so falling through to the title below named the wrong thing.
+  const step = subtaskTextOf(call)
+  if (step) return step
   const result = (call.result ?? {}) as Record<string, unknown>
   const task = result.task as Record<string, unknown> | undefined
   const title =
@@ -189,8 +199,11 @@ export function ToolCallCard({ call, onConfirm, onDecline, pendingAction = null 
   const result = (call.result ?? {}) as { draft?: unknown; task?: unknown }
   if (result.draft && !result.task) return <DraftConfirm draft={result.draft as never} />
 
-  const verb = tChat(`ledger.verb.${call.name}`)
-  const matter = matterLabel(call)
+  const verb = tChat(`ledger.verb.${ledgerVerbOf(call)}`)
+  // A read names what it matched, not a matter it did not touch: `queryTasks`
+  // carries no title, so the row used to render a bare verb and no object.
+  const matches = queryMatchCount(call)
+  const matter = matches === null ? matterLabel(call) : tChat('ledger.matched', { count: matches })
   const fields = taskFieldsOf(call)
 
   // A matter was filed, with guesses attached — the card.

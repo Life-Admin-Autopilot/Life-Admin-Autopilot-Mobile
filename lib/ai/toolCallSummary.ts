@@ -85,3 +85,75 @@ export function taskFieldsFrom(value: unknown): ToolCallTaskFields | null {
     willRemind: kind === 'reminder',
   }
 }
+
+// ---- Ledger rows ----
+//
+// What a quiet receipt row NAMES. Three of the eleven tools act on a step
+// inside a matter and return the whole parent, so a row built from the result's
+// title said "Step added — Go to the doctor" once per step: the same sentence
+// three times, and never the thing that was actually added.
+
+interface SubtaskRow {
+  id: string
+  text: string
+  done: boolean
+}
+
+function subtaskRows(call: AiToolCall): SubtaskRow[] {
+  const result = (call.result ?? {}) as Record<string, unknown>
+  const task = result.task as WireTask | undefined
+  const raw = Array.isArray(task?.subtasks) ? task.subtasks : []
+  return raw.filter((row): row is SubtaskRow => {
+    if (!row || typeof row !== 'object') return false
+    const sub = row as WireTask
+    return (
+      typeof sub.id === 'string' && typeof sub.text === 'string' && typeof sub.done === 'boolean'
+    )
+  })
+}
+
+/** The step `toggleSubtask` flipped, read back off the saved parent. */
+export function toggledSubtask(call: AiToolCall): SubtaskRow | null {
+  if (call.name !== 'toggleSubtask') return null
+  const id = typeof call.args.subtaskId === 'string' ? call.args.subtaskId : null
+  if (!id) return null
+  return subtaskRows(call).find((row) => row.id === id) ?? null
+}
+
+/**
+ * The step text a subtask row should name, or null when the call is about the
+ * matter itself. `addSubtask` carries it in the args and nowhere else;
+ * `removeSubtask` has already deleted it, so that row names the parent instead.
+ */
+export function subtaskTextOf(call: AiToolCall): string | null {
+  if (call.name === 'addSubtask') {
+    const text = typeof call.args.text === 'string' ? call.args.text.trim() : ''
+    return text.length > 0 ? text : null
+  }
+  return toggledSubtask(call)?.text ?? null
+}
+
+/** How many matters a read matched. Null when the tool returned no count. */
+export function queryMatchCount(call: AiToolCall): number | null {
+  if (call.name !== 'queryTasks') return null
+  const result = (call.result ?? {}) as Record<string, unknown>
+  return typeof result.count === 'number' ? result.count : null
+}
+
+/**
+ * The catalogue key under `chat.ledger.verb.*`.
+ *
+ * `toggleSubtask` splits in two, because "Step updated" described ticking a
+ * step and un-ticking it identically — which is the one thing that row exists
+ * to say. The unsplit key survives as the fallback for a result too old or too
+ * thin to say which way it went.
+ */
+export type LedgerVerb = AiToolName | 'toggleSubtaskDone' | 'toggleSubtaskOpen'
+
+export function ledgerVerbOf(call: AiToolCall): LedgerVerb {
+  if (call.name !== 'toggleSubtask') return call.name
+  const done =
+    toggledSubtask(call)?.done ?? (typeof call.args.done === 'boolean' ? call.args.done : null)
+  if (done === null) return 'toggleSubtask'
+  return done ? 'toggleSubtaskDone' : 'toggleSubtaskOpen'
+}

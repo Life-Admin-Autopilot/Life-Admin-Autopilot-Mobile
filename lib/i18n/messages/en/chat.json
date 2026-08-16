@@ -50,17 +50,20 @@
   "ledger": {
     "noReminder": "Won't remind",
     "reminds": "Reminds {when}",
+    "matched": "{count, plural, =0 {No matches} one {# matter} other {# matters}}",
     "verb": {
       "createTask": "Created",
       "updateTask": "Updated",
-      "completeTask": "Resolved",
+      "completeTask": "Completed",
       "deleteTask": "Deleted",
       "deleteAllTasks": "Cleared",
-      "snoozeTask": "Deferred",
-      "queryTasks": "Reviewed",
+      "snoozeTask": "Snoozed",
+      "queryTasks": "Searched",
       "addSubtask": "Step added",
       "toggleSubtask": "Step updated",
-      "removeSubtask": "Step removed",
+      "toggleSubtaskDone": "Step done",
+      "toggleSubtaskOpen": "Step reopened",
+      "removeSubtask": "Step removed from",
       "holdForClarification": "Filed — needs a detail"
     }
   }
