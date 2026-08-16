@@ -30,6 +30,21 @@
     "loadFailed": "المحادثة غير متاحة.",
     "messageCount": "{count, plural, =0 {لا رسائل} one {رسالة واحدة} two {رسالتان} few {# رسائل} many {# رسالة} other {# رسالة}}"
   },
+  "streaming": {
+    "thinking": "جارٍ التفكير…",
+    "working": "جارٍ التنفيذ…"
+  },
+  "clarify": {
+    "heading": "{count, plural, zero {لا أسئلة} one {سؤال واحد} two {سؤالان} few {# أسئلة} many {# سؤالًا} other {# سؤال}}",
+    "filed": "أُضيفت — {title}",
+    "filedNoTitle": "أُضيفت",
+    "fallbackQuestion": "أمر واحد يحتاج تفصيلًا.",
+    "typeReply": "اكتب ردًا",
+    "replyPlaceholder": "اكتب ردًا…",
+    "queueNote": "الأسئلة بلا إجابة تبقى في قائمتك.",
+    "answersPrefix": "إجابات على أسئلتك:",
+    "saved": "{count, plural, zero {تم التحديث.} one {تم التحديث.} two {حُدّث أمران.} few {حُدّثت # أمور.} many {حُدّث # أمرًا.} other {حُدّث # أمر.}}"
+  },
   "ledger": {
     "noReminder": "بدون تذكير",
     "verb": {
@@ -43,7 +58,7 @@
       "addSubtask": "أُضيفت خطوة",
       "toggleSubtask": "حُدّثت خطوة",
       "removeSubtask": "حُذفت خطوة",
-      "holdForClarification": "بانتظار توضيح"
+      "holdForClarification": "أُضيفت — تحتاج تفصيلًا"
     }
   }
 }

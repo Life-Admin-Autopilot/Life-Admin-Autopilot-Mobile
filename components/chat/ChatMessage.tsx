@@ -3,10 +3,12 @@
 //   assistant → left-aligned lavender card with inline citation chips + stacked
 //               tool-call / clarification cards below
 //
-// A streaming assistant turn shows a static caret (handled by AssistantText) or
-// three dots before the first token arrives.
+// A streaming assistant turn shows a static caret (handled by AssistantText) or,
+// before the first token arrives, the dots and — once the silence runs long —
+// a status label (StreamingStatus).
 
 import { AssistantText } from '@/components/chat/AssistantText'
+import { StreamingStatus } from '@/components/chat/StreamingStatus'
 import { ToolCallCard } from '@/components/chat/ToolCallCard'
 import { ClarificationDeck } from '@/components/chat/ClarificationDeck'
 import { taskFieldsOf } from '@/lib/ai/toolCallSummary'
@@ -78,9 +80,11 @@ export function ChatMessage({
         <div className="rounded-2xl bg-surface-sunken px-3.5 py-2.5">
           <AssistantText text={message.text} sources={message.sources} streaming={streaming} />
         </div>
-      ) : streaming && !hasTools ? (
+      ) : streaming ? (
+        // Tools running with no prose yet used to render nothing at all: the
+        // turn that does the most work was the one that showed the least.
         <div className="rounded-2xl bg-surface-sunken px-3.5 py-2.5">
-          <StreamingDots />
+          <StreamingStatus working={hasTools} />
         </div>
       ) : null}
 
@@ -127,17 +131,6 @@ export function ChatMessage({
           ) : null}
         </div>
       ) : null}
-    </div>
-  )
-}
-
-// Three-dot indicator for the moment between request send and first token.
-function StreamingDots() {
-  return (
-    <div className="flex items-center gap-1.5 py-1">
-      <span className="size-1.5 animate-pulse rounded-full bg-ink-subtle [animation-delay:0ms]" />
-      <span className="size-1.5 animate-pulse rounded-full bg-ink-subtle [animation-delay:150ms]" />
-      <span className="size-1.5 animate-pulse rounded-full bg-ink-subtle [animation-delay:300ms]" />
     </div>
   )
 }

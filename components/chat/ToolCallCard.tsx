@@ -187,13 +187,17 @@ export function ToolCallCard({ call, onConfirm, onDecline, pendingAction = null 
     )
   }
 
-  // A DRAFT, not a receipt. The chat agent's createTask now calls
-  // /me/tasks/draft, which saves nothing — so this branch has to come before the
-  // "filed" card, or the user is shown a receipt for a matter that only exists
-  // as a proposal. Confirming routes through /api/planning/commit, exactly like
-  // the voice capture flow.
-  const draft = (call.result as { draft?: unknown } | null)?.draft
-  if (draft) return <DraftConfirm draft={draft as never} />
+  // A DRAFT, not a receipt: a proposal that saved nothing, confirmed through
+  // /api/planning/commit exactly like the voice capture flow.
+  //
+  // Gated on there being NO persisted task, which is the whole difference
+  // between the two. createTask files immediately again, so a result carrying a
+  // real task is a receipt — the draft branch reading `draft` alone would put a
+  // "Not saved yet" proposal card over a matter that is already in the list.
+  // The branch itself stays: history rows written while createTask pointed at
+  // /me/tasks/draft still render out of the transcript.
+  const result = (call.result ?? {}) as { draft?: unknown; task?: unknown }
+  if (result.draft && !result.task) return <DraftConfirm draft={result.draft as never} />
 
   const verb = tChat(`ledger.verb.${call.name}`)
   const matter = matterLabel(call)

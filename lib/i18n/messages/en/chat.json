@@ -30,6 +30,21 @@
     "loadFailed": "Conversation unavailable.",
     "messageCount": "{count, plural, =0 {No messages} one {# message} other {# messages}}"
   },
+  "streaming": {
+    "thinking": "Thinking…",
+    "working": "Working on it…"
+  },
+  "clarify": {
+    "heading": "{count, plural, one {# question} other {# questions}}",
+    "filed": "Filed — {title}",
+    "filedNoTitle": "Filed",
+    "fallbackQuestion": "One matter needs a detail.",
+    "typeReply": "Type a reply",
+    "replyPlaceholder": "Type a reply…",
+    "queueNote": "Unanswered questions stay in your queue.",
+    "answersPrefix": "Answers to your questions:",
+    "saved": "{count, plural, one {Updated.} other {Updated # matters.}}"
+  },
   "ledger": {
     "noReminder": "Won't remind",
     "verb": {
@@ -43,7 +58,7 @@
       "addSubtask": "Step added",
       "toggleSubtask": "Step updated",
       "removeSubtask": "Step removed",
-      "holdForClarification": "Held"
+      "holdForClarification": "Filed — needs a detail"
     }
   }
 }
