@@ -47,8 +47,8 @@ coverage/
 *.tsbuildinfo
 next-env.d.ts
 
-# Agent scratch worktrees — a nested git repo, never ours to commit.
-.claude/worktrees/
+# Agent scratch worktrees and local editor config — never ours to commit.
+.claude/
 
 # Firebase Android config. Not committed by default: it carries an API key, and
 # this repo has a secret purge in its history. Google treats it as non-secret
