@@ -43,6 +43,21 @@ export interface DailyDigest {
   generatedAt: string
   /** One sentence. The only free prose the model writes. */
   headline: string
+  /**
+   * A model is writing a better `headline` for this day right now.
+   *
+   * The server answers the dashboard with a computed count sentence immediately
+   * and asks the model for a real one in the background — a language model on
+   * the critical path of the home screen's first paint is not a trade worth
+   * making for prose. This flag is how the sentence gets collected: while it is
+   * true the query refetches, and the improved headline arrives in place.
+   *
+   * It is an assertion that a write is actually in flight, so it goes false on
+   * a failed generation as well as a successful one, and is never true on a
+   * server with no model configured. Optional because an older server does not
+   * send it — absent reads as "nothing coming", which is the safe default.
+   */
+  prosePending?: boolean
   counts: DigestCounts
   /** Summed from today's matter estimates. Zeros when nothing is estimated. */
   estimatedMinutesToday: { min: number; max: number }
@@ -70,5 +85,24 @@ export function useDigest() {
     // The server rebuilds only when the user's matters change, so a short
     // client stale window costs at most one cheap cached round trip.
     staleTime: 60_000,
+    // Wait for the sentence, and only for as long as one is coming.
+    //
+    // Gated on the server's own claim rather than on a timer or a retry count:
+    // it is the only party that knows whether a model was asked, and it drops
+    // the flag on failure as well as on success. A client that instead polled
+    // "until the headline changes" would poll forever on the day the model was
+    // unavailable — and that day is precisely the day the plain count is all
+    // there is.
+    refetchInterval: (query) => (query.state.data?.prosePending ? PROSE_POLL_MS : false),
   })
 }
+
+/**
+ * How often to check back while the model is writing.
+ *
+ * Two seconds because the request is a single short generation against a warm
+ * key, not a chat turn — most land on the first or second check. Tighter would
+ * spend requests on a wait the user is not watching a spinner for; looser is a
+ * home screen that keeps its placeholder sentence noticeably too long.
+ */
+const PROSE_POLL_MS = 2_000
