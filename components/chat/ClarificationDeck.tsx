@@ -10,6 +10,11 @@
 // not allowed to drip-feed questions; every matter is already filed, and the
 // asks for one turn belong in one place with one Save.
 //
+// A single hold can now raise SEVERAL questions about ONE matter, so the card is
+// grouped by matter rather than by question: the facts block once, then every
+// question about it stacked underneath (ClarificationMatter). Questions about
+// different matters keep their own facts block and the divider between them.
+//
 // What survives from the deck, unchanged, because it was correct:
 //   - the parse (lib/ai/clarificationHolds.ts) and the option INDEX contract —
 //     resolve sends the SERVER's index verbatim,
@@ -30,16 +35,19 @@
 import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 
-import { ClarificationRow } from '@/components/chat/ClarificationRow'
+import { ClarificationMatter } from '@/components/chat/ClarificationMatter'
+import type { ClarificationRowState } from '@/components/chat/ClarificationRow'
 import { Button } from '@/components/ui/button'
 import {
+  groupHolds,
   localTimezone,
   parseHolds,
+  resolvedMatterFrom,
   type HoldAnswer,
   type HoldOption,
   type ParsedHold,
+  type ResolvedMatter,
 } from '@/lib/ai/clarificationHolds'
-import { taskFieldsFrom, type ToolCallTaskFields } from '@/lib/ai/toolCallSummary'
 import { useResolveClarification } from '@/queries/clarifications'
 import type { AiToolCall } from '@/lib/ai/types'
 
@@ -51,10 +59,20 @@ interface ClarificationDeckProps {
   disabled?: boolean
 }
 
+/** One line of the prose fallback. Each names its own matter, and its own
+ *  question when the matter was asked more than one thing — the questions are
+ *  not replayed into the model's context, so "Dentist → 6pm" twice would be two
+ *  answers to the same ask. */
+function legacyLine(hold: ParsedHold, answer: HoldAnswer, multi: boolean): string {
+  const stem = [hold.title, multi ? hold.question : ''].filter(Boolean).join(' — ')
+  return stem ? `${stem} → ${answer.label}` : answer.label
+}
+
 export function ClarificationDeck({ calls, onAnswer, disabled = false }: ClarificationDeckProps) {
   const t = useTranslations('chat')
   const tCommon = useTranslations('common')
   const holds = useMemo(() => parseHolds(calls), [calls])
+  const groups = useMemo(() => groupHolds(holds), [holds])
   const resolve = useResolveClarification()
 
   const [picked, setPicked] = useState<Record<string, HoldOption>>({})
@@ -63,80 +81,107 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
   /** Rows already resolved by an earlier Save on this card. */
   const [saved, setSaved] = useState<Record<string, HoldAnswer>>({})
   /**
-   * Each resolved row's matter as the server left it — the confirmed date, and
-   * whether it will now fire. Without this the row would keep rendering the
-   * guess it just asked the user to correct.
+   * Each matter as the server left it — the confirmed date, the title an answer
+   * rewrote, and whether it will now fire. Keyed by MATTER, not by question:
+   * answering the time question redraws the same facts block the "which friend"
+   * question hangs off. Without this the block would keep rendering the guess it
+   * just asked the user to correct.
    */
-  const [resolvedFacts, setResolvedFacts] = useState<Record<string, ToolCallTaskFields>>({})
+  const [resolved, setResolved] = useState<Record<string, ResolvedMatter>>({})
 
   // A row's answer is whichever affordance it used last: picking an option
   // clears the typed draft and typing clears the pick, so the two can never
   // disagree about what Save is about to send.
   const answerFor = (hold: ParsedHold): HoldAnswer | null => {
-    const done = saved[hold.callId]
+    const done = saved[hold.rowKey]
     if (done) return done
-    const option = picked[hold.callId]
+    const option = picked[hold.rowKey]
     if (option) return { label: option.label, optionIndex: option.index }
-    const text = (drafts[hold.callId] ?? '').trim()
+    const text = (drafts[hold.rowKey] ?? '').trim()
     return text ? { label: text, optionIndex: null } : null
   }
 
+  const stateOf = (hold: ParsedHold): ClarificationRowState => ({
+    answer: answerFor(hold),
+    draft: drafts[hold.rowKey] ?? '',
+    typing: Boolean(typing[hold.rowKey]),
+    saved: Boolean(saved[hold.rowKey]),
+  })
+
   const pick = (hold: ParsedHold, option: HoldOption) => {
-    setPicked((prev) => ({ ...prev, [hold.callId]: option }))
-    setDrafts((prev) => ({ ...prev, [hold.callId]: '' }))
+    setPicked((prev) => ({ ...prev, [hold.rowKey]: option }))
+    setDrafts((prev) => ({ ...prev, [hold.rowKey]: '' }))
   }
 
   const draft = (hold: ParsedHold, value: string) => {
-    setDrafts((prev) => ({ ...prev, [hold.callId]: value }))
+    setDrafts((prev) => ({ ...prev, [hold.rowKey]: value }))
     if (value.trim().length === 0) return
     setPicked((prev) => {
-      if (!(hold.callId in prev)) return prev
+      if (!(hold.rowKey in prev)) return prev
       const next = { ...prev }
-      delete next[hold.callId]
+      delete next[hold.rowKey]
       return next
     })
   }
 
-  const unsaved = holds.filter((hold) => !saved[hold.callId])
+  const unsaved = holds.filter((hold) => !saved[hold.rowKey])
   const stagedRows = unsaved.filter((hold) => answerFor(hold) !== null)
   const openRows = unsaved.length - stagedRows.length
+
+  /**
+   * Answer one matter's questions, in the order they were asked.
+   *
+   * Sequential on purpose: sibling questions patch the SAME task, and two
+   * resolves in flight would each write from the state they read, so the reply
+   * that landed last could carry a task missing the other answer's patch — and
+   * that reply is what the facts block redraws from.
+   */
+  const resolveMatter = async (key: string, rows: readonly { id: string; answer: HoldAnswer }[]) => {
+    const timezone = localTimezone()
+    for (const row of rows) {
+      const response = await resolve
+        .mutateAsync({
+          id: row.id,
+          answer:
+            row.answer.optionIndex !== null
+              ? { type: 'option', index: row.answer.optionIndex }
+              : { type: 'custom', text: row.answer.label },
+          timezone,
+        })
+        // The mutation reports its own failures (toast + rollback); swallowing
+        // the rejection keeps one failed answer from stranding the siblings
+        // queued behind it. The row stays answered on screen either way — same
+        // optimism the card has always had, and the question is still open in
+        // /uncertainties.
+        .catch(() => null)
+      if (!response) continue
+      setResolved((prev) => ({ ...prev, [key]: resolvedMatterFrom(response.task, prev[key]) }))
+    }
+  }
 
   const save = () => {
     if (disabled || stagedRows.length === 0) return
 
     const committed: Record<string, HoldAnswer> = {}
     // Holds the server never persisted. Their answers ride back through the
-    // chat instead, as ONE message — the questions are not replayed into the
-    // model's context, so each line has to name its own matter.
+    // chat instead, as ONE message.
     const legacy: string[] = []
 
-    for (const hold of stagedRows) {
-      const answer = answerFor(hold)
-      if (!answer) continue
-      committed[hold.callId] = answer
+    for (const group of groups) {
+      const pending: { id: string; answer: HoldAnswer }[] = []
+      const multi = group.rows.length > 1
 
-      if (hold.clarificationId) {
-        resolve
-          .mutateAsync({
-            id: hold.clarificationId,
-            answer:
-              answer.optionIndex !== null
-                ? { type: 'option', index: answer.optionIndex }
-                : { type: 'custom', text: answer.label },
-            timezone: localTimezone(),
-          })
-          .then((response) => {
-            const facts = taskFieldsFrom(response.task)
-            if (facts) setResolvedFacts((prev) => ({ ...prev, [hold.callId]: facts }))
-          })
-          // The mutation reports its own failures (toast + rollback); this only
-          // keeps a rejection from escaping as an unhandled promise. The row
-          // stays answered on screen either way — same optimism the card has
-          // always had, and the question is still open in /uncertainties.
-          .catch(() => {})
-      } else {
-        legacy.push(hold.title ? `${hold.title} → ${answer.label}` : answer.label)
+      for (const hold of group.rows) {
+        if (saved[hold.rowKey]) continue
+        const answer = answerFor(hold)
+        if (!answer) continue
+        committed[hold.rowKey] = answer
+
+        if (hold.clarificationId) pending.push({ id: hold.clarificationId, answer })
+        else legacy.push(legacyLine(hold, answer, multi))
       }
+
+      if (pending.length > 0) void resolveMatter(group.key, pending)
     }
 
     setSaved((prev) => ({ ...prev, ...committed }))
@@ -157,8 +202,10 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
   return (
     <div className="flex w-full flex-col gap-3 rounded-2xl bg-surface p-4 shadow-card">
       {settled ? (
+        // Matters, not questions: two asks about one dentist appointment
+        // updated one matter.
         <span className="text-label uppercase text-ink-subtle">
-          {t('clarify.saved', { count: holds.length })}
+          {t('clarify.saved', { count: groups.length })}
         </span>
       ) : holds.length > 1 ? (
         <span className="text-label uppercase text-ink-subtle">
@@ -166,23 +213,20 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
         </span>
       ) : null}
 
-      {/* Every question at once. The divider is the only separation they get —
-          a card per question inside a card is the box-in-a-box the chat
-          transcript already suffers from. */}
+      {/* Every question at once, one block per matter. The divider is the only
+          separation they get — a card per matter inside a card is the
+          box-in-a-box the chat transcript already suffers from. */}
       <ul className="flex flex-col [&>li:not(:first-child)]:mt-3.5 [&>li:not(:first-child)]:border-t [&>li:not(:first-child)]:border-border/60 [&>li:not(:first-child)]:pt-3.5">
-        {holds.map((hold) => (
-          <ClarificationRow
-            key={hold.callId}
-            hold={hold}
-            answer={answerFor(hold)}
-            draft={drafts[hold.callId] ?? ''}
-            typing={Boolean(typing[hold.callId])}
-            saved={Boolean(saved[hold.callId])}
-            resolvedFacts={resolvedFacts[hold.callId] ?? null}
+        {groups.map((group) => (
+          <ClarificationMatter
+            key={group.key}
+            group={group}
+            stateOf={stateOf}
+            resolved={resolved[group.key] ?? null}
             disabled={disabled}
-            onPick={(option) => pick(hold, option)}
-            onDraft={(value) => draft(hold, value)}
-            onReveal={() => setTyping((prev) => ({ ...prev, [hold.callId]: true }))}
+            onPick={pick}
+            onDraft={draft}
+            onReveal={(hold) => setTyping((prev) => ({ ...prev, [hold.rowKey]: true }))}
             onSubmit={save}
           />
         ))}

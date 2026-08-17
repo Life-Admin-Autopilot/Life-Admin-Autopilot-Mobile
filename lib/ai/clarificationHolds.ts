@@ -5,24 +5,43 @@
 // returned — so every field is checked here once, and the component below can
 // assume it holds real values.
 //
+// ONE hold call can now raise SEVERAL questions about ONE matter — a date
+// ("What time?") and a detail ("Which friend are you visiting?") — so the result
+// carries a `clarifications` array, each entry a persisted row with its own id,
+// question and options, all sharing a taskId. Rows are read from that array,
+// then from the single `clarification` object, and finally from the args, which
+// is the only shape a transcript written before this change has. History must
+// keep rendering exactly as it did, so the last path is not a degraded fallback:
+// it is the one-question card, unchanged.
+//
 // The one field that must survive verbatim is the option INDEX: resolving a
 // clarification sends `{ type: 'option', index }` and the server reads that
-// index against ITS OWN options array. Re-sorting, de-duplicating, or
-// re-numbering the options client-side would silently answer a different
-// question than the one the user tapped.
+// index against ITS OWN options array — per ROW, not per call. Re-sorting,
+// de-duplicating, or re-numbering the options client-side would silently answer
+// a different question than the one the user tapped.
 
-import { taskFieldsOf, type ToolCallTaskFields } from '@/lib/ai/toolCallSummary'
+import { taskFieldsOf, taskFieldsFrom, type ToolCallTaskFields } from '@/lib/ai/toolCallSummary'
 import type { AiToolCall } from '@/lib/ai/types'
 import { TASK_DOMAINS, type TaskDomain } from '@/queries/tasks'
 
 export interface HoldOption {
   label: string
-  /** Position in the SERVER's options array. Sent to /resolve unchanged. */
+  /** Position in the SERVER's options array for THIS row. Sent to /resolve unchanged. */
   index: number
 }
 
+/** One question. A hold call contributes one row per clarification it raised. */
 export interface ParsedHold {
+  /** Unique per QUESTION — the deck keys every piece of row state on it. */
+  rowKey: string
   callId: string
+  /**
+   * The matter the question is about. Rows that share it share one facts block,
+   * because they are corrections to the same filed thing. Null when the result
+   * named no task (a failed hold, or a transcript written before the task rode
+   * back), and the row stands alone.
+   */
+  taskId: string | null
   /** The persisted Clarification row. Null → resolve via the chat fallback. */
   clarificationId: string | null
   /** Empty when the tool sent none — the card supplies translated copy. */
@@ -40,13 +59,31 @@ export interface ParsedHold {
   facts: ToolCallTaskFields | null
 }
 
+/** One matter and every question raised about it, in the order asked. */
+export interface HoldGroup {
+  /** The matter's id, or the call when the hold saved no task. */
+  key: string
+  title: string
+  domain: TaskDomain | null
+  facts: ToolCallTaskFields | null
+  rows: ParsedHold[]
+}
+
 const DOMAINS: ReadonlySet<string> = new Set(TASK_DOMAINS)
 
-function optionsOf(args: Record<string, unknown>): HoldOption[] {
-  const raw = Array.isArray(args.options) ? args.options : []
-  return raw
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object'
+}
+
+function trimmed(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function optionsOf(raw: unknown): HoldOption[] {
+  const list = Array.isArray(raw) ? raw : []
+  return list
     .map((option, index) => ({
-      label: option && typeof option === 'object' ? (option as Record<string, unknown>).label : null,
+      label: isRecord(option) ? option.label : null,
       index,
     }))
     .filter(
@@ -55,35 +92,142 @@ function optionsOf(args: Record<string, unknown>): HoldOption[] {
     )
 }
 
-export function parseHold(call: AiToolCall): ParsedHold {
+/**
+ * The persisted rows on a hold result, newest wire shape first.
+ *
+ * Empty means the call persisted nothing we can answer against — the caller
+ * falls back to the args, which is what every pre-multi-question transcript
+ * holds.
+ */
+function wireRows(result: Record<string, unknown> | null | undefined): Record<string, unknown>[] {
+  if (!result) return []
+  const many = Array.isArray(result.clarifications) ? result.clarifications.filter(isRecord) : []
+  if (many.length > 0) return many
+  return isRecord(result.clarification) ? [result.clarification] : []
+}
+
+/** Every question one hold call raised. One entry for the single-question case. */
+export function parseHoldRows(call: AiToolCall): ParsedHold[] {
   const args = call.args
-  const rawId = call.result?.clarificationId
+  const result = call.result
   const domain = typeof args.domain === 'string' && DOMAINS.has(args.domain) ? args.domain : null
   // Prefer the persisted title: the server normalizes it, and it is the title
   // the matter now carries in the list.
-  const task = call.result?.task as Record<string, unknown> | undefined
-  const savedTitle = typeof task?.title === 'string' ? task.title.trim() : ''
-  const argTitle = typeof args.title === 'string' ? args.title.trim() : ''
+  const task = result?.task as Record<string, unknown> | undefined
+  const title = trimmed(task?.title) || trimmed(args.title)
+  const facts = taskFieldsOf(call)
+  const callTaskId = trimmed(result?.taskId) || trimmed(task?.id) || null
 
-  return {
+  const shared = {
     callId: call.callId,
-    clarificationId: typeof rawId === 'string' && rawId.length > 0 ? rawId : null,
-    question: typeof args.question === 'string' ? args.question.trim() : '',
-    title: savedTitle || argTitle,
+    title,
     domain: domain as TaskDomain | null,
-    options: optionsOf(args),
-    facts: taskFieldsOf(call),
+    facts,
   }
+
+  const rows = wireRows(result)
+  if (rows.length === 0) {
+    // The one-question shape: the id on the result, the question in the args.
+    const legacyId = trimmed(result?.clarificationId)
+    return [
+      {
+        ...shared,
+        rowKey: call.callId,
+        taskId: callTaskId,
+        clarificationId: legacyId.length > 0 ? legacyId : null,
+        question: trimmed(args.question),
+        options: optionsOf(args.options),
+      },
+    ]
+  }
+
+  return rows.map((row, index) => {
+    const id = trimmed(row.id) || (index === 0 ? trimmed(result?.clarificationId) : '')
+    return {
+      ...shared,
+      // The id when there is one: it survives a re-render that reorders nothing
+      // but would otherwise reuse a positional key across two different rows.
+      rowKey: `${call.callId}:${id || index}`,
+      taskId: trimmed(row.taskId) || callTaskId,
+      clarificationId: id.length > 0 ? id : null,
+      question: trimmed(row.question),
+      options: optionsOf(row.options),
+    }
+  })
 }
 
 export function parseHolds(calls: readonly AiToolCall[]): ParsedHold[] {
-  return calls.map(parseHold)
+  return calls.flatMap(parseHoldRows)
+}
+
+/**
+ * One group per MATTER, in the order the questions were asked.
+ *
+ * Two questions about the same filed thing get one facts block between them —
+ * repeating the chip, title, date and priority above each question would
+ * describe one matter twice on one card, which is the duplication this card was
+ * rebuilt to remove. Rows with no task id are their own group: nothing says
+ * they belong together.
+ */
+export function groupHolds(holds: readonly ParsedHold[]): HoldGroup[] {
+  const groups: HoldGroup[] = []
+  const byKey = new Map<string, HoldGroup>()
+
+  for (const hold of holds) {
+    const key = hold.taskId ?? hold.rowKey
+    const existing = byKey.get(key)
+    if (existing) {
+      existing.rows.push(hold)
+      // A later row may carry facts the first one lacked; never drop what we have.
+      if (!existing.facts && hold.facts) existing.facts = hold.facts
+      if (!existing.title && hold.title) existing.title = hold.title
+      continue
+    }
+    const group: HoldGroup = {
+      key,
+      title: hold.title,
+      domain: hold.domain,
+      facts: hold.facts,
+      rows: [hold],
+    }
+    byKey.set(key, group)
+    groups.push(group)
+  }
+
+  return groups
 }
 
 /** What the user staged for one row. `optionIndex` null → they typed it. */
 export interface HoldAnswer {
   label: string
   optionIndex: number | null
+}
+
+/**
+ * The matter as the server left it after an answer was written.
+ *
+ * Answering patches the task — a date answer sets the real dueAt and lets the
+ * reminder fire, a detail answer can rewrite the title — and the shared facts
+ * block redraws from this instead of the guess it was asking about.
+ */
+export interface ResolvedMatter {
+  facts: ToolCallTaskFields | null
+  title: string
+}
+
+/**
+ * Fold a resolve response's task into what the card already knew.
+ *
+ * Field-wise rather than wholesale: sibling questions resolve one after another
+ * and a thinner reply must not erase a title or a set of fields an earlier one
+ * established.
+ */
+export function resolvedMatterFrom(task: unknown, prev?: ResolvedMatter): ResolvedMatter {
+  const title = isRecord(task) ? trimmed(task.title) : ''
+  return {
+    facts: taskFieldsFrom(task) ?? prev?.facts ?? null,
+    title: title || prev?.title || '',
+  }
 }
 
 /**

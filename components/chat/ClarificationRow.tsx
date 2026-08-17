@@ -1,35 +1,28 @@
 'use client'
 
-// One held matter inside the clarification card: what was filed, then what is
-// being asked about it.
+// ONE question inside the clarification card: the ask, then the affordances for
+// answering it — chips, free text, and the tick it collapses to once saved.
 //
-// The facts come FIRST and they are the whole matter — chip, title, date,
-// priority, domain, and the warning when the date will not fire. They used to
-// live on a separate receipt card stacked above this one, which meant one
-// matter had two surfaces: the question here, the guess up there. Answering
-// collapsed this half and left the other half insisting the matter still needed
-// a detail, showing a time the user had just corrected.
-//
-// So this row owns both halves and both states. Unanswered: eyebrow "Filed —
-// needs a detail", the guessed date, the "won't remind until you confirm"
-// caveat. Answered: eyebrow "Filed", the CONFIRMED date read back off the
-// server's patched task, and the caveat replaced by the promise it became.
+// The facts of the matter are NOT here. They live once per matter, above the
+// questions, in ClarificationMatter — because a hold can raise two questions
+// about one filed thing ("What time?" and "Which friend?"), and printing the
+// chip, title, date and priority above each of them describes one matter twice
+// on one card.
 //
 // Presentational: every piece of state is owned by ClarificationDeck, because
 // Save is a single control over the whole card and it has to know what each row
-// is holding.
+// is holding. Resolving one question must not touch its sibling — the answered
+// one collapses to its tick, the sibling stays interactive — which is exactly
+// what per-row state buys.
 
 import { Check } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
-import { MatterFacts, type ReminderState } from '@/components/chat/MatterFacts'
-import { DomainIcon } from '@/components/icons/DomainIcon'
 import { cn } from '@/lib/cn'
-import type { HoldAnswer, ParsedHold } from '@/lib/ai/clarificationHolds'
-import type { ToolCallTaskFields } from '@/lib/ai/toolCallSummary'
+import type { HoldAnswer, HoldOption, ParsedHold } from '@/lib/ai/clarificationHolds'
 
-interface ClarificationRowProps {
-  hold: ParsedHold
+/** What the deck is holding for one question. */
+export interface ClarificationRowState {
   /** What is staged for this row, or null while it is unanswered. */
   answer: HoldAnswer | null
   /** Free-text draft — separate from `answer` so a pick can be typed over. */
@@ -38,14 +31,13 @@ interface ClarificationRowProps {
   typing: boolean
   /** Already resolved by an earlier Save on this card. */
   saved: boolean
-  /**
-   * The matter as it stands AFTER the answer was written, from the resolve
-   * response. Null until it lands (or when the row resolved through the legacy
-   * chat fallback, which patches nothing here).
-   */
-  resolvedFacts: ToolCallTaskFields | null
+}
+
+interface ClarificationRowProps {
+  hold: ParsedHold
+  state: ClarificationRowState
   disabled: boolean
-  onPick: (option: { label: string; index: number }) => void
+  onPick: (option: HoldOption) => void
   onDraft: (value: string) => void
   onReveal: () => void
   onSubmit: () => void
@@ -53,11 +45,7 @@ interface ClarificationRowProps {
 
 export function ClarificationRow({
   hold,
-  answer,
-  draft,
-  typing,
-  saved,
-  resolvedFacts,
+  state,
   disabled,
   onPick,
   onDraft,
@@ -65,42 +53,12 @@ export function ClarificationRow({
   onSubmit,
 }: ClarificationRowProps) {
   const t = useTranslations('chat')
+  const { answer, draft, typing, saved } = state
   const hasOptions = hold.options.length > 0
   const showInput = !hasOptions || typing
 
-  // The answer wins over the guess it replaced. When the server sent nothing
-  // back we still drop the caveat — the question has been answered, and a
-  // "won't remind until you confirm" pill under a confirmation is the exact
-  // stale line this card was rebuilt to kill.
-  const fields = (saved ? resolvedFacts : null) ?? hold.facts
-  const reminder: ReminderState | undefined = !saved
-    ? undefined
-    : fields?.dueAt && fields.willRemind
-      ? 'confirmed'
-      : 'none'
-
   return (
-    <li className="flex flex-col gap-2.5">
-      {fields ? (
-        <MatterFacts
-          eyebrow={saved ? t('clarify.filedEyebrow') : t('ledger.verb.holdForClarification')}
-          title={hold.title}
-          fields={fields}
-          reminder={reminder}
-          warnLabel={t('clarify.noReminderUntil')}
-        />
-      ) : (
-        // The hold saved no task (a failed call, or a transcript written before
-        // the task rode back on the result). Name the matter and nothing else —
-        // inventing pills for fields we do not hold is the opposite of the fix.
-        <div className="flex items-center gap-2">
-          {hold.domain ? <DomainIcon domain={hold.domain} size={24} /> : null}
-          <span className="min-w-0 truncate text-caption text-ink-subtle" dir="auto">
-            {hold.title ? t('clarify.filed', { title: hold.title }) : t('clarify.filedNoTitle')}
-          </span>
-        </div>
-      )}
-
+    <div className="flex flex-col gap-2.5">
       <p className="text-body-sm font-semibold text-ink" dir="auto">
         {hold.question || t('clarify.fallbackQuestion')}
       </p>
@@ -123,7 +81,7 @@ export function ClarificationRow({
                 const picked = answer?.optionIndex === option.index
                 return (
                   <button
-                    key={`${hold.callId}-${option.index}`}
+                    key={`${hold.rowKey}-${option.index}`}
                     type="button"
                     disabled={disabled}
                     aria-pressed={picked}
@@ -167,6 +125,6 @@ export function ClarificationRow({
           )}
         </>
       )}
-    </li>
+    </div>
   )
 }
