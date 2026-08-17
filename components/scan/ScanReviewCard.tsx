@@ -7,9 +7,11 @@
 // DocumentCaptureFlow's phase machine — this component only ever renders
 // once a doc is 'ready_for_review' with pending candidates.
 
-import { useState } from 'react'
-import { Check, ChevronDown, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { AlertTriangle, Check, ChevronDown, X } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import { previewDraftConflicts, type DraftConflict } from '@/queries/planning'
+import { SuggestedSlots } from '@/components/planning/SuggestedSlots'
 
 import { SketchDomainIcon } from '@/components/icons/sketch/domainGlyphs'
 import {
@@ -84,6 +86,46 @@ export function ScanReviewCard({ doc, onReviewed }: ScanReviewCardProps) {
     ),
   )
   const review = useReviewScannedDocument(doc.id)
+
+  const [expandedConflicts, setExpandedConflicts] = useState<DraftConflict[]>([])
+  const [expandedSuggestions, setExpandedSuggestions] = useState<string[]>([])
+  const [expandedSuggestionReason, setExpandedSuggestionReason] = useState('')
+
+  const expandedDraft = expanded ? drafts[expanded] : null
+  const expandedTitle = expandedDraft?.title
+  const expandedDueAt = expandedDraft?.dueAt
+  const expandedDomain = expandedDraft?.domain
+  const expandedPriority = expandedDraft?.priority
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const trimmedTitle = (expandedTitle ?? '').trim()
+      if (!expanded || !trimmedTitle || !expandedDueAt) {
+        setExpandedConflicts([])
+        setExpandedSuggestions([])
+        setExpandedSuggestionReason('')
+        return
+      }
+
+      void previewDraftConflicts({
+        title: trimmedTitle,
+        dueDate: expandedDueAt,
+        domain: expandedDomain,
+        priority: expandedPriority,
+      }).then((preview) => {
+        setExpandedConflicts(preview.conflicts ?? [])
+        setExpandedSuggestions(preview.suggestions ?? [])
+        setExpandedSuggestionReason(preview.suggestionReason ?? '')
+      })
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [expanded, expandedTitle, expandedDueAt, expandedDomain, expandedPriority])
+
+  const handlePickSuggestion = (date: Date) => {
+    if (!expanded) return
+    updateDraft(expanded, { dueAt: date.toISOString() })
+  }
 
   if (pending.length === 0) {
     return (
@@ -264,6 +306,31 @@ export function ScanReviewCard({ doc, onReviewed }: ScanReviewCardProps) {
                         </button>
                       ) : null}
                     </div>
+
+                    {expanded === c.key && expandedConflicts.length > 0 ? (
+                      <ul className="mt-1 flex flex-col gap-1">
+                        {expandedConflicts.map((conflict) => (
+                          <li
+                            key={conflict.taskId}
+                            className="flex items-start gap-1.5 text-body-sm text-warning animate-in fade-in slide-in-from-top-1 duration-200"
+                          >
+                            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                            <span dir="auto">
+                              {conflict.reason}{' '}
+                              <span className="text-ink-muted">“{conflict.title}”</span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+
+                    {expanded === c.key && expandedConflicts.length > 0 ? (
+                      <SuggestedSlots
+                        slots={expandedSuggestions}
+                        reason={expandedSuggestionReason}
+                        onPick={handlePickSuggestion}
+                      />
+                    ) : null}
 
                     <div className="flex flex-col gap-1">
                       <span className="text-label uppercase text-ink-subtle">{t('fields.summary')}</span>
