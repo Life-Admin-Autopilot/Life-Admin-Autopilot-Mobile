@@ -49,7 +49,7 @@ import {
   type ParsedHold,
   type ResolvedMatter,
 } from '@/lib/ai/clarificationHolds'
-import { useResolveClarification } from '@/queries/clarifications'
+import { useClarificationStatuses, useResolveClarification } from '@/queries/clarifications'
 import type { AiToolCall } from '@/lib/ai/types'
 
 interface ClarificationDeckProps {
@@ -79,8 +79,60 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
   const [picked, setPicked] = useState<Record<string, HoldOption>>({})
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [typing, setTyping] = useState<Record<string, boolean>>({})
-  /** Rows already resolved by an earlier Save on this card. */
+  /** Rows resolved by an earlier Save on THIS mount. */
   const [saved, setSaved] = useState<Record<string, HoldAnswer>>({})
+
+  // What the SERVER says became of these questions.
+  //
+  // Local `saved` only ever knew about answers given while this card was on
+  // screen, so reopening the conversation re-armed a question the user had
+  // already answered — chips untapped, Save enabled, the answer nowhere. The
+  // rows were resolved server-side the whole time; nothing asked. Answers given
+  // from /uncertainties land here too, which the card could never have known.
+  const persistedIds = useMemo(
+    () => holds.map((hold) => hold.clarificationId).filter((id): id is string => Boolean(id)),
+    [holds],
+  )
+  const { data: statuses } = useClarificationStatuses(persistedIds)
+
+  // Keyed by rowKey like `saved`, so the two merge with local winning: a save in
+  // flight must not flicker back to unanswered when a refetch lands before the
+  // server has the answer.
+  const persistedAnswers = useMemo(() => {
+    if (!statuses) return {}
+    const byId = new Map(statuses.map((row) => [row.clarification.id, row]))
+    const out: Record<string, HoldAnswer> = {}
+    for (const hold of holds) {
+      const row = hold.clarificationId ? byId.get(hold.clarificationId) : undefined
+      // ONLY 'resolved'. A dropped row is not an answer, and a deferred one is
+      // still open — rendering either as answered would tick a question the user
+      // never settled.
+      if (row?.clarification.status !== 'resolved') continue
+      out[hold.rowKey] = {
+        // The label the server recorded. `optionIndex` is null because this is a
+        // receipt, not a pending send — nothing re-resolves it.
+        label: row.clarification.answer ?? '',
+        optionIndex: null,
+      }
+    }
+    return out
+  }, [statuses, holds])
+
+  const persistedMatters = useMemo(() => {
+    if (!statuses) return {}
+    const byId = new Map(statuses.map((row) => [row.clarification.id, row]))
+    const out: Record<string, ResolvedMatter> = {}
+    for (const group of groups) {
+      for (const hold of group.rows) {
+        const row = hold.clarificationId ? byId.get(hold.clarificationId) : undefined
+        if (!row?.task) continue
+        // Folded in group order, so a matter answered twice ends on the state its
+        // LAST answer left — the same rule resolveMatter follows live.
+        out[group.key] = resolvedMatterFrom(row.task, out[group.key])
+      }
+    }
+    return out
+  }, [statuses, groups])
   /**
    * Each matter as the server left it — the confirmed date, the title an answer
    * rewrote, and whether it will now fire. Keyed by MATTER, not by question:
@@ -94,7 +146,7 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
   // clears the typed draft and typing clears the pick, so the two can never
   // disagree about what Save is about to send.
   const answerFor = (hold: ParsedHold): HoldAnswer | null => {
-    const done = saved[hold.rowKey]
+    const done = saved[hold.rowKey] ?? persistedAnswers[hold.rowKey]
     if (done) return done
     const option = picked[hold.rowKey]
     if (option) return { label: option.label, optionIndex: option.index, dueAt: option.dueAt }
@@ -106,7 +158,7 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
     answer: answerFor(hold),
     draft: drafts[hold.rowKey] ?? '',
     typing: Boolean(typing[hold.rowKey]),
-    saved: Boolean(saved[hold.rowKey]),
+    saved: Boolean(saved[hold.rowKey] ?? persistedAnswers[hold.rowKey]),
   })
 
   const pick = (hold: ParsedHold, option: HoldOption) => {
@@ -132,7 +184,7 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
   // something that was never written to it.
   const answerable = holds.filter(isAnswerable)
   const answerableGroups = groups.filter((group) => group.rows.some(isAnswerable))
-  const unsaved = answerable.filter((hold) => !saved[hold.rowKey])
+  const unsaved = answerable.filter((hold) => !(saved[hold.rowKey] ?? persistedAnswers[hold.rowKey]))
   const stagedRows = unsaved.filter((hold) => answerFor(hold) !== null)
   const openRows = unsaved.length - stagedRows.length
 
@@ -182,7 +234,7 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
       const multi = group.rows.filter(isAnswerable).length > 1
 
       for (const hold of group.rows) {
-        if (!isAnswerable(hold) || saved[hold.rowKey]) continue
+        if (!isAnswerable(hold) || saved[hold.rowKey] || persistedAnswers[hold.rowKey]) continue
         const answer = answerFor(hold)
         if (!answer) continue
         committed[hold.rowKey] = answer
@@ -237,7 +289,7 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
             key={group.key}
             group={group}
             stateOf={stateOf}
-            resolved={resolved[group.key] ?? null}
+            resolved={resolved[group.key] ?? persistedMatters[group.key] ?? null}
             disabled={disabled}
             onPick={pick}
             onDraft={draft}

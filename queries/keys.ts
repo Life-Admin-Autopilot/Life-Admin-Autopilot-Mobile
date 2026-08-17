@@ -12,6 +12,9 @@ export const queryKeys = {
   },
   notifications: ['notifications'] as const,
   clarifications: ['clarifications'] as const,
+  /** Status of specific rows, by id — see useClarificationStatuses. */
+  clarificationStatuses: (ids: readonly string[]) =>
+    ['clarifications', 'by-ids', [...ids].sort().join(',')] as const,
   /** The Knowledge Agent's daily briefing. */
   briefing: () => ['briefing', 'today'] as const,
   /** Conflicts re-checked for one saved task. */

@@ -41,7 +41,14 @@ export function timeChipLabel(label: string, dueAt: string | undefined, tag: str
   if (!dueAt) return label
   const instant = new Date(dueAt)
   if (Number.isNaN(instant.getTime())) return label
-  const pattern = /\b([01]?\d|2[0-3]):[0-5]\d\b/
+  // Any meridiem already on the label is part of the MATCH, not left behind it.
+  //
+  // The model does not always write 24-hour time: asked for options it produced
+  // "Afternoon (2:00 PM)", the `2:00` was replaced with a formatted `2:00 PM`,
+  // and the chip read "Afternoon (2:00 PM PM)". Consuming the marker means the
+  // replacement supplies the only one, whatever the label arrived with — and an
+  // Arabic reader gets ص/م rather than an English marker the formatter never saw.
+  const pattern = /\b([01]?\d|2[0-3]):[0-5]\d(?:\s*(?:[AaPp]\.?[Mm]\.?|[صم]))?/
   if (!pattern.test(label)) return label
   return label.replace(pattern, formatTime(instant, tag))
 }
