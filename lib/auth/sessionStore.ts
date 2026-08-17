@@ -185,6 +185,27 @@ export function refreshSession(): Promise<boolean> {
     const before = useSessionStore.getState().refreshToken
     if (!before) return false
 
+    // Has the session moved out from under this rotation while it was in flight?
+    // Whatever moved it outranks the pair this call is holding:
+    //   - a DIFFERENT token → a concurrent rotation got there first and its pair
+    //     is the live one; ours is already spent. The session is healthy, so a
+    //     401 here says nothing about it — signing the user out would be the bug.
+    //   - NULL → clear() ended the session (sign-out, account deletion). There is
+    //     no session left to install a pair into.
+    //
+    // The null case is why this check has to guard the SUCCESS path too. Writing
+    // a fresh pair after clear() resurrects the session: the tokens land back in
+    // localStorage, the next boot validates them against /auth/me, status flips
+    // to 'authenticated', and the guest guard bounces the signed-out user off
+    // /welcome to /dashboard — for good.
+    //
+    // Returns null when nothing moved and this call should proceed.
+    const supersededBy = (): boolean | null => {
+      const settled = useSessionStore.getState().refreshToken
+      if (settled === before) return null
+      return settled !== null
+    }
+
     try {
       const res = await fetch(`${resolveApiBaseUrl()}/auth/refresh`, {
         method: 'POST',
@@ -194,6 +215,8 @@ export function refreshSession(): Promise<boolean> {
 
       if (res.ok) {
         const data = (await res.json()) as { tokens: { accessToken: string; refreshToken: string } }
+        const supersededOnSuccess = supersededBy()
+        if (supersededOnSuccess !== null) return supersededOnSuccess
         storageSet(ACCESS_KEY, data.tokens.accessToken)
         storageSet(REFRESH_KEY, data.tokens.refreshToken)
         useSessionStore.setState({
@@ -203,10 +226,8 @@ export function refreshSession(): Promise<boolean> {
         return true
       }
 
-      // Someone else got there first. The token we presented was spent by a
-      // concurrent rotation that succeeded, so the session is healthy and this
-      // 401 says nothing about it — signing the user out here is the bug.
-      if (useSessionStore.getState().refreshToken !== before) return true
+      const supersededOnFailure = supersededBy()
+      if (supersededOnFailure !== null) return supersededOnFailure
 
       // Only now is it genuinely dead: the server rejected the CURRENT token and
       // nobody replaced it. A 5xx is not that, and must not cost a session.

@@ -2,7 +2,7 @@
 // `status` → 'authenticated' and lets the route gate route onward. The HTTP
 // seam is lib/api/client.ts; these are unauthenticated calls.
 
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api/client'
 import { useSessionStore, type AuthUser } from '@/lib/auth/sessionStore'
@@ -37,6 +37,7 @@ export function useSignIn() {
 
 export function useSignOut() {
   const clear = useSessionStore((s) => s.clear)
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async () => {
       const refreshToken = useSessionStore.getState().refreshToken
@@ -47,6 +48,16 @@ export function useSignOut() {
         /* ignore — local clear is what matters for the gate */
       }
     },
-    onSuccess: () => clear(),
+    // Order matters. The cache goes FIRST: every query the signed-in surfaces
+    // mounted is still live at this point, and the moment the tokens are gone
+    // each one refetches, 401s, and drives a refresh rotation — which is the
+    // race that used to resurrect the session and make /welcome unreachable
+    // (see refreshSession in lib/auth/sessionStore.ts). Dropping the cache
+    // first means there is nothing left to refetch, and it keeps the previous
+    // account's data from being handed to whoever signs in next.
+    onSuccess: async () => {
+      queryClient.clear()
+      await clear()
+    },
   })
 }

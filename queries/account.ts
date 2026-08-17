@@ -6,7 +6,7 @@
 // already worthless and leaving them there just means the next request fails
 // somewhere confusing.
 
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { apiBlob, api } from '@/lib/api/client'
 import { saveExport } from '@/lib/account/downloadExport'
@@ -28,9 +28,14 @@ export interface DeleteAccountInput {
 
 export function useDeleteAccount() {
   const clear = useSessionStore((s) => s.clear)
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (body: DeleteAccountInput) => api<void>('/me', { method: 'DELETE', body }),
+    // Cache before tokens, for the same reason sign-out does it in that order:
+    // a live query refetching into the gap 401s and drives a refresh rotation,
+    // which can write a working token pair back after the session was cleared.
     onSuccess: async () => {
+      queryClient.clear()
       await clear()
     },
   })

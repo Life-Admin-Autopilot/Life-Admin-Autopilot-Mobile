@@ -1,3 +1,4 @@
+import { HeaderBackButton } from '@/components/layout/HeaderBackButton'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { ThemeToggle } from '@/components/layout/ThemeToggle'
 import { env } from '@/lib/env'
@@ -13,6 +14,10 @@ import { env } from '@/lib/env'
 // There used to be a hamburger puck on the left. It had no handler and opened
 // nothing; Profile — its only plausible destination — is now a real tab, so it
 // was removed rather than left as a control that does nothing on every screen.
+// The left slot is used again now, but only by screens that were opened FROM a
+// tab and therefore have somewhere specific to go back to (`backTo`) — a tabbed
+// screen has no "back", and a puck that reads as one would be that same dead
+// control returning.
 //
 // The centred layer spans `top-safe` → `bottom-1`: exactly the header's content
 // box, so `items-center` puts the title on the same optical line as the pucks.
@@ -27,16 +32,32 @@ import { env } from '@/lib/env'
 // whole header above those rows fixes it for every screen at once. The header
 // never overlaps a stuck row — the row only sticks once the header has scrolled
 // fully out — so nothing else changes.
-export function AppHeader({ title }: { title?: string }) {
+export function AppHeader({
+  title,
+  /**
+   * Route to land on when this screen was opened cold (a deep link, a
+   * notification tap) and there is no history to go back through. Presence of
+   * this prop is what puts the back puck in the leading slot.
+   */
+  backTo,
+}: {
+  title?: string
+  backTo?: string
+}) {
   // A header that names the screen IS that screen's heading. The wordmark
   // variant is not — there the page's own hero owns the h1.
   const Title = title ? 'h1' : 'span'
 
   return (
-    // `justify-end` rather than `justify-between`: the right cluster is the only
-    // flex child now, and the title is positioned absolutely, so there is
-    // nothing on the left to space against.
+    // Still `justify-end`: the control cluster holds the trailing edge whether
+    // or not a back puck exists. The puck carries its own `me-auto` to claim the
+    // leading edge, which is why this stays one static class rather than
+    // switching to `justify-between` — with no puck, `justify-between` would
+    // place the lone cluster at the START and move it on every tabbed screen.
+    // The title is positioned absolutely either way and never participates.
     <header className="pt-safe relative z-30 flex items-center justify-end gap-2 px-5 pb-1">
+      {backTo ? <HeaderBackButton fallback={backTo} /> : null}
+
       {/* pointer-events-none so the title never swallows a tap meant for a
           puck it happens to overlap on a narrow screen. */}
       <Title className="top-safe pointer-events-none absolute inset-x-0 bottom-1 flex items-center justify-center">

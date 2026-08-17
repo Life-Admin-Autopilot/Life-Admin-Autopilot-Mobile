@@ -18,6 +18,20 @@ export const ROUTE_TAB = {
 
 export type AppTab = (typeof ROUTE_TAB)[keyof typeof ROUTE_TAB]
 
+// Screens that are not tabs of their own but are opened FROM one, and are still
+// the same place as far as the person is concerned. They keep the bar mounted
+// with their parent tab lit rather than dropping the app's chrome entirely —
+// /money is the whole of a dashboard card, so losing the bar on the way in left
+// the screen with no way out but the browser's own back gesture.
+//
+// Such a screen also wears a back puck in its header (AppHeader's `back` prop),
+// because a lit tab that is not the current screen cannot be the way back on its
+// own: tapping Home from /money goes to /dashboard's top, not to where the
+// person was.
+const ROUTE_PARENT_TAB = {
+  '/money': 'dashboard',
+} as const satisfies Record<string, AppTab>
+
 // next.config.ts sets trailingSlash: true (Capacitor static export), so
 // usePathname() returns e.g. "/documents/" — strip it before lookup.
 export function normalizeRoute(pathname: string): string {
@@ -25,12 +39,20 @@ export function normalizeRoute(pathname: string): string {
 }
 
 export function routeTab(pathname: string): AppTab | undefined {
-  return ROUTE_TAB[normalizeRoute(pathname) as keyof typeof ROUTE_TAB]
+  const route = normalizeRoute(pathname)
+  return (
+    ROUTE_TAB[route as keyof typeof ROUTE_TAB] ??
+    ROUTE_PARENT_TAB[route as keyof typeof ROUTE_PARENT_TAB]
+  )
 }
 
 // The tabbed surfaces plus the routes reached from them that still count as
 // "inside the app" (RouteGuard guard="app").
-const CHAT_ROUTES = new Set<string>([...Object.keys(ROUTE_TAB), '/uncertainties'])
+const CHAT_ROUTES = new Set<string>([
+  ...Object.keys(ROUTE_TAB),
+  ...Object.keys(ROUTE_PARENT_TAB),
+  '/uncertainties',
+])
 
 export function isAppChatRoute(pathname: string): boolean {
   return CHAT_ROUTES.has(normalizeRoute(pathname))

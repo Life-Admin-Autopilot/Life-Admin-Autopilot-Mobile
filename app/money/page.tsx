@@ -33,8 +33,11 @@ export default function MoneyPage() {
   }
 
   return (
-    <main className="min-h-dvh pb-28">
-      <AppHeader title={t('title')} />
+    // pb-32 clears the floating tab bar, matching every other screen that wears
+    // it. /money is opened from a dashboard card, so the bar stays with Home lit
+    // and the header carries a back puck home — see ROUTE_PARENT_TAB.
+    <main className="min-h-dvh pb-32">
+      <AppHeader title={t('title')} backTo="/dashboard" />
 
       {isLoading ? <MoneySkeleton label={t('states.loading')} /> : null}
 
