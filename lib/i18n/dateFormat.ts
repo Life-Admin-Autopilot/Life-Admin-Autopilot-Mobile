@@ -36,12 +36,18 @@ export function formatTime(date: Date, tag: string): string {
  * clock; the user's clock is a display concern, so it is settled here, not in
  * the prompt. Labels without a recognizable time, or options without a
  * parseable dueAt, pass through untouched.
+ *
+ * The match deliberately swallows a trailing meridiem. A label the model already
+ * wrote on a 12-hour clock ("Morning (9:00 AM)") matches the clock part on its
+ * own, and replacing just that part leaves the old marker stranded behind the
+ * new one — "9:00 AM AM". Consuming it means the localized time replaces the
+ * whole original reading, whichever clock it was written on.
  */
 export function timeChipLabel(label: string, dueAt: string | undefined, tag: string): string {
   if (!dueAt) return label
   const instant = new Date(dueAt)
   if (Number.isNaN(instant.getTime())) return label
-  const pattern = /\b([01]?\d|2[0-3]):[0-5]\d\b/
+  const pattern = /\b([01]?\d|2[0-3]):[0-5]\d(?!\d)(\s*[APap]\.?[Mm]\.?)?/
   if (!pattern.test(label)) return label
   return label.replace(pattern, formatTime(instant, tag))
 }
