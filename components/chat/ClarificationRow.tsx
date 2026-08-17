@@ -19,6 +19,8 @@ import { Check } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
 import { cn } from '@/lib/cn'
+import { timeChipLabel } from '@/lib/i18n/dateFormat'
+import { useIntlTag } from '@/lib/i18n/localeStore'
 import type { HoldAnswer, HoldOption, ParsedHold } from '@/lib/ai/clarificationHolds'
 
 /** What the deck is holding for one question. */
@@ -53,6 +55,7 @@ export function ClarificationRow({
   onSubmit,
 }: ClarificationRowProps) {
   const t = useTranslations('chat')
+  const tag = useIntlTag()
   const { answer, draft, typing, saved } = state
   const hasOptions = hold.options.length > 0
   const showInput = !hasOptions || typing
@@ -70,7 +73,7 @@ export function ClarificationRow({
         <div className="flex items-center gap-1.5">
           <Check size={13} strokeWidth={2.5} className="shrink-0 text-accent" />
           <span className="truncate text-caption text-ink-muted" dir="auto">
-            {answer?.label}
+            {answer ? timeChipLabel(answer.label, answer.dueAt, tag) : null}
           </span>
         </div>
       ) : (
@@ -93,7 +96,7 @@ export function ClarificationRow({
                         : 'border-border bg-surface text-ink hover:bg-surface-sunken',
                     )}
                   >
-                    {option.label}
+                    {timeChipLabel(option.label, option.dueAt, tag)}
                   </button>
                 )
               })}

@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Pill } from '@/components/ui/Pill'
 import { ChoiceChip } from '@/components/onboarding/QuestionChips'
+import { timeChipLabel } from '@/lib/i18n/dateFormat'
+import { useIntlTag } from '@/lib/i18n/localeStore'
 import { MorphSurface, type MorphShape } from '@/components/ui/MorphSurface'
 import {
   OriginalRequest,
@@ -87,6 +89,7 @@ export function UncertaintyStack() {
 function Walker({ initial }: { initial: Clarification[] }) {
   const t = useTranslations('uncertainty')
   const tCommon = useTranslations('common')
+  const tag = useIntlTag()
   const router = useRouter()
   const resolve = useResolveClarification()
   const defer = useDeferClarification()
@@ -222,7 +225,7 @@ function Walker({ initial }: { initial: Clarification[] }) {
             ) : (
               <div className="mt-4 flex flex-wrap gap-2">
                 {current!.options.map((o, i) => (
-                  <ChoiceChip key={i} label={o.label} onClick={() => pickOption(i)} />
+                  <ChoiceChip key={i} label={timeChipLabel(o.label, o.dueAt, tag)} onClick={() => pickOption(i)} />
                 ))}
               </div>
             )}

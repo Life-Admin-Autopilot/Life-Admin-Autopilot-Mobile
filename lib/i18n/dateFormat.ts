@@ -29,6 +29,23 @@ export function formatTime(date: Date, tag: string): string {
   return formatter(tag, { hour: 'numeric', minute: '2-digit' }).format(date)
 }
 
+/**
+ * An option chip's label with any 24-hour time the model wrote ("Afternoon
+ * (14:00)") re-rendered in the locale's own clock from the option's dueAt —
+ * "Afternoon (2:00 PM)" in English. The model authors labels on a 24-hour
+ * clock; the user's clock is a display concern, so it is settled here, not in
+ * the prompt. Labels without a recognizable time, or options without a
+ * parseable dueAt, pass through untouched.
+ */
+export function timeChipLabel(label: string, dueAt: string | undefined, tag: string): string {
+  if (!dueAt) return label
+  const instant = new Date(dueAt)
+  if (Number.isNaN(instant.getTime())) return label
+  const pattern = /\b([01]?\d|2[0-3]):[0-5]\d\b/
+  if (!pattern.test(label)) return label
+  return label.replace(pattern, formatTime(instant, tag))
+}
+
 /** "Monday" / "الاثنين" */
 export function formatWeekday(date: Date, tag: string, style: 'long' | 'short' = 'long'): string {
   return formatter(tag, { weekday: style }).format(date)

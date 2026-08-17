@@ -34,6 +34,8 @@ export interface HoldOption {
   label: string
   /** Position in the SERVER's options array for THIS row. Sent to /resolve unchanged. */
   index: number
+  /** The option's resolved instant, when it carries one — display re-renders the time per locale. */
+  dueAt?: string
 }
 
 /**
@@ -148,8 +150,15 @@ function optionList(raw: unknown): unknown[] {
 // option.
 function optionsOf(raw: unknown): HoldOption[] {
   return optionList(raw)
-    .map((option, index) => ({ label: labelOf(option), index }))
+    .map((option, index) => ({ label: labelOf(option), index, dueAt: dueAtOf(option) }))
     .filter((option) => option.label.length > 0)
+}
+
+/** The option's resolved instant, when the object shape carries one. */
+function dueAtOf(option: unknown): string | undefined {
+  if (!isRecord(option)) return undefined
+  const value = trimmed(option.dueAt)
+  return value.length > 0 ? value : undefined
 }
 
 /**
@@ -330,6 +339,8 @@ export function groupHolds(holds: readonly ParsedHold[]): HoldGroup[] {
 export interface HoldAnswer {
   label: string
   optionIndex: number | null
+  /** The picked option's instant, for locale-correct display of the answer. */
+  dueAt?: string
 }
 
 /**

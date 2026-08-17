@@ -97,7 +97,7 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
     const done = saved[hold.rowKey]
     if (done) return done
     const option = picked[hold.rowKey]
-    if (option) return { label: option.label, optionIndex: option.index }
+    if (option) return { label: option.label, optionIndex: option.index, dueAt: option.dueAt }
     const text = (drafts[hold.rowKey] ?? '').trim()
     return text ? { label: text, optionIndex: null } : null
   }
