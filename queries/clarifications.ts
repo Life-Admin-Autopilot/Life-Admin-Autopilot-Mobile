@@ -64,6 +64,41 @@ export function useClarifications() {
   })
 }
 
+/**
+ * What became of questions whose ids a caller already holds.
+ *
+ * The chat transcript needs this and `useClarifications` cannot give it. That
+ * one lists VISIBLE OPEN rows, so a row missing from it may have been resolved,
+ * dropped, or only deferred — and a card that treats absence as "answered"
+ * would show a tick over a question still sitting in the user's queue.
+ *
+ * Without it the chat card knew only what happened while it was mounted:
+ * answering a question and reopening the conversation re-rendered the hold from
+ * the tool call in history, options untapped and Save armed, as though nothing
+ * had been said. The answer was on the server the whole time.
+ */
+export interface ClarificationStatus {
+  clarification: Clarification
+  /** The matter as it stands now — the CONFIRMED time, not the guess. Null if deleted. */
+  task: { id: string; title?: string; dueAt?: string; kind?: string } | null
+}
+
+export function useClarificationStatuses(ids: readonly string[]) {
+  return useQuery({
+    queryKey: queryKeys.clarificationStatuses(ids),
+    queryFn: () =>
+      api<{ clarifications: ClarificationStatus[] }>(
+        `/me/clarifications/by-ids?ids=${encodeURIComponent(ids.join(','))}`,
+      ),
+    enabled: ids.length > 0,
+    // A resolved row never reopens, so this is close to immutable once answered.
+    // The window is short enough that a row answered elsewhere in this session —
+    // /uncertainties, another tab — still catches up on the next mount.
+    staleTime: 30_000,
+    select: (data) => data.clarifications ?? [],
+  })
+}
+
 export function useResolveClarification() {
   const queryClient = useQueryClient()
   return useMutation({

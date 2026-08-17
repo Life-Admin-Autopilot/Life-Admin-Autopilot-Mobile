@@ -47,7 +47,12 @@ export function timeChipLabel(label: string, dueAt: string | undefined, tag: str
   if (!dueAt) return label
   const instant = new Date(dueAt)
   if (Number.isNaN(instant.getTime())) return label
-  const pattern = /\b([01]?\d|2[0-3]):[0-5]\d(?!\d)(\s*[APap]\.?[Mm]\.?)?/
+  // Any meridiem already on the label is part of the MATCH, not left behind it,
+  // and Arabic's ص/م counts as one: an ar-EG reader's formatted time carries a
+  // marker the English character class would not have consumed, which is the
+  // same "9:00 AM AM" defect in the other locale. `(?!\d)` keeps the clock part
+  // from matching the head of a longer run of digits.
+  const pattern = /\b([01]?\d|2[0-3]):[0-5]\d(?!\d)(?:\s*(?:[AaPp]\.?[Mm]\.?|[صم]))?/
   if (!pattern.test(label)) return label
   return label.replace(pattern, formatTime(instant, tag))
 }
