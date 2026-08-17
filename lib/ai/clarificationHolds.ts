@@ -36,8 +36,30 @@ export interface HoldOption {
   index: number
 }
 
+/**
+ * Where a row came from — and therefore whether it is a question at all.
+ *
+ * `clarificationId === null` used to carry this on its own, and it was three
+ * different facts wearing one value: a hold that persisted no receipt, a hold
+ * that FAILED, and a hold the server deliberately declined to ask. All three
+ * were synthesized into an answerable-looking question built from the args, so
+ * a turn where the tool errored and was immediately retried rendered a question
+ * nobody had been asked, about a matter that was never filed, above the real
+ * one. Naming the states is the fix.
+ *
+ * `receipt` — a persisted row. Answerable server-side.
+ * `legacy`  — the call succeeded but saved no receipt. Answerable through the
+ *             chat fallback, which is the behaviour it has always had.
+ * `filed`   — the queue was full: the task was filed and NO question was asked.
+ *             A statement, not an ask.
+ * `failed`  — the call errored. Nothing was filed and nothing was asked, so
+ *             there is nothing here to answer.
+ */
+export type HoldOrigin = 'receipt' | 'legacy' | 'filed' | 'failed'
+
 /** One question. A hold call contributes one row per clarification it raised. */
 export interface ParsedHold {
+  origin: HoldOrigin
   /** Unique per QUESTION — the deck keys every piece of row state on it. */
   rowKey: string
   callId: string
@@ -98,12 +120,34 @@ function labelOf(option: unknown): string {
   return isRecord(option) ? trimmed(option.label) : ''
 }
 
+/**
+ * The options container, which is not always an array.
+ *
+ * The Langflow tool ships `args.options` as a JSON STRING, so a synthesized row
+ * built from the args renders no chips at all and the answer that was meant to
+ * be one tap becomes something to type. Parsing it here rather than only at the
+ * adapter is the point: the adapter fix cannot reach a transcript that has
+ * already been written, and this is the code that re-renders it.
+ */
+function optionList(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw
+  if (typeof raw !== 'string') return []
+  const text = raw.trim()
+  if (!text.startsWith('[')) return []
+  try {
+    const parsed: unknown = JSON.parse(text)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    // Malformed JSON is a question with no chips, never a broken transcript.
+    return []
+  }
+}
+
 // Index is taken BEFORE the empty labels are dropped: it addresses the server's
 // array, not this one, so renumbering the survivors would answer the wrong
 // option.
 function optionsOf(raw: unknown): HoldOption[] {
-  const list = Array.isArray(raw) ? raw : []
-  return list
+  return optionList(raw)
     .map((option, index) => ({ label: labelOf(option), index }))
     .filter((option) => option.label.length > 0)
 }
@@ -146,19 +190,47 @@ export function parseHoldRows(call: AiToolCall): ParsedHold[] {
 
   const rows = wireRows(result)
   if (rows.length === 0) {
-    // No question was persisted, so there is nothing to resolve against: the
-    // card asks what the ARGS say it meant to ask, and the answer rides back
-    // through the chat. `clarificationId` is read as a courtesy — the hold that
-    // saves a row always ships the row itself.
+    // No receipt was persisted. WHY decides whether there is a question here at
+    // all: a failed call asked nothing and filed nothing, a full queue filed the
+    // matter and deliberately asked nothing, and only the remaining case is a
+    // question the user can still answer — through the chat, since there is no
+    // row to resolve against. `clarificationId` is read as a courtesy; the hold
+    // that saves a receipt always ships the receipt itself.
+    //
+    // `legacy` is the catch-all, and it FAILS OPEN: it builds an answerable
+    // question out of the args, which is exactly the phantom this split exists
+    // to kill. That is safe only because of an invariant on the server —
+    // ClarificationHoldService returns zero receipts on the queue-full branch
+    // and nowhere else, so "no receipts" and `queueFull: true` are one condition
+    // and there is no third state. Confirmed against the persisted history: no
+    // hold result in the database lands here. What `legacy` actually carries is
+    // transcripts written before receipts rode back on the result at all.
+    //
+    // So if a SECOND decline path is ever added — a per-matter cap, quiet hours,
+    // a dedupe that suppresses a repeat question — it will arrive as ok:true
+    // with no receipts and no flag, and this branch will invent a question for
+    // it. The fix at that point is to invert the test: name the positive
+    // conditions for a question and treat every unrecognized shape as a
+    // statement. Do not add the new flag to the `filed` test and stop there;
+    // the next one after it will land here too.
     const looseId = trimmed(result?.clarificationId)
+    const origin: HoldOrigin =
+      call.status === 'failed' || result?.ok === false
+        ? 'failed'
+        : result?.queueFull === true
+          ? 'filed'
+          : 'legacy'
     return [
       {
         ...shared,
+        origin,
         rowKey: call.callId,
         taskId: callTaskId,
         clarificationId: looseId.length > 0 ? looseId : null,
-        question: trimmed(args.question),
-        options: optionsOf(args.options),
+        // A question nobody was asked is the phantom this discriminator exists
+        // to kill, so the inert origins carry no question text forward.
+        question: origin === 'legacy' ? trimmed(args.question) : '',
+        options: origin === 'legacy' ? optionsOf(args.options) : [],
       },
     ]
   }
@@ -167,6 +239,7 @@ export function parseHoldRows(call: AiToolCall): ParsedHold[] {
     const id = trimmed(row.id) || (index === 0 ? trimmed(result?.clarificationId) : '')
     return {
       ...shared,
+      origin: 'receipt' as const,
       // The id when there is one: it survives a re-render that reorders nothing
       // but would otherwise reuse a positional key across two different rows.
       rowKey: `${call.callId}:${id || index}`,
@@ -178,8 +251,42 @@ export function parseHoldRows(call: AiToolCall): ParsedHold[] {
   })
 }
 
+/** Is this a question the user can still answer? */
+export function isAnswerable(hold: ParsedHold): boolean {
+  return hold.origin === 'receipt' || hold.origin === 'legacy'
+}
+
+function normalizedTitle(title: string): string {
+  return title.trim().toLowerCase()
+}
+
+/**
+ * Every row of one turn, with the failures the turn already repaired removed.
+ *
+ * A tool that errors and is retried in the same turn leaves two calls behind,
+ * and the failed one names the same matter as the call that then worked. Kept,
+ * it renders as a second matter that was never filed — the phantom sitting
+ * above the real thing, in the same card, looking equally real. The repair
+ * supersedes it, so it goes.
+ *
+ * Matched on the title because a failed call has no task to match on: nothing
+ * was written, so there is no id either side could share. A failure the turn did
+ * NOT repair survives and is stated — it is the only trace that something the
+ * user said was dropped.
+ */
 export function parseHolds(calls: readonly AiToolCall[]): ParsedHold[] {
-  return calls.flatMap(parseHoldRows)
+  const rows = calls.flatMap(parseHoldRows)
+
+  const repaired = new Set(
+    rows
+      .filter((row) => row.origin !== 'failed' && row.taskId !== null)
+      .map((row) => normalizedTitle(row.title))
+      .filter((title) => title.length > 0),
+  )
+
+  return rows.filter(
+    (row) => row.origin !== 'failed' || !repaired.has(normalizedTitle(row.title)),
+  )
 }
 
 /**

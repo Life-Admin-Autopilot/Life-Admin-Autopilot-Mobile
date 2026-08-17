@@ -21,16 +21,18 @@
 // unanswered has not been promised anything yet, and the whole point of this
 // block is that it stops describing a state the matter is no longer in.
 
+import { AlertTriangle } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
 import { ClarificationRow, type ClarificationRowState } from '@/components/chat/ClarificationRow'
 import { MatterFacts, type ReminderState } from '@/components/chat/MatterFacts'
 import { DomainIcon } from '@/components/icons/DomainIcon'
-import type {
-  HoldGroup,
-  HoldOption,
-  ParsedHold,
-  ResolvedMatter,
+import {
+  isAnswerable,
+  type HoldGroup,
+  type HoldOption,
+  type ParsedHold,
+  type ResolvedMatter,
 } from '@/lib/ai/clarificationHolds'
 
 interface ClarificationMatterProps {
@@ -62,9 +64,17 @@ export function ClarificationMatter({
 }: ClarificationMatterProps) {
   const t = useTranslations('chat')
 
-  const savedCount = group.rows.filter((row) => stateOf(row).saved).length
+  // Only some rows are questions. A hold that failed, or that filed the matter
+  // and deliberately asked nothing, still belongs on the card — it is the only
+  // place that says what became of what the user said — but it is a statement,
+  // and it must not be counted, answered, or dressed as an ask.
+  const questions = group.rows.filter(isAnswerable)
+  const statement = questions.length === 0 ? (group.rows[0]?.origin ?? null) : null
+  const nothingFiled = statement === 'failed'
+
+  const savedCount = questions.filter((row) => stateOf(row).saved).length
   const anySaved = savedCount > 0
-  const allSaved = savedCount === group.rows.length
+  const allSaved = questions.length > 0 && savedCount === questions.length
 
   // The answers win over the guesses they replaced. When the server sent
   // nothing back we still drop the caveat once every question is answered — a
@@ -84,18 +94,35 @@ export function ClarificationMatter({
 
   return (
     <li className="flex flex-col gap-2.5">
-      {fields ? (
+      {nothingFiled ? (
+        // The call errored: no task, no question, nothing in the queue. Saying
+        // "Filed" here — which is what every other row on this card says — would
+        // promise a matter that does not exist, and the user would stop looking
+        // for the thing they asked for.
+        <div className="flex items-center gap-1.5">
+          <AlertTriangle size={13} className="shrink-0 text-warning" />
+          <span className="min-w-0 truncate text-caption text-ink-subtle" dir="auto">
+            {title ? t('clarify.notFiled', { title }) : t('clarify.notFiledNoTitle')}
+          </span>
+        </div>
+      ) : fields ? (
         <MatterFacts
-          eyebrow={allSaved ? t('clarify.filedEyebrow') : t('ledger.verb.holdForClarification')}
+          eyebrow={
+            statement || allSaved ? t('clarify.filedEyebrow') : t('ledger.verb.holdForClarification')
+          }
           title={title}
           fields={fields}
           reminder={reminder}
-          warnLabel={t('clarify.noReminderUntil')}
+          // "Won't remind until you confirm" is a promise that a question is
+          // coming. When none was raised, the honest pill is the ledger's plain
+          // "Won't remind" — there is nothing here to confirm it with.
+          warnLabel={statement ? undefined : t('clarify.noReminderUntil')}
         />
       ) : (
-        // The hold saved no task (a failed call, or a transcript written before
-        // the task rode back on the result). Name the matter and nothing else —
-        // inventing pills for fields we do not hold is the opposite of the fix.
+        // The hold saved no task, and did not fail either — a transcript written
+        // before the task rode back on the result. Name the matter and nothing
+        // else: inventing pills for fields we do not hold is the opposite of the
+        // fix.
         <div className="flex items-center gap-2">
           {group.domain ? <DomainIcon domain={group.domain} size={24} /> : null}
           <span className="min-w-0 truncate text-caption text-ink-subtle" dir="auto">
@@ -104,25 +131,34 @@ export function ClarificationMatter({
         </div>
       )}
 
+      {/* Filed, and asked nothing. Without this line the matter reads as a
+          question whose text failed to load, on a card whose every other block
+          is an ask. */}
+      {statement === 'filed' ? (
+        <span className="text-caption text-ink-subtle">{t('clarify.noQuestion')}</span>
+      ) : null}
+
       {/* The questions, stacked under the facts they are about. The gap is the
           only separation between two asks on one matter — a divider here would
           split the matter from itself, and the dividers on this card mean "a
           different matter starts". A single question renders no gap at all, so
           the one-question card is untouched. */}
-      <div className="flex flex-col gap-4">
-        {group.rows.map((row) => (
-          <ClarificationRow
-            key={row.rowKey}
-            hold={row}
-            state={stateOf(row)}
-            disabled={disabled}
-            onPick={(option) => onPick(row, option)}
-            onDraft={(value) => onDraft(row, value)}
-            onReveal={() => onReveal(row)}
-            onSubmit={onSubmit}
-          />
-        ))}
-      </div>
+      {questions.length > 0 ? (
+        <div className="flex flex-col gap-4">
+          {questions.map((row) => (
+            <ClarificationRow
+              key={row.rowKey}
+              hold={row}
+              state={stateOf(row)}
+              disabled={disabled}
+              onPick={(option) => onPick(row, option)}
+              onDraft={(value) => onDraft(row, value)}
+              onReveal={() => onReveal(row)}
+              onSubmit={onSubmit}
+            />
+          ))}
+        </div>
+      ) : null}
     </li>
   )
 }
