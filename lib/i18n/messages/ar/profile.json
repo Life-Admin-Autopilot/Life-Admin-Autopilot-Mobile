@@ -40,6 +40,8 @@
     "export": "تصدير بياناتك",
     "exportMeta": "كل ما يحفظه Kitto، في ملف واحد",
     "exportPending": "جارٍ التحضير…",
+    "financialInsights": "الرؤى المالية",
+    "financialInsightsMeta": "عدد الالتزامات والتواريخ المقتربة",
     "deleteAccount": "حذف الحساب"
   },
   "name": {

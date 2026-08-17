@@ -251,6 +251,12 @@ export default function ProfilePage() {
         </SettingGroup>
 
         <SettingGroup label={t('groups.yourData')}>
+          <SettingRow
+            emoji="💳"
+            category="yellow"
+            title={t('rows.financialInsights')}
+            onOpen={() => router.push('/financial-insights')}
+          />
           <SettingActionRow
             emoji="📦"
             category="sage"

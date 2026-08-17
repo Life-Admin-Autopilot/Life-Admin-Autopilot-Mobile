@@ -6,7 +6,7 @@
     "postinstall": "npm run pdfjs:assets",
     "pdfjs:assets": "node scripts/copy-pdfjs-assets.mjs",
     "predev": "npm run pdfjs:assets",
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "prebuild": "npm run pdfjs:assets",
     "build": "next build",
     "start": "next start",

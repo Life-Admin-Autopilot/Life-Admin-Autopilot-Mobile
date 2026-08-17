@@ -13,6 +13,12 @@ const nextConfig: NextConfig = {
   trailingSlash: true,
   images: { unoptimized: true },
   reactStrictMode: true,
+  experimental: {
+    // Keep build/dev worker fan-out low on laptops and low-memory machines.
+    // This app is a static export and does not need aggressive parallelism.
+    cpus: 1,
+    webpackBuildWorker: false,
+  },
 }
 
 export default nextConfig

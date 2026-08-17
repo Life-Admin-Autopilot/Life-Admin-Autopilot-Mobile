@@ -40,6 +40,8 @@
     "export": "Export your data",
     "exportMeta": "Everything Kitto holds, as a file",
     "exportPending": "Preparing…",
+    "financialInsights": "Financial Insights",
+    "financialInsightsMeta": "Obligation counts and upcoming deadlines",
     "deleteAccount": "Delete account"
   },
   "name": {
