@@ -13,7 +13,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '@/lib/api/client'
 import { queryKeys } from '@/queries/keys'
 import { deviceTimeZone } from '@/lib/i18n/dateFormat'
-import type { TaskDomain, TaskKind, TaskPriority } from '@/queries/tasks'
+import type { MoneyInput, TaskDomain, TaskKind, TaskPriority } from '@/queries/tasks'
 
 export interface DraftConflict {
   taskId: string
@@ -45,6 +45,16 @@ export interface TaskDraft {
    * ask for the real time before saving.
    */
   timeAssumed?: boolean
+  /**
+   * A figure the extractor heard in the utterance — "pay 200 dollars for X".
+   *
+   * Absent on almost every draft, and absent is not zero: only a figure the user
+   * actually STATED arrives here, never one inferred from what a thing usually
+   * costs. It survives to the commit body because otherwise the amount is heard,
+   * shown, confirmed and then dropped — which is how a matter reaches /matters
+   * saying "$200" in its title with nothing for /money to count.
+   */
+  amount?: MoneyInput | null
 }
 
 /** Turn one utterance into draft tasks. Reads only — nothing is saved. */
@@ -108,6 +118,10 @@ export function useCommitDraft() {
           kind: draft.kind,
           dueDate: draft.dueDate,
           notes: draft.notes,
+          // Only when the draft carried one. Sending `null` on every ordinary
+          // matter would be a claim ("no money involved") where the draft simply
+          // never had an opinion.
+          ...(draft.amount ? { amount: draft.amount } : {}),
           confirmConflicts,
         },
       }),

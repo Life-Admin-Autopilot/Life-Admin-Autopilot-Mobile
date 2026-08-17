@@ -7,7 +7,6 @@ import { useState } from 'react'
 import { AppHeader } from '@/components/layout/AppHeader'
 import { MoneyView } from '@/components/money/MoneyView'
 import { Button } from '@/components/ui/button'
-import { useVoiceCapture } from '@/lib/voice/captureStore'
 import { hasAnyMoney, useFinanceSummary, type FinanceEntry, type FinanceWindow } from '@/queries/finance'
 
 /**
@@ -21,7 +20,6 @@ import { hasAnyMoney, useFinanceSummary, type FinanceEntry, type FinanceWindow }
 export default function MoneyPage() {
   const t = useTranslations('money')
   const router = useRouter()
-  const openCapture = useVoiceCapture((s) => s.openCapture)
 
   const [months, setMonths] = useState<FinanceWindow>(6)
   const { data: summary, isLoading, error } = useFinanceSummary(months)
@@ -56,7 +54,12 @@ export default function MoneyPage() {
         <section className="flex flex-col items-center gap-3 px-5 pt-16 text-center">
           <h2 className="font-display text-heading-serif text-ink">{t('states.emptyTitle')}</h2>
           <p className="max-w-xs text-body-sm text-ink-muted">{t('states.emptyBody')}</p>
-          <Button variant="solid" onClick={openCapture}>
+          {/* The document scanner, not the voice sheet. This button used to call
+              openCapture() from the VOICE store — same verb, wrong feature — so
+              "Scan a document" opened the microphone. The scanner lives on
+              /documents inside its morph flow and cannot be mounted from here,
+              so the CTA deep-links to it and that page opens the flow. */}
+          <Button variant="solid" onClick={() => router.push('/documents?capture=1')}>
             {t('states.emptyAction')}
           </Button>
         </section>
