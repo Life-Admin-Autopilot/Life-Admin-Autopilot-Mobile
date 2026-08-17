@@ -23,6 +23,7 @@ import enDomain from '@/lib/i18n/messages/en/domain.json'
 import enErrors from '@/lib/i18n/messages/en/errors.json'
 import enLanguage from '@/lib/i18n/messages/en/language.json'
 import enMatters from '@/lib/i18n/messages/en/matters.json'
+import enMoney from '@/lib/i18n/messages/en/money.json'
 import enNav from '@/lib/i18n/messages/en/nav.json'
 import enNotifications from '@/lib/i18n/messages/en/notifications.json'
 import enProfile from '@/lib/i18n/messages/en/profile.json'
@@ -41,6 +42,7 @@ import arDomain from '@/lib/i18n/messages/ar/domain.json'
 import arErrors from '@/lib/i18n/messages/ar/errors.json'
 import arLanguage from '@/lib/i18n/messages/ar/language.json'
 import arMatters from '@/lib/i18n/messages/ar/matters.json'
+import arMoney from '@/lib/i18n/messages/ar/money.json'
 import arNav from '@/lib/i18n/messages/ar/nav.json'
 import arNotifications from '@/lib/i18n/messages/ar/notifications.json'
 import arProfile from '@/lib/i18n/messages/ar/profile.json'
@@ -63,6 +65,7 @@ const en = {
   voice: enVoice,
   profile: enProfile,
   matters: enMatters,
+  money: enMoney,
   domain: enDomain,
   auth: enAuth,
   dashboard: enDashboard,
@@ -89,6 +92,7 @@ const ar: Messages = {
   voice: arVoice,
   profile: arProfile as Messages['profile'],
   matters: arMatters as Messages['matters'],
+  money: arMoney as Messages['money'],
   domain: arDomain,
   auth: arAuth as Messages['auth'],
   dashboard: arDashboard as Messages['dashboard'],

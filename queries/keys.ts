@@ -46,6 +46,10 @@ export const queryKeys = {
   // upload while the list changes on upload AND on delete, so sharing one key
   // would refetch the whole list every time a meter ticked.
   documentScanQuota: ['documentScans', 'quota'] as const,
+  // The money summary, keyed by window: 3, 6 and 12 months are three different
+  // answers, and switching between them should read from cache rather than
+  // refetch whichever one happened to be last.
+  financeSummary: (months: number) => ['finance', 'summary', months] as const,
   // Account surfaces. `sessions` is the signed-in-devices list; it invalidates
   // on password change and on revoke, both of which end sessions server-side.
   sessions: ['sessions'] as const,

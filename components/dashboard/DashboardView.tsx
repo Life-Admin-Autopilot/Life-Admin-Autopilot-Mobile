@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl'
 import { DayProgress } from '@/components/dashboard/DayProgress'
 import { FirstRunState } from '@/components/dashboard/FirstRunState'
 import { BriefingCard } from '@/components/dashboard/BriefingCard'
+import { MoneyCard } from '@/components/dashboard/MoneyCard'
 import { HomeHero } from '@/components/dashboard/HomeHero'
 import { MatterRow } from '@/components/dashboard/MatterRow'
 import { NeedsYouStrip } from '@/components/dashboard/NeedsYouStrip'
@@ -147,6 +148,11 @@ export function DashboardView({
 
       {/* Below the hero, above the plate: it frames the day the rows then detail. */}
       <BriefingCard />
+
+      {/* The only way into /money — the tab bar is full at five slots. It renders
+          nothing until there is a real figure, so it costs an empty account no
+          vertical space above the day's matters. */}
+      <MoneyCard />
 
       {focus ? (
         <>

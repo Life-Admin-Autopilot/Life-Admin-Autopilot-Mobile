@@ -1,0 +1,66 @@
+{
+  "title": "المال",
+  "hero": {
+    "thisMonth": "أُنفق هذا الشهر",
+    "noComparison": "لا يوجد إنفاق مسجَّل الشهر الماضي للمقارنة.",
+    "upOnLastMonth": "أعلى بنسبة {percent}% عن الشهر الماضي ({amount}).",
+    "downOnLastMonth": "أقل بنسبة {percent}% عن الشهر الماضي ({amount}).",
+    "overdue": "متأخر",
+    "upcoming": "قادم",
+    "window": "{months, plural, zero {# شهر} one {شهر} two {شهران} few {# أشهر} many {# شهرًا} other {# شهر}}"
+  },
+  "window": {
+    "label": "مدة السجل",
+    "months": "{months} ش"
+  },
+  "currency": {
+    "label": "العملة",
+    "note": "تُعرض كل عملة على حدة. لا يُطبَّق أي سعر صرف."
+  },
+  "trend": {
+    "title": "أين ذهب",
+    "caption": "الإنفاق شهريًا، من الأقدم إلى الأحدث.",
+    "received": "استُرد {amount} خلال المدة نفسها، وهو غير مخصوم مما سبق."
+  },
+  "domains": {
+    "title": "حسب المجال",
+    "empty": "لا يوجد إنفاق مصنَّف ضمن مجال بعد.",
+    "count": "{count, plural, zero {# أمر} one {أمر واحد} two {أمران} few {# أمور} many {# أمرًا} other {# أمر}}"
+  },
+  "upcoming": {
+    "title": "ما زال للدفع",
+    "empty": "لا يوجد ما هو مستحق.",
+    "undated": "بلا تاريخ",
+    "overdue": "متأخر"
+  },
+  "largest": {
+    "title": "الأكبر",
+    "empty": "لا يوجد إنفاق مسجَّل في هذه المدة."
+  },
+  "provenance": {
+    "extracted": "مقروء من مستند",
+    "short": "مستخرج"
+  },
+  "coverage": {
+    "partial": "قُرئ من {withAmount} من أصل {total} مستند. ما دُفع خارج {app} غير محتسب.",
+    "none": "لم يُعثر على أي مبلغ في مستنداتك البالغ عددها {total}.",
+    "matters": "{count, plural, zero {لا يحمل أي أمر} one {أمر واحد يحمل} two {أمران يحملان} few {# أمور تحمل} many {# أمرًا تحمل} other {# أمر يحمل}} مبلغًا."
+  },
+  "states": {
+    "loading": "جارٍ التحميل",
+    "errorTitle": "الملخص غير متاح",
+    "errorBody": "تعذّر تحميل الملخص المالي.",
+    "emptyTitle": "لا توجد مبالغ بعد",
+    "emptyBody": "امسح فاتورة أو إيصالًا ليظهر مبلغه هنا.",
+    "emptyAction": "امسح مستندًا"
+  },
+  "card": {
+    "title": "المال",
+    "thisMonth": "أُنفق هذا الشهر",
+    "overdue": "{amount} متأخرة",
+    "upcoming": "{amount} مستحقة قريبًا",
+    "settled": "لا شيء مستحق.",
+    "empty": "لا توجد مبالغ مسجَّلة بعد.",
+    "open": "افتح المال"
+  }
+}

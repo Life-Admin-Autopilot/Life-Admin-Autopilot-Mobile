@@ -1,0 +1,66 @@
+{
+  "title": "Money",
+  "hero": {
+    "thisMonth": "Spent this month",
+    "noComparison": "No spending recorded last month to compare against.",
+    "upOnLastMonth": "Up {percent}% on last month ({amount}).",
+    "downOnLastMonth": "Down {percent}% on last month ({amount}).",
+    "overdue": "Overdue",
+    "upcoming": "Upcoming",
+    "window": "{months, plural, one {# month} other {# months}}"
+  },
+  "window": {
+    "label": "History length",
+    "months": "{months}M"
+  },
+  "currency": {
+    "label": "Currency",
+    "note": "Currencies are reported separately. No exchange rate is applied."
+  },
+  "trend": {
+    "title": "Where it went",
+    "caption": "Spending per month, oldest first.",
+    "received": "{amount} received back over the same period, not deducted above."
+  },
+  "domains": {
+    "title": "By area",
+    "empty": "No spending is filed under an area yet.",
+    "count": "{count, plural, one {# matter} other {# matters}}"
+  },
+  "upcoming": {
+    "title": "Still to pay",
+    "empty": "Nothing is due.",
+    "undated": "No date",
+    "overdue": "Overdue"
+  },
+  "largest": {
+    "title": "Largest",
+    "empty": "No spending recorded in this period."
+  },
+  "provenance": {
+    "extracted": "Read from a document",
+    "short": "Extracted"
+  },
+  "coverage": {
+    "partial": "Read from {withAmount} of {total} documents. Anything paid outside {app} is not counted.",
+    "none": "No amount was found in any of your {total} documents.",
+    "matters": "{count, plural, one {# matter carries} other {# matters carry}} an amount."
+  },
+  "states": {
+    "loading": "Loading",
+    "errorTitle": "Summary unavailable",
+    "errorBody": "The financial summary could not be loaded.",
+    "emptyTitle": "No amounts yet",
+    "emptyBody": "Scan a bill, an invoice or a receipt and its amount appears here.",
+    "emptyAction": "Scan a document"
+  },
+  "card": {
+    "title": "Money",
+    "thisMonth": "Spent this month",
+    "overdue": "{amount} overdue",
+    "upcoming": "{amount} due soon",
+    "settled": "Nothing outstanding.",
+    "empty": "No amounts recorded yet.",
+    "open": "Open money"
+  }
+}
