@@ -36,6 +36,13 @@
     "slipped": "{count, plural, zero {لا شيء تأخّر} one {أمر واحد تأخّر} two {أمران تأخّرا} few {# أمور تأخّرت} many {# أمرًا تأخّر} other {# أمر تأخّر}}",
     "slippedBody": "رتّبها حين تجد لحظة."
   },
+  "quickLinks": {
+    "title": "روابط سريعة",
+    "speak": "تحدَّث",
+    "scan": "مسح",
+    "matters": "الأمور",
+    "money": "المال"
+  },
   "firstRun": {
     "title": "ابدأ من حيث تشاء",
     "speakTitle": "قل ما يشغل بالك",

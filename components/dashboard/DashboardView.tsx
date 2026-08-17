@@ -10,6 +10,7 @@ import { MoneyCard } from '@/components/dashboard/MoneyCard'
 import { HomeHero } from '@/components/dashboard/HomeHero'
 import { MatterRow } from '@/components/dashboard/MatterRow'
 import { NeedsYouStrip } from '@/components/dashboard/NeedsYouStrip'
+import { QuickLinks } from '@/components/dashboard/QuickLinks'
 import { RightNowCard } from '@/components/dashboard/RightNowCard'
 import { SectionHeaderChip } from '@/components/ui/SectionHeaderChip'
 import { useIntlTag } from '@/lib/i18n/localeStore'
@@ -225,6 +226,11 @@ export function DashboardView({
           ) : null}
         </>
       ) : null}
+
+      {/* Below the day's work, above the inboxes. Not shown on first run: the
+          welcome strip above already offers the same routes in full sentences,
+          and two rows of the same four doors is noise. */}
+      {firstRun ? null : <QuickLinks />}
 
       <NeedsYouStrip
         needsInput={needsInput}
