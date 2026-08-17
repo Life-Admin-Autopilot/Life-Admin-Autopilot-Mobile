@@ -126,15 +126,22 @@ function CoverageNote({
 
   return (
     <section className="flex flex-col gap-1.5 px-5 pb-4">
-      <p className="text-body-sm text-ink-muted">
-        {documentsWithAmount === 0
-          ? t('coverage.none', { total: documentsTotal })
-          : t('coverage.partial', {
-              withAmount: documentsWithAmount,
-              total: documentsTotal,
-              app: env.appName,
-            })}
-      </p>
+      {/* Silent when there are no documents at all. The sentence exists to say
+          how much of the DOCUMENT pile the reader is seeing, and with an empty
+          pile every phrasing of it is absurd — "no amount was found in any of
+          your 0 documents" reads as a fault report about nothing. The matters
+          line below still carries the real provenance. */}
+      {documentsTotal > 0 ? (
+        <p className="text-body-sm text-ink-muted">
+          {documentsWithAmount === 0
+            ? t('coverage.none', { total: documentsTotal })
+            : t('coverage.partial', {
+                withAmount: documentsWithAmount,
+                total: documentsTotal,
+                app: env.appName,
+              })}
+        </p>
+      ) : null}
 
       {mattersWithAmount > 0 ? (
         <p className="text-body-sm text-ink-muted">
