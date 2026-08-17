@@ -131,10 +131,12 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
   /**
    * Answer one matter's questions, in the order they were asked.
    *
-   * Sequential on purpose: sibling questions patch the SAME task, and two
-   * resolves in flight would each write from the state they read, so the reply
-   * that landed last could carry a task missing the other answer's patch — and
-   * that reply is what the facts block redraws from.
+   * Sequential for the READ, not the write: resolve patches only the fields the
+   * tapped option carries, so two siblings in flight cannot lose each other's
+   * changes server-side. But each reply describes the task as it stood when
+   * THAT request was served, and the facts block redraws from whichever reply
+   * lands last — so answering in parallel could put the confirmed date back to
+   * the guess it replaced. One at a time makes the last reply the whole truth.
    */
   const resolveMatter = async (key: string, rows: readonly { id: string; answer: HoldAnswer }[]) => {
     const timezone = localTimezone()

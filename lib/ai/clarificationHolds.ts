@@ -7,18 +7,24 @@
 //
 // ONE hold call can now raise SEVERAL questions about ONE matter — a date
 // ("What time?") and a detail ("Which friend are you visiting?") — so the result
-// carries a `clarifications` array, each entry a persisted row with its own id,
-// question and options, all sharing a taskId. Rows are read from that array,
-// then from the single `clarification` object, and finally from the args, which
-// is the only shape a transcript written before this change has. History must
-// keep rendering exactly as it did, so the last path is not a degraded fallback:
-// it is the one-question card, unchanged.
+// carries a `clarifications` array of RECEIPTS: `{ id, taskId, question, kind,
+// costOfWrong, options }`, all sharing one taskId. Deliberately small (it lands
+// in the model's context too), so there is no draft and no status here; those
+// live on `GET /me/clarifications`.
+//
+// The back-compat axis is the OPTION, not the envelope. A transcript written
+// before this change has `result.clarification` — the same receipt, singular —
+// but its options are bare STRINGS rather than `{ label, dueAt? }` objects, so
+// both are read. Reading only the object form would strip every chip off every
+// question in the history and leave a free-text box where the answer used to be
+// one tap.
 //
 // The one field that must survive verbatim is the option INDEX: resolving a
 // clarification sends `{ type: 'option', index }` and the server reads that
 // index against ITS OWN options array — per ROW, not per call. Re-sorting,
 // de-duplicating, or re-numbering the options client-side would silently answer
-// a different question than the one the user tapped.
+// a different question than the one the user tapped. Dropping an unlabelled
+// option must therefore not renumber the ones after it.
 
 import { taskFieldsOf, taskFieldsFrom, type ToolCallTaskFields } from '@/lib/ai/toolCallSummary'
 import type { AiToolCall } from '@/lib/ai/types'
@@ -79,25 +85,36 @@ function trimmed(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+/**
+ * One option's label, from either shape it has been written in.
+ *
+ * A receipt written today carries `{ label, dueAt? }`; one written before the
+ * multi-question change carries the label as a bare string. Both are one tap in
+ * the card, and reading only the object form would silently strip the chips off
+ * every question already in the transcript.
+ */
+function labelOf(option: unknown): string {
+  if (typeof option === 'string') return option.trim()
+  return isRecord(option) ? trimmed(option.label) : ''
+}
+
+// Index is taken BEFORE the empty labels are dropped: it addresses the server's
+// array, not this one, so renumbering the survivors would answer the wrong
+// option.
 function optionsOf(raw: unknown): HoldOption[] {
   const list = Array.isArray(raw) ? raw : []
   return list
-    .map((option, index) => ({
-      label: isRecord(option) ? option.label : null,
-      index,
-    }))
-    .filter(
-      (option): option is HoldOption =>
-        typeof option.label === 'string' && option.label.trim().length > 0,
-    )
+    .map((option, index) => ({ label: labelOf(option), index }))
+    .filter((option) => option.label.length > 0)
 }
 
 /**
- * The persisted rows on a hold result, newest wire shape first.
+ * The persisted question receipts on a hold result, newest shape first.
  *
- * Empty means the call persisted nothing we can answer against — the caller
- * falls back to the args, which is what every pre-multi-question transcript
- * holds.
+ * `clarifications` is the array; `clarification` is its first row, and the only
+ * one a transcript written before the change has. Empty means the call
+ * persisted no question at all — a failed hold, or one that hit the queue cap —
+ * and the caller falls back to the args so the matter is still named.
  */
 function wireRows(result: Record<string, unknown> | null | undefined): Record<string, unknown>[] {
   if (!result) return []
@@ -116,7 +133,9 @@ export function parseHoldRows(call: AiToolCall): ParsedHold[] {
   const task = result?.task as Record<string, unknown> | undefined
   const title = trimmed(task?.title) || trimmed(args.title)
   const facts = taskFieldsOf(call)
-  const callTaskId = trimmed(result?.taskId) || trimmed(task?.id) || null
+  // The hold result names its task ONLY through the task it saved and the
+  // receipts' own taskId — there is no top-level `taskId` on it.
+  const callTaskId = trimmed(task?.id) || null
 
   const shared = {
     callId: call.callId,
@@ -127,14 +146,17 @@ export function parseHoldRows(call: AiToolCall): ParsedHold[] {
 
   const rows = wireRows(result)
   if (rows.length === 0) {
-    // The one-question shape: the id on the result, the question in the args.
-    const legacyId = trimmed(result?.clarificationId)
+    // No question was persisted, so there is nothing to resolve against: the
+    // card asks what the ARGS say it meant to ask, and the answer rides back
+    // through the chat. `clarificationId` is read as a courtesy — the hold that
+    // saves a row always ships the row itself.
+    const looseId = trimmed(result?.clarificationId)
     return [
       {
         ...shared,
         rowKey: call.callId,
         taskId: callTaskId,
-        clarificationId: legacyId.length > 0 ? legacyId : null,
+        clarificationId: looseId.length > 0 ? looseId : null,
         question: trimmed(args.question),
         options: optionsOf(args.options),
       },
