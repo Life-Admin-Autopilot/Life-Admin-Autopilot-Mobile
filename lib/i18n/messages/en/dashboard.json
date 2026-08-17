@@ -38,10 +38,14 @@
   },
   "quickLinks": {
     "title": "Quick links",
-    "speak": "Speak",
-    "scan": "Scan",
-    "matters": "Matters",
-    "money": "Money"
+    "speakTitle": "Speak",
+    "speakBody": "Say it and I’ll file it.",
+    "scanTitle": "Scan",
+    "scanBody": "A bill, a letter, a form.",
+    "mattersTitle": "Matters",
+    "mattersBody": "Everything you’re tracking.",
+    "moneyTitle": "Money",
+    "moneyBody": "What’s due and what’s paid."
   },
   "firstRun": {
     "title": "Start anywhere",

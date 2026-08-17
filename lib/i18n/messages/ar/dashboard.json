@@ -38,10 +38,14 @@
   },
   "quickLinks": {
     "title": "روابط سريعة",
-    "speak": "تحدَّث",
-    "scan": "مسح",
-    "matters": "الأمور",
-    "money": "المال"
+    "speakTitle": "تحدَّث",
+    "speakBody": "قُلها وسأتكفّل بترتيبها.",
+    "scanTitle": "مسح",
+    "scanBody": "فاتورة أو رسالة أو نموذج.",
+    "mattersTitle": "الأمور",
+    "mattersBody": "كل ما تتابعه.",
+    "moneyTitle": "المال",
+    "moneyBody": "ما استُحق وما دُفع."
   },
   "firstRun": {
     "title": "ابدأ من حيث تشاء",
