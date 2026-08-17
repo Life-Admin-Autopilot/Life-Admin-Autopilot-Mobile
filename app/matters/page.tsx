@@ -53,17 +53,8 @@ import {
 
 // Matters — every reminder the user has, in one place.
 //
-// The governing decision: this screen is a DECISION SURFACE, not an inventory.
-// By default it shows only what needs attention (overdue / today / tomorrow)
-// and folds the rest behind one tap. Showing someone their entire backlog on
-// open is the single most reliable way to make them close the app.
-//
 // Grouping and filtering are lenses. Nothing on this screen ever moves a matter
 // somewhere the user can't find it again.
-
-// The buckets that constitute "needs attention". Everything else lives below
-// the fold until asked for.
-const ATTENTION = new Set(['overdue', 'today', 'tomorrow'])
 
 // Group headers are tinted by what the grouping MEANS, so a half-scrolled list
 // still tells you where you are. Time buckets walk the day's palette; priority
@@ -109,7 +100,6 @@ export default function MattersPage() {
   const [sort, setSort] = useState<TaskSort>('due-asc')
   const [group, setGroup] = useState<GroupMode>('time')
   const [search, setSearch] = useState('')
-  const [expanded, setExpanded] = useState(false)
 
   const [filterOpen, setFilterOpen] = useState(false)
   const [sortOpen, setSortOpen] = useState(false)
@@ -224,7 +214,6 @@ export default function MattersPage() {
     }
     return merged
   }, [list.data, heldRows])
-  const total = list.data?.pages[0]?.total ?? 0
   const filtered = hasActiveFilters({ ...filters, status: undefined })
 
   // While an answer is on screen the results ARE the list, so bulk selection,
@@ -252,25 +241,19 @@ export default function MattersPage() {
     return groupByTime(tasks, t, undefined, pinnedBuckets)
   }, [tasks, group, pinnedBuckets, domainLabels, t])
 
-  // The two-tier fold applies only to the unfiltered default view — once the
-  // user has asked a specific question, they get the whole answer.
-  const folded = group === 'time' && !filtered && !expanded && !result
-  const visibleGroups = folded ? groups.filter((g) => ATTENTION.has(g.key)) : groups
-  const shown = visibleGroups.reduce((n, g) => n + g.tasks.length, 0)
-  const hidden = Math.max(0, total - shown)
+  const visibleGroups = groups
 
-  // Infinite scroll. Never auto-loads while folded — pulling in pages the user
-  // can't see would burn data to render nothing.
+  // Infinite scroll.
   const sentinel = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     const node = sentinel.current
-    if (!node || folded || !list.hasNextPage || list.isFetchingNextPage) return
+    if (!node || !list.hasNextPage || list.isFetchingNextPage) return
     const io = new IntersectionObserver((entries) => {
       if (entries[0]?.isIntersecting) void list.fetchNextPage()
     })
     io.observe(node)
     return () => io.disconnect()
-  }, [folded, list])
+  }, [list])
 
   // Completing holds the row in place; reopening releases it back to the live
   // list, where the refetch decides whether it still belongs on screen.
@@ -597,18 +580,6 @@ export default function MattersPage() {
               </section>
             ))}
 
-            {folded && hidden > 0 ? (
-              <button
-                type="button"
-                onClick={() => setExpanded(true)}
-                className="flex items-center justify-center gap-2 py-1 text-caption text-ink-subtle"
-              >
-                <span className="h-px flex-1 bg-border" />
-                <span className="tabular">{t('list.showMore', { count: hidden })}</span>
-                <span className="h-px flex-1 bg-border" />
-              </button>
-            ) : null}
-
             <div ref={sentinel} className="h-4" />
             {list.isFetchingNextPage ? (
               <p className="pb-2 text-center text-caption text-ink-subtle">
@@ -646,7 +617,6 @@ export default function MattersPage() {
           setResult(null)
           setSearch('')
           setFilters({ ...DEFAULT_FILTERS, ...next })
-          setExpanded(true)
         }}
       />
       <MatterDetailSheet
