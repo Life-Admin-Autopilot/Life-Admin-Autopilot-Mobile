@@ -211,11 +211,19 @@ export interface ConflictPreview {
 export async function previewDraftConflicts(draft: {
   title: string
   dueDate: string | null
+  domain?: TaskDomain
+  priority?: TaskPriority
 }): Promise<ConflictPreview> {
   try {
     return await api<ConflictPreview>('/me/conflicts', {
       method: 'POST',
-      body: { title: draft.title, dueAt: draft.dueDate, timezone: deviceTimeZone() },
+      body: {
+        title: draft.title,
+        dueAt: draft.dueDate,
+        domain: draft.domain,
+        priority: draft.priority,
+        timezone: deviceTimeZone(),
+      },
     })
   } catch {
     return { conflicts: [], suggestions: [], suggestionReason: '' }

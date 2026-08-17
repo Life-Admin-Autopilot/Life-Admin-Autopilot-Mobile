@@ -11,9 +11,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { MorphSheet, SheetSection } from '@/components/ui/Sheet'
 import { cn } from '@/lib/cn'
-import { fromLocalInputValue } from '@/lib/taskFormat'
+import { fromLocalInputValue, toLocalInputValue } from '@/lib/taskFormat'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
+import { AlertTriangle } from 'lucide-react'
+import { previewDraftConflicts, type DraftConflict } from '@/queries/planning'
+import { SuggestedSlots } from '@/components/planning/SuggestedSlots'
 import {
   TASK_DOMAINS,
   TASK_PRIORITIES,
@@ -96,18 +99,61 @@ export function CreateMatterSheet({
   const [customAt, setCustomAt] = useState('')
   const [priority, setPriority] = useState<TaskPriority>('normal')
   const [amount, setAmount] = useState<MoneyInput | null>(null)
+  const [conflicts, setConflicts] = useState<DraftConflict[]>([])
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [suggestionReason, setSuggestionReason] = useState('')
 
   // Reset on every open. A sheet that reopens holding the last matter's title
   // is one distracted tap away from creating it twice.
   useEffect(() => {
     if (!open) return
-    setTitle('')
-    setDomain('home')
-    setWhen('none')
-    setCustomAt('')
-    setPriority('normal')
-    setAmount(null)
+    const timer = setTimeout(() => {
+      setTitle('')
+      setDomain('home')
+      setWhen('none')
+      setCustomAt('')
+      setPriority('normal')
+      setAmount(null)
+      setConflicts([])
+      setSuggestions([])
+      setSuggestionReason('')
+    }, 0)
+    return () => clearTimeout(timer)
   }, [open])
+
+  // Debounced conflict check when title, domain, when, customAt, or priority changes.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const trimmedTitle = title.trim()
+      if (!trimmedTitle || when === 'none' || (when === 'custom' && !customAt)) {
+        setConflicts([])
+        setSuggestions([])
+        setSuggestionReason('')
+        return
+      }
+
+      const dueDate = resolveDue(when, customAt, new Date())
+      if (!dueDate) return
+
+      void previewDraftConflicts({
+        title: trimmedTitle,
+        dueDate,
+        domain,
+        priority,
+      }).then((preview) => {
+        setConflicts(preview.conflicts ?? [])
+        setSuggestions(preview.suggestions ?? [])
+        setSuggestionReason(preview.suggestionReason ?? '')
+      })
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [title, domain, when, customAt, priority])
+
+  const handlePickSuggestion = (date: Date) => {
+    setWhen('custom')
+    setCustomAt(toLocalInputValue(date.toISOString()))
+  }
 
   // "Pick a date" with nothing picked yet is not a date. Saving then would
   // silently file the matter as undated, which is the one outcome the user
@@ -224,6 +270,31 @@ export function CreateMatterSheet({
               onChange={(e) => setCustomAt(e.target.value)}
               aria-label={t('create.dueLabel')}
               className="mt-1"
+            />
+          ) : null}
+
+          {conflicts.length > 0 ? (
+            <ul className="mt-2 flex flex-col gap-1">
+              {conflicts.map((conflict) => (
+                <li
+                  key={conflict.taskId}
+                  className="flex items-start gap-1.5 text-body-sm text-warning animate-in fade-in slide-in-from-top-1 duration-200"
+                >
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                  <span dir="auto">
+                    {conflict.reason}{' '}
+                    <span className="text-ink-muted">“{conflict.title}”</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {conflicts.length > 0 ? (
+            <SuggestedSlots
+              slots={suggestions}
+              reason={suggestionReason}
+              onPick={handlePickSuggestion}
             />
           ) : null}
         </SheetSection>
