@@ -196,6 +196,23 @@ export function parseHoldRows(call: AiToolCall): ParsedHold[] {
     // question the user can still answer — through the chat, since there is no
     // row to resolve against. `clarificationId` is read as a courtesy; the hold
     // that saves a receipt always ships the receipt itself.
+    //
+    // `legacy` is the catch-all, and it FAILS OPEN: it builds an answerable
+    // question out of the args, which is exactly the phantom this split exists
+    // to kill. That is safe only because of an invariant on the server —
+    // ClarificationHoldService returns zero receipts on the queue-full branch
+    // and nowhere else, so "no receipts" and `queueFull: true` are one condition
+    // and there is no third state. Confirmed against the persisted history: no
+    // hold result in the database lands here. What `legacy` actually carries is
+    // transcripts written before receipts rode back on the result at all.
+    //
+    // So if a SECOND decline path is ever added — a per-matter cap, quiet hours,
+    // a dedupe that suppresses a repeat question — it will arrive as ok:true
+    // with no receipts and no flag, and this branch will invent a question for
+    // it. The fix at that point is to invert the test: name the positive
+    // conditions for a question and treat every unrecognized shape as a
+    // statement. Do not add the new flag to the `filed` test and stop there;
+    // the next one after it will land here too.
     const looseId = trimmed(result?.clarificationId)
     const origin: HoldOrigin =
       call.status === 'failed' || result?.ok === false
