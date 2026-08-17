@@ -36,6 +36,13 @@
     "slipped": "{count, plural, one {# matter has slipped} other {# matters have slipped}}",
     "slippedBody": "Sort them out when you have a moment."
   },
+  "quickLinks": {
+    "title": "Quick links",
+    "speak": "Speak",
+    "scan": "Scan",
+    "matters": "Matters",
+    "money": "Money"
+  },
   "firstRun": {
     "title": "Start anywhere",
     "speakTitle": "Say what’s on your mind",
