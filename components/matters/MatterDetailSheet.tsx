@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl'
 import { useDomainLabels } from '@/hooks/useDomainLabels'
 import { useState } from 'react'
 
+import { AmountField } from '@/components/matters/AmountField'
 import { ConflictNotice } from '@/components/matters/ConflictNotice'
 import { MatterSteps } from '@/components/matters/MatterSteps'
 import { TimeProvenance } from '@/components/matters/TimeProvenance'
@@ -21,6 +22,7 @@ import {
   TASK_PRIORITIES,
   useDeleteTask,
   useUpdateTask,
+  type MoneyInput,
   type Task,
   type TaskDomain,
   type TaskPriority,
@@ -48,6 +50,8 @@ interface Draft {
   dueAt?: string
   notes?: string
   tags: string[]
+  /** `null` is "this matter has no amount", which has to be distinct from unset. */
+  amount: MoneyInput | null
 }
 
 function draftFrom(task: Task): Draft {
@@ -58,7 +62,18 @@ function draftFrom(task: Task): Draft {
     dueAt: task.dueAt,
     notes: task.notes,
     tags: task.tags,
+    // The server's Money carries `source` and stamps it itself; MoneyInput
+    // deliberately cannot, so the draft keeps only the two fields it may send.
+    amount: task.amount
+      ? { amountMinor: task.amount.amountMinor, currency: task.amount.currency, direction: task.amount.direction }
+      : null,
   }
+}
+
+/** Same figure, ignoring the fields the client never sends. */
+function sameAmount(a: MoneyInput | null, b: MoneyInput | null): boolean {
+  if (a === null || b === null) return a === b
+  return a.amountMinor === b.amountMinor && a.currency === b.currency && a.direction === b.direction
 }
 
 // The editor outlives the caller's `task`, and `open` drives the morph.
@@ -124,6 +139,7 @@ function Editor({
 }) {
   const t = useTranslations('matters')
   const tCommon = useTranslations('common')
+  const tMoney = useTranslations('money')
   const domainLabels = useDomainLabels()
   const [draft, setDraft] = useState<Draft>(() => draftFrom(task))
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -153,6 +169,9 @@ function Editor({
     if (draft.dueAt !== task.dueAt) body.dueAt = draft.dueAt ?? null
     if ((draft.notes ?? '') !== (task.notes ?? '')) body.notes = draft.notes?.trim() || null
     if (draft.tags.join(',') !== task.tags.join(',')) body.tags = draft.tags
+    // Sent as explicit null when cleared — omitting it would leave the old
+    // figure standing, and "this was never about money" has to be sayable.
+    if (!sameAmount(draft.amount, draftFrom(task).amount)) body.amount = draft.amount
 
     if (Object.keys(body).length === 0) {
       onClose()
@@ -346,6 +365,16 @@ function Editor({
           aria-label={t('section.notes')}
           className="min-h-20 rounded-md bg-surface-sunken px-3 py-2 text-body-sm text-ink outline-none"
         />
+      </SheetSection>
+
+      {/* The only place an already-saved matter can be priced.
+          Create had this field from the start, but nothing that arrives any
+          other way — the agent, a voice note, a scan that read no figure — could
+          ever be given one, which left "Pay $200 for X" permanently invisible to
+          /money with no way to correct it by hand. */}
+      <SheetSection label={tMoney('field.onMatter')}>
+        <AmountField value={draft.amount} onChange={(amount) => patch({ amount })} />
+        <p className="text-caption text-ink-muted">{tMoney('field.hint')}</p>
       </SheetSection>
 
       {task.rescheduleCount >= 3 ? (

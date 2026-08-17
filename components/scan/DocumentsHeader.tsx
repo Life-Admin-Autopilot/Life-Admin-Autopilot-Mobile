@@ -23,6 +23,7 @@
 
 import { ScanLine } from 'lucide-react'
 import { useTranslations } from 'next-intl'
+import type { RefObject } from 'react'
 
 import { AppHeader } from '@/components/layout/AppHeader'
 import { Button } from '@/components/ui/button'
@@ -35,6 +36,7 @@ export function DocumentsHeader({
   onCancelSelect,
   onSelectAll,
   onScan,
+  scanRef,
 }: {
   selectMode: boolean
   count: number
@@ -43,6 +45,12 @@ export function DocumentsHeader({
   onSelectAll: () => void
   /** Receives the button's rect so the capture flow morphs out of it. */
   onScan: (rect: DOMRect) => void
+  /**
+   * The scan button itself, so a caller that did not come from a tap — the
+   * `?capture=1` deep link the Money empty state uses — can still open the flow
+   * out of the same rect a tap would have produced.
+   */
+  scanRef?: RefObject<HTMLButtonElement | null>
 }) {
   const t = useTranslations('scan')
 
@@ -65,6 +73,7 @@ export function DocumentsHeader({
              end of an empty row reads as a leftover control rather than the
              page's action. */
           <Button
+            ref={scanRef}
             variant="solid"
             className="h-10 w-full"
             onClick={(e) => onScan(e.currentTarget.getBoundingClientRect())}

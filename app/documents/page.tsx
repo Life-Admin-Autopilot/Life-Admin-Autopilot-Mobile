@@ -14,8 +14,9 @@
 // DocumentsHeader for why the scan action lives in the row rather than the
 // header.
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
+import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 
 import { DeleteDocumentsConfirm } from '@/components/scan/DeleteDocumentsConfirm'
@@ -36,6 +37,7 @@ import {
 
 export default function DocumentsPage() {
   const t = useTranslations('scan')
+  const router = useRouter()
   // Origin colour for the capture morph, read live off the CTA's own token so
   // the shell reads as that button expanding rather than a new surface popping
   // in. It used to be a hardcoded plum literal left over from a previous
@@ -64,6 +66,28 @@ export default function DocumentsPage() {
     },
     [solid],
   )
+
+  // ?capture=1 — arriving here already meaning to scan.
+  //
+  // The Money empty state's "Scan a document" cannot mount the flow itself (it
+  // lives in this page's state and morphs out of this page's button), so it
+  // deep-links instead and this opens the flow on arrival. The param is stripped
+  // with replace() so the back gesture leaves /documents rather than re-opening
+  // the scanner, and the ref means the morph still grows out of the real button
+  // instead of a made-up rect.
+  // Read off `location` rather than useSearchParams(): that hook opts the whole
+  // route into client-side rendering unless it sits under its own Suspense
+  // boundary, which is a lot of ceremony for one boolean this page only ever
+  // reads once, on mount.
+  const scanRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('capture') !== '1') return
+    const rect = scanRef.current?.getBoundingClientRect()
+    if (!rect) return
+    openCapture(rect)
+    router.replace('/documents')
+  }, [openCapture, router])
 
   const openDocument = useCallback((doc: ScannedDocument, rect: DOMRect) => {
     setTrigger({ id: ++openCount.current, rect, mode: 'open', documentId: doc.id })
@@ -134,6 +158,7 @@ export default function DocumentsPage() {
           setSelected(allSelected ? new Set() : new Set(docs.map((d) => d.id)))
         }
         onScan={openCapture}
+        scanRef={scanRef}
       />
 
       {isLoading ? (

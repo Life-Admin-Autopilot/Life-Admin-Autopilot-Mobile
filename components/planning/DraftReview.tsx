@@ -14,6 +14,7 @@ import { SuggestedSlots } from '@/components/planning/SuggestedSlots'
 import { WhenField } from '@/components/planning/WhenField'
 import { useIntlTag } from '@/lib/i18n/localeStore'
 import { formatDayMonthMaybeYear, formatTime } from '@/lib/i18n/dateFormat'
+import { formatCurrency } from '@/lib/i18n/numberFormat'
 import { toast } from '@/lib/toast'
 
 /**
@@ -236,6 +237,15 @@ export function DraftReview({
                     {/* Surfaced only when the extractor is unsure — a confidence
                         badge on every row is noise that trains people to ignore it. */}
                     {draft.confidence < 0.6 ? <Chip tone="warn">unsure</Chip> : null}
+                    {/* The figure that will actually be filed, shown BEFORE the
+                        save rather than discovered on /money afterwards. A
+                        misheard amount is the one field here the user cannot
+                        infer from the title, so it has to be on the card. */}
+                    {draft.amount ? (
+                      <Chip>
+                        {formatCurrency(draft.amount.amountMinor, draft.amount.currency, tag)}
+                      </Chip>
+                    ) : null}
                   </div>
 
                   {!isSaved && !isSkipped ? (
