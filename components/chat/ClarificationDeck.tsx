@@ -40,6 +40,7 @@ import type { ClarificationRowState } from '@/components/chat/ClarificationRow'
 import { Button } from '@/components/ui/button'
 import {
   groupHolds,
+  isAnswerable,
   localTimezone,
   parseHolds,
   resolvedMatterFrom,
@@ -124,7 +125,14 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
     })
   }
 
-  const unsaved = holds.filter((hold) => !saved[hold.rowKey])
+  // EVERY count and every control below is over the ANSWERABLE rows only. An
+  // inert row can never be saved, so counting it would leave `settled`
+  // permanently false — the Save footer and the queue note would outlive the
+  // last real question, and the card would promise the queue is holding
+  // something that was never written to it.
+  const answerable = holds.filter(isAnswerable)
+  const answerableGroups = groups.filter((group) => group.rows.some(isAnswerable))
+  const unsaved = answerable.filter((hold) => !saved[hold.rowKey])
   const stagedRows = unsaved.filter((hold) => answerFor(hold) !== null)
   const openRows = unsaved.length - stagedRows.length
 
@@ -171,10 +179,10 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
 
     for (const group of groups) {
       const pending: { id: string; answer: HoldAnswer }[] = []
-      const multi = group.rows.length > 1
+      const multi = group.rows.filter(isAnswerable).length > 1
 
       for (const hold of group.rows) {
-        if (saved[hold.rowKey]) continue
+        if (!isAnswerable(hold) || saved[hold.rowKey]) continue
         const answer = answerFor(hold)
         if (!answer) continue
         committed[hold.rowKey] = answer
@@ -199,7 +207,12 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
   // CORRECTION rather than the filing — the matters were filed when the
   // questions were raised, so anything in the future tense here describes work
   // that finished before the user read it.
-  const settled = unsaved.length === 0
+  //
+  // A card with nothing answerable on it is neither open nor settled: it is a
+  // statement of what was filed. No heading counting questions that were never
+  // asked, and no Save — a control whose only possible act is to do nothing.
+  const asks = answerable.length > 0
+  const settled = asks && unsaved.length === 0
 
   return (
     <div className="flex w-full flex-col gap-3 rounded-2xl bg-surface p-4 shadow-card">
@@ -207,11 +220,11 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
         // Matters, not questions: two asks about one dentist appointment
         // updated one matter.
         <span className="text-label uppercase text-ink-subtle">
-          {t('clarify.saved', { count: groups.length })}
+          {t('clarify.saved', { count: answerableGroups.length })}
         </span>
-      ) : holds.length > 1 ? (
+      ) : answerable.length > 1 ? (
         <span className="text-label uppercase text-ink-subtle">
-          {t('clarify.heading', { count: holds.length })}
+          {t('clarify.heading', { count: answerable.length })}
         </span>
       ) : null}
 
@@ -236,7 +249,7 @@ export function ClarificationDeck({ calls, onAnswer, disabled = false }: Clarifi
 
       {/* Nothing left open → no footer. A Save button with nothing to save is a
           control that can only disappoint. */}
-      {settled ? null : (
+      {!asks || settled ? null : (
         <div className="flex items-center justify-between gap-3">
           {/* The one line that makes a partial answer safe to give: nothing is
               lost by leaving a question alone. */}
