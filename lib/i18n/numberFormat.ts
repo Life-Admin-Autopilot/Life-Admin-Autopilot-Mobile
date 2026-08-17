@@ -73,6 +73,37 @@ function minorUnitsPerMajor(currency: string, tag: string): number {
  * "E£4,800" with "EGP 4,800.00" reads as two different currencies. Where a
  * currency has no narrow form (KWD), Intl falls back to the code on its own.
  */
+/**
+ * What a person typed, as whole minor units — the inverse of
+ * {@link formatCurrency}, and the only sanctioned way a typed figure becomes a
+ * storable one.
+ *
+ * Returns null for anything that is not a figure, so a half-typed "12." or a
+ * stray letter leaves the amount unset rather than becoming a confident wrong
+ * number. Parsed with `Number`, not `parseFloat`, because `parseFloat('12abc')`
+ * is 12 — which would silently accept a typo as a price.
+ *
+ * Rounds to the currency's own precision and away from zero, matching the
+ * server's rule, so the two ends cannot disagree by a cent.
+ */
+export function toMinorUnits(major: string, currency: string, tag: string): number | null {
+  const trimmed = major.trim()
+  if (trimmed === '') return null
+
+  const parsed = Number(trimmed)
+  if (!Number.isFinite(parsed) || parsed < 0) return null
+
+  return Math.round(parsed * minorUnitsPerMajor(currency, tag))
+}
+
+/** Whole minor units back to an editable major-unit string, for populating an input. */
+export function toMajorString(minor: number, currency: string, tag: string): string {
+  const per = minorUnitsPerMajor(currency, tag)
+  // Fixed to the currency's own digit count, so 14237 EGP is "142.37" and
+  // 1000 JPY is "1000" rather than "1000.00".
+  return (minor / per).toFixed(Math.round(Math.log10(per)))
+}
+
 export function formatCurrency(minor: number, currency: string, tag: string): string {
   return formatter(tag, currencyOptions(currency, tag)).format(
     minor / minorUnitsPerMajor(currency, tag),

@@ -3,6 +3,8 @@
 import { useTranslations } from 'next-intl'
 import { useEffect, useState } from 'react'
 
+import { AmountField } from '@/components/matters/AmountField'
+
 import { useDomainLabels } from '@/hooks/useDomainLabels'
 import { DomainIcon } from '@/components/icons/DomainIcon'
 import { Button } from '@/components/ui/button'
@@ -18,6 +20,7 @@ import {
   useCreateTask,
   type TaskDomain,
   type TaskPriority,
+  type MoneyInput,
 } from '@/queries/tasks'
 
 // Add a matter by hand.
@@ -84,6 +87,7 @@ export function CreateMatterSheet({
 }) {
   const t = useTranslations('matters')
   const tCommon = useTranslations('common')
+  const tMoney = useTranslations('money')
   const domainLabels = useDomainLabels()
   const createTask = useCreateTask()
   const [title, setTitle] = useState('')
@@ -91,6 +95,7 @@ export function CreateMatterSheet({
   const [when, setWhen] = useState<WhenKey>('none')
   const [customAt, setCustomAt] = useState('')
   const [priority, setPriority] = useState<TaskPriority>('normal')
+  const [amount, setAmount] = useState<MoneyInput | null>(null)
 
   // Reset on every open. A sheet that reopens holding the last matter's title
   // is one distracted tap away from creating it twice.
@@ -101,6 +106,7 @@ export function CreateMatterSheet({
     setWhen('none')
     setCustomAt('')
     setPriority('normal')
+    setAmount(null)
   }, [open])
 
   // "Pick a date" with nothing picked yet is not a date. Saving then would
@@ -121,6 +127,9 @@ export function CreateMatterSheet({
         // the date rather than being a third thing to choose.
         kind: when === 'none' ? 'list' : 'reminder',
         dueAt: resolveDue(when, customAt, new Date()),
+        // Omitted entirely when nothing was typed. Sending a zero would put
+        // the matter on the money page claiming it cost nothing.
+        ...(amount ? { amount } : {}),
       },
       {
         onSuccess: () => {
@@ -236,6 +245,12 @@ export function CreateMatterSheet({
               </button>
             ))}
           </div>
+        </SheetSection>
+
+        {/* Last, and optional. Most matters are not about money, so asking for a
+            figure above the date would imply otherwise on every one of them. */}
+        <SheetSection label={tMoney('field.label')}>
+          <AmountField value={amount} onChange={setAmount} />
         </SheetSection>
       </div>
     </MorphSheet>

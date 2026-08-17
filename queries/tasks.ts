@@ -52,6 +52,18 @@ export interface TaskEstimate {
   source: 'ai' | 'user'
 }
 
+/**
+ * A stored figure as the server returns it — whole minor units plus an ISO 4217
+ * code, never a formatted string, because the server does not know the reader's
+ * locale. Format it with `lib/i18n/numberFormat.ts`.
+ */
+export interface Money {
+  amountMinor: number
+  currency: string
+  source: 'ai' | 'user'
+  direction: 'out' | 'in'
+}
+
 export interface TaskReminder {
   at: string
   firedAt?: string
@@ -76,6 +88,15 @@ export interface Task {
   snoozedUntil?: string
   confidence?: TaskConfidence
   estimate?: TaskEstimate
+  /**
+   * What this matter costs, if anything. Absent on most matters — an amount is
+   * the exception — so every surface must render without it.
+   *
+   * `source: 'ai'` means a document reader produced the figure and the surface
+   * owes it a provenance marker; `'user'` means a person typed it and no AI pass
+   * will overwrite it.
+   */
+  amount?: Money
   sourceVoiceNoteId?: string
   sourceDocumentId?: string
   /** Set when this matter came from a connected service rather than from you. */
@@ -238,6 +259,20 @@ export function invalidateTasks(qc: QueryClient) {
   void qc.invalidateQueries({ queryKey: queryKeys.briefing() })
 }
 
+/**
+ * A figure the server will store.
+ *
+ * Minor units and an ISO 4217 code, exactly the shape the server hands back, so
+ * a value never makes a lossy round trip through a decimal. `source` is
+ * deliberately absent — the server stamps it, and sending it is rejected: a
+ * client able to set it could pass an AI guess off as something a person typed.
+ */
+export interface MoneyInput {
+  amountMinor: number
+  currency: string
+  direction?: 'out' | 'in'
+}
+
 export interface CreateTaskBody {
   title: string
   domain: TaskDomain
@@ -246,6 +281,7 @@ export interface CreateTaskBody {
   tags?: string[]
   dueAt?: string
   notes?: string
+  amount?: MoneyInput
 }
 
 // `null` clears a field; omitting it leaves the field alone. Matches the
@@ -259,6 +295,8 @@ export interface UpdateTaskBody {
   dueAt?: string | null
   notes?: string | null
   snoozedUntil?: string | null
+  /** `null` clears it — "this was never about money", which has to be sayable. */
+  amount?: MoneyInput | null
 }
 
 export function useCreateTask() {

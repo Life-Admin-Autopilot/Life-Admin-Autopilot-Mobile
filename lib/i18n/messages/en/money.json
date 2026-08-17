@@ -62,5 +62,11 @@
     "settled": "Nothing outstanding.",
     "empty": "No amounts recorded yet.",
     "open": "Open money"
+  },
+  "field": {
+    "label": "Amount",
+    "placeholder": "0.00",
+    "hint": "Leave blank if this matter is not about money.",
+    "onMatter": "Amount"
   }
 }
