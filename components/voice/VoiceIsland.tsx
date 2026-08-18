@@ -65,11 +65,35 @@ export function VoiceIsland() {
   // the island closes, which is the whole point.
   const followUp = useVoiceNoteFollowUp()
   const abortRef = useRef<AbortController | null>(null)
+  const [micStarted, setMicStarted] = useState(false)
 
   // CSS-morph path (probe mode) — declared before the open effect that latches
   // it, so the setter is initialised by the time that effect closes over it.
   const [cssMorph, setCssMorph] = useState(false)
   const [expanded, setExpanded] = useState(false)
+
+  // Reset state on open change during render to avoid a 1-frame visual flash of the previous session
+  const [prevOpen, setPrevOpen] = useState(false)
+  if (open !== prevOpen) {
+    setPrevOpen(open)
+    if (open) {
+      setPhase('recording')
+      setCapturedMs(0)
+      setBlob(null)
+      setError(null)
+      setMicStarted(false)
+      const isMorph = typeof document !== 'undefined' && (document.documentElement.dataset.perf?.includes('css-morph') ?? false)
+      setCssMorph(isMorph)
+    } else {
+      setMicStarted(false)
+    }
+  }
+
+  // Surface an unusable mic instead of a dead recording state.
+  if (open && recorder.phase === 'unavailable' && (phase !== 'error' || error === null)) {
+    setPhase('error')
+    setError(micFailureMessage(recorder.failure ?? 'unknown', env.appName, tLib))
+  }
 
   const [vp] = useState(() => ({
     w: typeof window === 'undefined' ? 400 : window.innerWidth,
@@ -78,7 +102,7 @@ export function VoiceIsland() {
   const panelW = Math.min(vp.w * 0.92, 440)
   const panelH = vp.h * 0.8
 
-  // Reset on open; tear down on close. Note what is NOT here: recorder.start().
+  // Tear down on close. Note what is NOT here: recorder.start().
   //
   // Starting the mic on this commit put getUserMedia — which activates an
   // AVAudioSession, a 100–300ms main-thread stall on iOS — plus `new
@@ -86,20 +110,12 @@ export function VoiceIsland() {
   // needs. The animation and the audio hardware fought, and the open measured
   // ~40fps. The mic now starts once the shell has settled (see below).
   useEffect(() => {
-    if (open) {
-      // Latched at open time: switching probe modes requires reopening the
-      // panel to see the effect anyway, so there is nothing to gain from
-      // making this reactive mid-animation.
-      setCssMorph(document.documentElement.dataset.perf?.includes('css-morph') ?? false)
-      setPhase('recording')
-      setBlob(null)
-      setError(null)
-    } else {
+    if (!open) {
       abortRef.current?.abort()
       void recorder.stop().catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  }, [open, recorder.stop])
 
   // Hand the mic the frame AFTER the morph is done, so the audio-session stall
   // lands on an idle main thread instead of mid-spring.
@@ -108,7 +124,6 @@ export function VoiceIsland() {
   // for the cases framer will not call it (an interrupted or skipped
   // animation) — a missed callback here would mean a surface that says
   // "Recording" and never records.
-  const micStartedRef = useRef(false)
 
   useEffect(() => {
     if (!open || !cssMorph) return
@@ -122,17 +137,14 @@ export function VoiceIsland() {
   }, [open, cssMorph])
 
   const startMic = useCallback(() => {
-    if (micStartedRef.current || !open) return
-    micStartedRef.current = true
+    if (micStarted || !open) return
+    setMicStarted(true)
     void recorder.start()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+  }, [open, micStarted])
 
   useEffect(() => {
-    if (!open) {
-      micStartedRef.current = false
-      return
-    }
+    if (!open) return
     const fallback = setTimeout(startMic, MIC_START_FALLBACK_MS)
     return () => clearTimeout(fallback)
   }, [open, startMic])
@@ -144,16 +156,6 @@ export function VoiceIsland() {
   useEffect(() => {
     if (open && !isAppChatRoute(pathname)) close()
   }, [open, pathname, close])
-
-  // Surface an unusable mic instead of a dead recording state. The reason
-  // matters: a blocked permission and a non-secure dev origin both land here,
-  // and only one of them is fixable in Settings.
-  useEffect(() => {
-    if (open && recorder.phase === 'unavailable') {
-      setError(micFailureMessage(recorder.failure ?? 'unknown', env.appName, tLib))
-      setPhase('error')
-    }
-  }, [open, recorder.phase, recorder.failure])
 
   const cancel = async () => {
     abortRef.current?.abort()

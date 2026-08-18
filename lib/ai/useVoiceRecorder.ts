@@ -116,15 +116,18 @@ export function useVoiceRecorder(): UseVoiceRecorderResult {
       void audioCtxRef.current.close().catch(() => {})
       audioCtxRef.current = null
     }
-    streamRef.current?.getTracks().forEach((t) => t.stop())
-    streamRef.current = null
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+    }
     // Drop the captured audio here, not only in start(). start() resets the
     // buffer AFTER `await getUserMedia`, and bails when a capture is already
     // live — so any stop that did not complete cleanly left the old samples in
     // place and the next recording appended to them.
     chunksRef.current = []
     level.set(0)
-  }, [level])
+    setElapsedMs(0)
+  }, [level, setElapsedMs])
 
   /** Shared by the Stop button and the 5-minute cap. */
   const finish = useCallback((): Blob | null => {
@@ -322,7 +325,11 @@ export function useVoiceRecorder(): UseVoiceRecorderResult {
     return Promise.resolve(finishRef.current())
   }, [cleanup])
 
-  useEffect(() => cleanup, [cleanup])
+  useEffect(() => {
+    return () => {
+      cleanup()
+    }
+  }, [cleanup])
 
   return { phase, elapsedMs, level, failure, start, stop: stopInternal }
 }
