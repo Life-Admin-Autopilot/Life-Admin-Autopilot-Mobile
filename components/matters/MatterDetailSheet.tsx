@@ -4,7 +4,7 @@ import { AlertTriangle, Check, Trash2 } from 'lucide-react'
 import { useTranslations } from 'next-intl'
 
 import { useDomainLabels } from '@/hooks/useDomainLabels'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { AmountField } from '@/components/matters/AmountField'
 import { ConflictNotice } from '@/components/matters/ConflictNotice'
@@ -30,6 +30,7 @@ import {
 } from '@/queries/tasks'
 import { ChipToggle, Sheet, SheetSection } from '@/components/ui/Sheet'
 import { previewConflicts, type DraftConflict } from '@/queries/planning'
+import { SuggestedSlots } from '@/components/planning/SuggestedSlots'
 
 // The single matter editor. Same field set and chip vocabulary as the document
 // scan review (components/scan/TaskOverview), so editing a matter feels the
@@ -149,8 +150,47 @@ function Editor({
 
   // The pre-save clash check: what it found, and whether the user has now seen it.
   const [clashes, setClashes] = useState<DraftConflict[]>([])
+  const [slots, setSlots] = useState<{ at: string[]; why: string }>({ at: [], why: '' })
   const [overrideClash, setOverrideClash] = useState(false)
   const [checking, setChecking] = useState(false)
+
+  // Live, not save-time. The check used to run only when Save was pressed, which
+  // made the warning an exit toll — the user had already decided. Watching the
+  // draft's time as it is typed answers the question they are actually asking
+  // while the picker is open ("is this slot free?"), and a clash that appears
+  // disappears again the moment the time moves somewhere clear. Debounced so a
+  // datetime input mid-keystroke does not fire a request per digit.
+  useEffect(() => {
+    // Everything in here is async on purpose — the linter's set-state-in-effect
+    // rule flags synchronous cascades, and clearing state for an unmoved time
+    // through the same zero-delay timer keeps the render loop single-pass.
+    if (!draft.dueAt || draft.dueAt === task.dueAt) {
+      const clear = setTimeout(() => {
+        setClashes([])
+        setSlots({ at: [], why: '' })
+        setOverrideClash(false)
+      }, 0)
+      return () => clearTimeout(clear)
+    }
+    const handle = setTimeout(() => {
+      setChecking(true)
+      void previewConflicts(task.id, {
+        dueAt: draft.dueAt,
+        title: draft.title.trim() || undefined,
+      })
+        .then((found) => {
+          setClashes(found.conflicts)
+          setSlots({ at: found.suggestions, why: found.suggestionReason })
+          // The warning is on screen before Save is ever pressed, so the first
+          // tap IS the decision — making them tap twice past a clash they have
+          // already read would just be friction wearing a safety label.
+          setOverrideClash(found.conflicts.length > 0)
+        })
+        .finally(() => setChecking(false))
+    }, 450)
+    return () => clearTimeout(handle)
+    // draft.title so a rename mid-edit re-scores the clash duration keywords.
+  }, [draft.dueAt, draft.title, task.dueAt, task.id])
 
   const patch = (p: Partial<Draft>) => {
     setDraft((d) => ({ ...d, ...p }))
@@ -191,8 +231,9 @@ function Editor({
       setChecking(true)
       const found = await previewConflicts(task.id, { dueAt: body.dueAt, title })
       setChecking(false)
-      if (found.length > 0) {
-        setClashes(found)
+      if (found.conflicts.length > 0) {
+        setClashes(found.conflicts)
+        setSlots({ at: found.suggestions, why: found.suggestionReason })
         setOverrideClash(true)
         return
       }
@@ -281,6 +322,15 @@ function Editor({
               </li>
             ))}
           </ul>
+          {/* The way out, beside the warning: times verified free for this kind
+              of matter. Picking one retimes the DRAFT — the live check above
+              then runs against it and the clash lines clear in front of the
+              user, which is the confirmation no banner could give. */}
+          <SuggestedSlots
+            slots={slots.at}
+            reason={slots.why}
+            onPick={(next) => patch({ dueAt: next.toISOString() })}
+          />
         </div>
       ) : (
         /* The Knowledge Agent's re-check. Sits above the fields that cause a

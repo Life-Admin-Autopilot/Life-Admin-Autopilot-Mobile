@@ -36,7 +36,14 @@ export function DraftConfirm({ draft: proposed }: { draft: TaskDraft }) {
   // were Confirm or Dismiss — so correcting an hour meant dismissing the card
   // and saying the whole thing again.
   const [edited, setEdited] = useState<TaskDraft | null>(null)
-  const [slots, setSlots] = useState<{ at: string[]; why: string }>({ at: [], why: '' })
+  // Seeded from the proposal itself: a draft that arrives clashing arrives with
+  // its escape routes, so the chips render on FIRST paint rather than only after
+  // the user has retimed once. Older drafts in history predate the field and
+  // simply start empty, exactly as before.
+  const [slots, setSlots] = useState<{ at: string[]; why: string }>({
+    at: proposed.suggestions ?? [],
+    why: proposed.suggestionReason ?? '',
+  })
 
   const draft = edited ?? proposed
   const due = draft.dueDate ? new Date(draft.dueDate) : null

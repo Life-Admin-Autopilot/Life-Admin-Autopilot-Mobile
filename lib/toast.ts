@@ -6,6 +6,7 @@
 import { createElement } from 'react'
 import { toast as sonnerToast } from 'sonner'
 
+import { DecisionToast } from '@/components/ui/DecisionToast'
 import { MorphToast } from '@/components/ui/MorphToast'
 
 export type ToastVariant = 'success' | 'error' | 'info' | 'loading'
@@ -65,5 +66,45 @@ export const toast = {
         { duration: 3200 },
       ),
     ),
+  // A decision, not a notice — the square panel with two weighted answers
+  // (components/ui/DecisionToast). Sticks until answered or dismissed: a
+  // question that auto-dismisses mid-read is worse than no question. Both
+  // buttons dismiss the panel themselves after running their action.
+  decide: (opts: {
+    tone: 'clash' | 'question'
+    title: string
+    description?: string
+    primary: { label: string; onPress: () => void }
+    secondary: { label: string; onPress: () => void }
+  }): string => {
+    const id = sonnerToast.custom(
+      (toastId) =>
+        createElement(
+          'div',
+          { className: 'flex w-full justify-center' },
+          createElement(DecisionToast, {
+            tone: opts.tone,
+            title: opts.title,
+            description: opts.description,
+            primary: {
+              label: opts.primary.label,
+              onPress: () => {
+                sonnerToast.dismiss(toastId)
+                opts.primary.onPress()
+              },
+            },
+            secondary: {
+              label: opts.secondary.label,
+              onPress: () => {
+                sonnerToast.dismiss(toastId)
+                opts.secondary.onPress()
+              },
+            },
+          }),
+        ),
+      { duration: Infinity },
+    )
+    return String(id)
+  },
   dismiss: (id: string) => sonnerToast.dismiss(id),
 }
