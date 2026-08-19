@@ -10,6 +10,7 @@ import { useVoiceRecorder } from '@/lib/ai/useVoiceRecorder'
 import { micFailureMessage } from '@/lib/ai/micFailure'
 import { useVoiceCapture } from '@/lib/voice/captureStore'
 import { useUploadVoiceNote } from '@/queries/voiceNotes'
+import { useTranscriptionAvailable } from '@/queries/capabilities'
 import { useVoiceNoteFollowUp } from '@/queries/voiceNoteFollowUp'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
@@ -55,6 +56,9 @@ export function VoiceIsland() {
   const close = useVoiceCapture((s) => s.close)
   const pathname = usePathname()
   const recorder = useVoiceRecorder()
+  // Whether speech-to-text can do anything at all right now — an operator switch
+  // or the provider itself refusing every call. Optimistic while it loads.
+  const transcriptionAvailable = useTranscriptionAvailable()
 
   const [phase, setPhase] = useState<Phase>('recording')
   const [capturedMs, setCapturedMs] = useState(0)
@@ -89,8 +93,24 @@ export function VoiceIsland() {
     }
   }
 
+  // Voice switched off at the source — say so BEFORE recording, not after.
+  //
+  // This is the honest half of an exhausted ASR quota. The server has known for
+  // a while that every transcription call is being refused; the app went on
+  // opening the mic, taking a recording, promising it was safely kept and then
+  // failing it seconds later with a message that named nothing actionable. The
+  // user reasonably concluded their microphone was broken.
+  //
+  // Checked before the mic starts, so nothing is captured and nothing is lost —
+  // and it reuses the error phase the unusable-mic case already established,
+  // which renders the message and an exit with no blob to retry.
+  if (open && !transcriptionAvailable && (phase !== 'error' || error === null)) {
+    setPhase('error')
+    setError(t('unavailableBody'))
+  }
+
   // Surface an unusable mic instead of a dead recording state.
-  if (open && recorder.phase === 'unavailable' && (phase !== 'error' || error === null)) {
+  else if (open && recorder.phase === 'unavailable' && (phase !== 'error' || error === null)) {
     setPhase('error')
     setError(micFailureMessage(recorder.failure ?? 'unknown', env.appName, tLib))
   }
@@ -138,10 +158,14 @@ export function VoiceIsland() {
 
   const startMic = useCallback(() => {
     if (micStarted || !open) return
+    // Never open the microphone for a recording nothing can read back. The
+    // morph still runs and the panel still appears — it just explains itself
+    // instead of listening.
+    if (!transcriptionAvailable) return
     setMicStarted(true)
     void recorder.start()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, micStarted])
+  }, [open, micStarted, transcriptionAvailable])
 
   useEffect(() => {
     if (!open) return
@@ -258,7 +282,7 @@ export function VoiceIsland() {
           className="bottom-safe fixed left-1/2 z-50 -translate-x-1/2 overflow-hidden rounded-3xl bg-surface shadow-elevated"
         >
           <div className="flex h-full w-full flex-col items-center justify-between p-6 text-center">
-              <Header phase={phase} />
+              <Header phase={phase} unavailable={!transcriptionAvailable} />
 
               <div className="flex w-full flex-1 flex-col items-center justify-center gap-6">
                 {phase === 'recording' || phase === 'review' ? (
@@ -290,7 +314,7 @@ export function VoiceIsland() {
   )
 }
 
-function Header({ phase }: { phase: Phase }) {
+function Header({ phase, unavailable }: { phase: Phase; unavailable: boolean }) {
   const t = useTranslations('voice')
   const label =
     phase === 'recording'
@@ -299,7 +323,11 @@ function Header({ phase }: { phase: Phase }) {
         ? t('readyToSend')
         : phase === 'saving'
           ? t('saving')
-          : t('somethingWrong')
+          : // "Something went wrong" is the wrong sentence for a feature that is
+            // switched off: nothing went wrong, and the user has nothing to fix.
+            unavailable
+            ? t('unavailableTitle')
+            : t('somethingWrong')
   return <span className="text-label uppercase tracking-wide text-accent">{label}</span>
 }
 

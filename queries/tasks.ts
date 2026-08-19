@@ -16,6 +16,7 @@ import {
 } from '@tanstack/react-query'
 
 import { api, toQuery } from '@/lib/api/client'
+import { deviceTimeZone } from '@/lib/i18n/dateFormat'
 import { queryKeys } from '@/queries/keys'
 
 export const TASK_DOMAINS = ['health', 'home', 'car', 'finance', 'family', 'pets'] as const
@@ -149,6 +150,17 @@ export interface TaskFilters {
   overdue?: boolean
   undated?: boolean
   untagged?: boolean
+  /**
+   * Matters that have stopped being real commitments — pushed three times or more,
+   * or overdue by more than a fortnight.
+   *
+   * NOT `overdue`, and the difference is the whole reason this exists. The banners
+   * that say "N matters have slipped" report `counts.slipping`, and until this
+   * filter existed they opened `overdue` instead — a different, larger set. So the
+   * prompt said one and the list showed two, which reads as the app contradicting
+   * itself. The server compiles this from the same rule the count is built from.
+   */
+  slipping?: boolean
 }
 
 export interface TaskCounts {
@@ -188,11 +200,17 @@ export function hasActiveFilters(filters: TaskFilters): boolean {
 const PAGE_SIZE = 50
 
 export function useTasks(filters: TaskFilters, sort: TaskSort = 'due-asc') {
+  // Only `slipping` needs a zone — it is the one filter measured against a LOCAL
+  // day boundary rather than an instant, and its cut-off has to land on the same
+  // day the count used or the two disagree by up to a day at the edge. Sent only
+  // when it is asked for, so no other list's request shape or cache key moves.
+  const tz = filters.slipping ? deviceTimeZone() : undefined
+
   return useInfiniteQuery({
     queryKey: queryKeys.tasks.list({ ...filters, sort }),
     queryFn: ({ pageParam }) =>
       api<TaskListPage>(
-        `/me/tasks${toQuery({ ...filters, sort, limit: PAGE_SIZE, cursor: pageParam })}`,
+        `/me/tasks${toQuery({ ...filters, tz, sort, limit: PAGE_SIZE, cursor: pageParam })}`,
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,

@@ -21,7 +21,7 @@
 
 import { useMutation } from '@tanstack/react-query'
 
-import { apiBinary } from '@/lib/api/client'
+import { api, apiBinary } from '@/lib/api/client'
 import { deviceTimeZone } from '@/lib/i18n/dateFormat'
 
 /**
@@ -166,4 +166,27 @@ export function useUploadVoiceNote() {
 /** One note, by id. Used by the follow-up poll; 404s as `voice_note_not_found`. */
 export function voiceNotePath(noteId: string): string {
   return `/me/voice-notes/${encodeURIComponent(noteId)}`
+}
+
+/**
+ * Put a failed note back in the queue.
+ *
+ * The failure toast has said "It is kept — retry from Notifications" since voice
+ * shipped, and nothing anywhere could retry one: there is no notifications route,
+ * the bell has no voice handling, and the only voice write endpoints re-ran
+ * EXTRACTION over a stored transcript — useless to a note that died before it had
+ * one. The audio really was kept; the promise was simply unkeepable.
+ *
+ * Not a `useMutation`: the caller is the background follow-up poll, which lives
+ * outside React's render tree by design (see voiceNoteFollowUp.ts) and fires this
+ * from a toast action. Resolves to the note's new state.
+ *
+ * The server refuses with 503 `transcription_unavailable` while the provider is
+ * known to be down, rather than re-queueing a note to fail the same way seconds
+ * later — so a rejection here is information, not an error to swallow.
+ */
+export function retryVoiceNote(noteId: string): Promise<VoiceNote> {
+  return api<VoiceNoteResponse>(`${voiceNotePath(noteId)}/retry`, { method: 'POST' }).then(
+    (res) => res.voiceNote,
+  )
 }

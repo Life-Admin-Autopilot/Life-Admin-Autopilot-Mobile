@@ -14,9 +14,20 @@
   "savedFiling": "Saved. Filing your matters.",
   "uploadFailed": "Could not save your recording. It is kept.",
   "retry": "Retry",
+  "review": "Review",
+  "changeIt": "Change it",
+  "keepAnyway": "Keep it anyway",
+  "answerNow": "Answer",
+  "later": "Later",
   "discard": "Discard",
   "outcomeFiled": "{count, plural, =0 {No matters filed.} one {1 matter filed.} other {# matters filed.}}",
   "outcomeNeedsInput": "{count, plural, one {1 needs your input.} other {# need your input.}}",
   "outcomeNeedsInputUnknown": "Some matters need your input.",
-  "workerFailed": "Could not process your voice note. It is kept — retry from Notifications."
+  "workerFailed": "Could not process your voice note. Your recording is kept.",
+  "retryQueued": "Trying that recording again.",
+  "retryUnavailable": "Voice is still unavailable. Your recording is kept — try later.",
+  "retryFailed": "Could not try that again just now.",
+  "unavailableTitle": "Voice is unavailable",
+  "unavailableBody": "Speech-to-text is paused right now, so a recording could not be read back. Type the matter instead.",
+  "unavailableAction": "Type it instead"
 }

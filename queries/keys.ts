@@ -11,6 +11,8 @@ export const queryKeys = {
     quota: () => ['ai', 'quota'] as const,
   },
   notifications: ['notifications'] as const,
+  /** What this deployment can do right now — chat, scanning, voice. */
+  capabilities: () => ['capabilities'] as const,
   clarifications: ['clarifications'] as const,
   /** Status of specific rows, by id — see useClarificationStatuses. */
   clarificationStatuses: (ids: readonly string[]) =>
