@@ -5,8 +5,11 @@
 // resolve/drop/defer so the card stack advances instantly.
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useTranslations } from 'next-intl'
 
 import { api } from '@/lib/api/client'
+import { formatTime } from '@/lib/i18n/dateFormat'
+import { useIntlTag } from '@/lib/i18n/localeStore'
 import { staticMessages } from '@/lib/i18n/staticMessages'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
@@ -99,15 +102,70 @@ export function useClarificationStatuses(ids: readonly string[]) {
   })
 }
 
+/**
+ * What the server reports back about the answer itself.
+ *
+ * The question that gets asked most often here is "what time?", and until now
+ * nothing checked whether the time the user picked was free. So the clash a
+ * held item was flagged for could be created BY the answer to the question that
+ * flagged it — silently, with the question then marked resolved. Every other way
+ * of setting a date in this product is checked; this was the one route that
+ * wrote a due date and asked nothing.
+ *
+ * Reported, never enforced: the answer stands, and the clash comes back with
+ * times that are known free so it is one more tap rather than a wall.
+ */
+export interface ResolveOutcome {
+  clarification: Clarification
+  task: { id: string; title?: string; dueAt?: string } | null
+  conflicts?: { taskId: string; title: string; dueAt: string | null; kind?: string; reason: string }[]
+  /** Free instants, soonest first. Only ever sent alongside a conflict. */
+  suggestions?: string[]
+  suggestionReason?: string
+}
+
 export function useResolveClarification() {
   const queryClient = useQueryClient()
+  // A hook, so `useTranslations` is available — the right tool here. The
+  // re-check copy carries a matter's title and a clock time, and
+  // staticMessages() is lookup-only for exactly that reason.
+  const t = useTranslations('uncertainty')
+  const tag = useIntlTag()
+
   return useMutation({
     mutationFn: (vars: { id: string; answer: ClarificationAnswer; timezone?: string }) =>
-      api<{ clarification: Clarification; task: unknown }>(`/me/clarifications/${vars.id}/resolve`, {
+      api<ResolveOutcome>(`/me/clarifications/${vars.id}/resolve`, {
         method: 'POST',
         body: { answer: vars.answer, timezone: vars.timezone },
       }),
     onMutate: (vars) => removeOptimistically(queryClient, vars.id),
+    onSuccess: (outcome) => {
+      const clash = outcome.conflicts?.[0]
+      const taskId = outcome.task?.id
+      if (!clash || !taskId) return
+
+      const slot = outcome.suggestions?.[0]
+
+      // A toast rather than a card, because the stack has already advanced —
+      // the answer was accepted and the next question is on screen. Interrupting
+      // that with a modal would punish the user for answering.
+      toast.info(t('stillClashes', { title: clash.title }), {
+        description: slot ? undefined : t('stillClashesNoSlot'),
+        action: slot
+          ? {
+              label: t('moveTo', { time: formatTime(new Date(slot), tag) }),
+              onPress: () => {
+                void api(`/me/tasks/${taskId}`, { method: 'PATCH', body: { dueAt: slot } })
+                  .then(() => {
+                    void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all })
+                    void queryClient.invalidateQueries({ queryKey: queryKeys.digestAll })
+                  })
+                  .catch(reportFailure)
+              },
+            }
+          : undefined,
+      })
+    },
     onError: (err, _v, ctx) => {
       restore(queryClient, ctx)
       reportFailure(err)

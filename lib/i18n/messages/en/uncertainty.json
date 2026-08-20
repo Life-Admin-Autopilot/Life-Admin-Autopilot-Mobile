@@ -9,5 +9,8 @@
   "drop": "Drop",
   "allClearTitle": "All clear.",
   "allClearBody": "Everything's filed the way you wanted.",
-  "backToDashboard": "Back to dashboard"
+  "backToDashboard": "Back to dashboard",
+  "stillClashes": "That time still clashes with “{title}”.",
+  "stillClashesNoSlot": "Nothing nearby is free — open the matter to pick another time.",
+  "moveTo": "Move to {time}"
 }

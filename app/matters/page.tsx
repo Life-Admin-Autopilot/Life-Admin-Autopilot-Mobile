@@ -21,7 +21,7 @@ import { AppHeader } from '@/components/layout/AppHeader'
 import { EmojiChip } from '@/components/ui/EmojiChip'
 import { SectionHeaderChip, type ChipTone } from '@/components/ui/SectionHeaderChip'
 import { SelectionToolbar } from '@/components/ui/SelectionToolbar'
-import { ApiError } from '@/lib/api/client'
+import { api, ApiError } from '@/lib/api/client'
 import { cn } from '@/lib/cn'
 import { LIST_ITEM_VARIANTS } from '@/lib/motion'
 import { usePendingProposal, useProposeCategorization } from '@/queries/categorize'
@@ -96,7 +96,23 @@ export default function MattersPage() {
   // one key. `nav.matters` is the screen's name everywhere it appears.
   const tNav = useTranslations('nav')
   const domainLabels = useDomainLabels()
-  const [filters, setFilters] = useState<TaskFilters>(DEFAULT_FILTERS)
+  // ?filter=slipping — arriving here from the home strip's "N matters have
+  // slipped".
+  //
+  // That row used to link to a bare /matters, so a prompt about one stale matter
+  // opened the entire list and the reader had to go and find it. The initialiser
+  // runs once, on mount, which is exactly the lifetime this needs: the user is
+  // free to change the filter afterwards and nothing here fights them for it.
+  //
+  // Read off `location` rather than useSearchParams(), for the reason the
+  // documents page records: that hook opts the whole route into client-side
+  // rendering unless it sits under its own Suspense boundary.
+  const [filters, setFilters] = useState<TaskFilters>(() =>
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('filter') === 'slipping'
+      ? { ...DEFAULT_FILTERS, slipping: true }
+      : DEFAULT_FILTERS,
+  )
   const [sort, setSort] = useState<TaskSort>('due-asc')
   const [group, setGroup] = useState<GroupMode>('time')
   const [search, setSearch] = useState('')
@@ -109,7 +125,20 @@ export default function MattersPage() {
   // at open time, so adding a step, ticking one off, or deleting one wrote to
   // the server and the cache and left the sheet showing the old subtask list
   // until it was closed and reopened.
-  const [detailId, setDetailId] = useState<string | null>(null)
+  // ?open={taskId} — arriving from the voice clash pop-up's "Change it", which
+  // promises the matter ALREADY OPEN, not a list to hunt through. Same one-shot
+  // initialiser (and the same location-not-useSearchParams reason) as ?filter
+  // above.
+  const [detailId, setDetailId] = useState<string | null>(() =>
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('open')
+      : null,
+  )
+  // A deep-linked matter may not be on the visible page — wrong filter, later
+  // page, or just created by the voice worker seconds ago. Fetched by id as a
+  // fallback so the sheet can still open; the cache-backed row wins whenever
+  // the list does hold it, so edits keep re-rendering live.
+  const [deepLinked, setDeepLinked] = useState<Task | null>(null)
 
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -225,7 +254,25 @@ export default function MattersPage() {
   // Resolved from whichever list is showing, so the sheet re-renders with the
   // matter as the cache now knows it. Going undefined (deleted, or filtered
   // out) closes the sheet through its normal collapse.
-  const detail = detailId ? visible.find((t) => t.id === detailId) ?? null : null
+  const detail = detailId
+    ? (visible.find((t) => t.id === detailId) ?? (deepLinked?.id === detailId ? deepLinked : null))
+    : null
+
+  useEffect(() => {
+    if (!detailId || detail || list.isLoading) return
+    let cancelled = false
+    void api<{ task: Task }>(`/me/tasks/${detailId}`)
+      .then((res) => {
+        if (!cancelled) setDeepLinked(res.task)
+      })
+      .catch(() => {
+        // Gone or never existed - close rather than hold an empty sheet open.
+        if (!cancelled) setDetailId(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [detailId, detail, list.isLoading])
 
   // Only time grouping needs the pin: domain and priority don't change when a
   // matter is completed, so a held row keeps its section there for free.
@@ -476,7 +523,14 @@ export default function MattersPage() {
         {!filtered && !result && (counts.data?.slipping ?? 0) > 0 ? (
           <button
             type="button"
-            onClick={() => setFilters({ ...DEFAULT_FILTERS, overdue: true })}
+            // `slipping`, not `overdue`. The prompt counts `counts.slipping` and
+            // used to open the OVERDUE list — a different and larger set — so "1
+            // matter has slipped" opened two matters under a header reading
+            // "Overdue 2", and the two numbers read as the app contradicting
+            // itself. Neither was wrong; they answered different questions and
+            // only one of them was named on screen. The server now compiles this
+            // filter from the same rule the count is built from.
+            onClick={() => setFilters({ ...DEFAULT_FILTERS, slipping: true })}
             className="flex items-center gap-3.5 rounded-2xl bg-accent-soft px-4 py-3.5 text-start"
           >
             <EmojiChip emoji="🌾" category="peach" size={40} />

@@ -36,6 +36,14 @@ export interface TaskDraft {
   confidence: number
   conflicts: DraftConflict[]
   /**
+   * Free instants for a CLASHING draft, soonest first — verified against the same
+   * pool as `conflicts`, so picking one cannot be refused at save. Sent by
+   * `/me/tasks/draft` only alongside a conflict; older drafts in thread history
+   * predate the field, so every reader must tolerate it missing.
+   */
+  suggestions?: string[]
+  suggestionReason?: string
+  /**
    * The day came from the user; the clock time did not.
    *
    * A task stores one instant, so "Wednesday" has to become some specific moment,
@@ -170,21 +178,30 @@ export function useBriefing() {
  * about a change that has not, so a caller can decline to make it — the same
  * ordering the chat agent's updateTask tool now follows.
  *
- * Returns [] rather than throwing when the check itself fails: a conflict check
- * that cannot run is not a reason to block an edit the user asked for.
+ * Returns empty rather than throwing when the check itself fails: a conflict
+ * check that cannot run is not a reason to block an edit the user asked for.
+ *
+ * Carries the same escape hatch as the draft preview: when the change WOULD
+ * clash, `suggestions` holds nearby times verified free against the same pool
+ * (excluding this task, which would otherwise collide with every slot proposed
+ * for itself), so the warning arrives with its own way out.
  */
 export async function previewConflicts(
   taskId: string,
   change: { dueAt?: string | null; title?: string },
-): Promise<DraftConflict[]> {
+): Promise<ConflictPreview> {
   try {
-    const res = await api<{ conflicts: DraftConflict[] }>(`/me/tasks/${taskId}/conflicts`, {
+    const res = await api<ConflictPreview>(`/me/tasks/${taskId}/conflicts`, {
       method: 'POST',
-      body: change,
+      body: { ...change, timezone: deviceTimeZone() },
     })
-    return res.conflicts ?? []
+    return {
+      conflicts: res.conflicts ?? [],
+      suggestions: res.suggestions ?? [],
+      suggestionReason: res.suggestionReason ?? '',
+    }
   } catch {
-    return []
+    return { conflicts: [], suggestions: [], suggestionReason: '' }
   }
 }
 

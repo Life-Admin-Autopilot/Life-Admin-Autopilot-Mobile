@@ -31,6 +31,7 @@
 
 import { AlertTriangle, Check, X } from 'lucide-react'
 import { DraftConfirm } from '@/components/chat/DraftConfirm'
+import { SavedConflictCard } from '@/components/chat/SavedConflictCard'
 import { useTranslations } from 'next-intl'
 
 import { MatterFacts } from '@/components/chat/MatterFacts'
@@ -196,8 +197,31 @@ export function ToolCallCard({ call, onConfirm, onDecline, pendingAction = null 
   // "Not saved yet" proposal card over a matter that is already in the list.
   // The branch itself stays: history rows written while createTask pointed at
   // /me/tasks/draft still render out of the transcript.
-  const result = (call.result ?? {}) as { draft?: unknown; task?: unknown }
+  const result = (call.result ?? {}) as {
+    draft?: unknown
+    task?: { id?: string; title?: string; dueAt?: string | null }
+    conflicts?: unknown[]
+    suggestions?: string[]
+    suggestionReason?: string
+  }
   if (result.draft && !result.task) return <DraftConfirm draft={result.draft as never} />
+
+  // Saved onto a clash: the write went through — save-first is the contract —
+  // and this card is the decision that follows it: move to a verified-free
+  // time, type another, or keep the overlap. Checked before the receipt branch,
+  // which would otherwise render this as an ordinary success.
+  if (result.task?.id && result.conflicts?.length) {
+    return (
+      <SavedConflictCard
+        taskId={result.task.id}
+        title={result.task.title ?? ''}
+        dueAt={result.task.dueAt ?? null}
+        conflicts={result.conflicts as never}
+        suggestions={result.suggestions ?? []}
+        suggestionReason={result.suggestionReason ?? ''}
+      />
+    )
+  }
 
   const verb = tChat(`ledger.verb.${ledgerVerbOf(call)}`)
   // A read names what it matched, not a matter it did not touch: `queryTasks`

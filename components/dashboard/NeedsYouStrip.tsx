@@ -97,7 +97,10 @@ export function NeedsYouStrip({
       // "تأخّر", not "متأخر" as a verdict.
       title: t('slipped', { count: slipping }),
       body: t('slippedBody'),
-      href: '/matters',
+      // Lands on the slipped matters themselves, not the whole list. A row that
+      // says "1 matter has slipped" and then opens ninety of them has told the
+      // user something and then hidden it.
+      href: '/matters?filter=slipping',
     })
   }
 

@@ -28,15 +28,17 @@ export function DraftConfirm({ draft: proposed }: { draft: TaskDraft }) {
   const commit = useCommitDraft()
   const tag = useIntlTag()
   const [state, setState] = useState<'open' | 'saved' | 'dismissed'>('open')
-
-  // Clashes the SERVER refused on, which the agent's proposal did not carry.
   const [lateConflicts, setLateConflicts] = useState<DraftConflict[] | null>(null)
-  // The user's own retiming, staged locally. Chat used to be the one capture
-  // surface with no way to fix a time: the agent proposed, and the only answers
-  // were Confirm or Dismiss — so correcting an hour meant dismissing the card
-  // and saying the whole thing again.
   const [edited, setEdited] = useState<TaskDraft | null>(null)
-  const [slots, setSlots] = useState<{ at: string[]; why: string }>({ at: [], why: '' })
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  // Seeded from the proposal itself: a draft that arrives clashing arrives with
+  // its escape routes, so the chips render on FIRST paint rather than only after
+  // the user has retimed once. Older drafts in history predate the field and
+  // simply start empty, exactly as before.
+  const [slots, setSlots] = useState<{ at: string[]; why: string }>({
+    at: proposed.suggestions ?? [],
+    why: proposed.suggestionReason ?? '',
+  })
 
   const draft = edited ?? proposed
   const due = draft.dueDate ? new Date(draft.dueDate) : null
@@ -126,21 +128,90 @@ export function DraftConfirm({ draft: proposed }: { draft: TaskDraft }) {
 
           {/* Editable until it is saved — change the day, the hour, AM/PM, as
               often as you like. Every change re-checks the new slot. */}
-          <WhenField value={due} unanswered={unanswered} onPick={retime} />
+          {(showDatePicker || unanswered) && (
+            <WhenField value={due} unanswered={unanswered} onPick={retime} />
+          )}
         </div>
       </div>
 
       {conflicts.length ? (
-        <ul className="flex flex-col gap-1">
-          {conflicts.map((conflict) => (
-            <li key={conflict.taskId} className="flex items-start gap-1.5 text-caption text-warning">
-              <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-              <span>
-                {conflict.reason} <span className="text-ink-muted">“{conflict.title}”</span>
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className="flex flex-col gap-2.5 rounded-xl bg-surface-field p-3">
+          <p className="flex items-center gap-1.5 text-micro font-bold tracking-wider text-ink-muted uppercase">
+            <AlertTriangle size={12} className="text-warning shrink-0" />
+            Clash Detected
+          </p>
+          <div className="flex flex-col gap-3">
+            {conflicts.map((conflict) => {
+              const isDuplicate = conflict.kind === 'duplicate'
+              
+              const t1 = conflict.dueAt ? new Date(conflict.dueAt).getTime() : null
+              const t2 = due ? due.getTime() : null
+              let left1 = 15
+              let left2 = 35
+              let width1 = 50
+              let width2 = 50
+              if (t1 && t2) {
+                const diff = t2 - t1
+                if (diff > 0) {
+                  left1 = 15
+                  left2 = 35
+                } else if (diff < 0) {
+                  left1 = 35
+                  left2 = 15
+                } else {
+                  left1 = 25
+                  left2 = 25
+                }
+              }
+              const conflictTimeStr = conflict.dueAt ? formatTime(new Date(conflict.dueAt), tag) : ''
+              const proposedTimeStr = due ? formatTime(due, tag) : ''
+
+              return (
+                <div key={conflict.taskId} className="flex flex-col gap-2.5">
+                  {isDuplicate ? (
+                    <div className="flex items-start justify-between rounded-lg bg-surface p-2.5 shadow-sm border-l-2 border-warning">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-caption font-semibold text-ink-muted">
+                          {conflict.title}
+                        </p>
+                        <p className="text-label text-ink-subtle mt-0.5">
+                          Existing duplicate matter
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-pill bg-warning-soft px-1.5 py-0.5 text-micro font-medium text-warning-ink">
+                        Duplicate
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="relative h-16 w-full rounded-lg bg-surface border border-border/40 overflow-hidden">
+                      <div className="absolute inset-0 flex justify-between px-4 pointer-events-none opacity-20">
+                        <div className="w-px h-full bg-border" />
+                        <div className="w-px h-full bg-border" />
+                        <div className="w-px h-full bg-border" />
+                        <div className="w-px h-full bg-border" />
+                      </div>
+                      <div 
+                        className="absolute top-1.5 h-6 rounded bg-ink-subtle/10 border-l-2 border-ink-subtle px-1.5 flex items-center text-micro text-ink-muted truncate"
+                        style={{ left: `${left1}%`, width: `${width1}%` }}
+                      >
+                        <span className="truncate">{conflict.title} ({conflictTimeStr})</span>
+                      </div>
+                      <div 
+                        className="absolute bottom-1.5 h-6 rounded bg-accent/15 border-l-2 border-accent px-1.5 flex items-center text-micro text-accent font-semibold truncate"
+                        style={{ left: `${left2}%`, width: `${width2}%` }}
+                      >
+                        <span className="truncate">{draft.title} ({proposedTimeStr})</span>
+                      </div>
+                    </div>
+                  )}
+                  <p className="px-0.5 text-caption leading-snug text-warning-ink">
+                    {conflict.reason}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       ) : null}
 
       {conflicts.length ? (
@@ -148,23 +219,42 @@ export function DraftConfirm({ draft: proposed }: { draft: TaskDraft }) {
       ) : null}
 
       <div className="flex gap-2">
-        <button
-          onClick={() => setState('dismissed')}
-          disabled={commit.isPending}
-          className="flex-1 rounded-pill bg-surface-field px-4 py-2 text-body-sm text-ink-muted disabled:opacity-50"
-        >
-          Dismiss
-        </button>
-        <button
-          onClick={() => void save()}
-          disabled={commit.isPending}
-          className={`flex flex-1 items-center justify-center gap-1.5 rounded-pill px-4 py-2 text-body-sm font-medium text-accent-ink disabled:opacity-50 ${
-            conflicts.length ? 'bg-warning' : 'bg-accent'
-          }`}
-        >
-          {commit.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={15} />}
-          {conflicts.length ? 'Save anyway' : 'Confirm'}
-        </button>
+        {conflicts.length ? (
+          <>
+            <button
+              onClick={() => setShowDatePicker(prev => !prev)}
+              disabled={commit.isPending}
+              className="flex-1 rounded-pill bg-solid px-4 py-2 text-body-sm font-medium text-solid-ink disabled:opacity-50"
+            >
+              Reschedule
+            </button>
+            <button
+              onClick={() => void save()}
+              disabled={commit.isPending}
+              className="flex-1 rounded-pill bg-surface-field px-4 py-2 text-body-sm text-ink-muted disabled:opacity-50"
+            >
+              Save anyway
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => setState('dismissed')}
+              disabled={commit.isPending}
+              className="flex-1 rounded-pill bg-surface-field px-4 py-2 text-body-sm text-ink-muted disabled:opacity-50"
+            >
+              Dismiss
+            </button>
+            <button
+              onClick={() => void save()}
+              disabled={commit.isPending}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-pill bg-accent px-4 py-2 text-body-sm font-medium text-accent-ink disabled:opacity-50"
+            >
+              {commit.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={15} />}
+              Confirm
+            </button>
+          </>
+        )}
       </div>
     </div>
   )
