@@ -87,8 +87,12 @@ export function TimezoneSheet({
       onClose()
       return
     }
+    // `timezoneFollowsDevice: false` is the half that makes this stick. Without
+    // it SyncAccountTimezone would see a device-following account whose zone
+    // disagrees with the phone and write the phone's back over this pick on the
+    // very next render.
     update.mutate(
-      { timezone: selected },
+      { timezone: selected, timezoneFollowsDevice: false },
       {
         onSuccess: () => {
           toast.success(t('saved'))

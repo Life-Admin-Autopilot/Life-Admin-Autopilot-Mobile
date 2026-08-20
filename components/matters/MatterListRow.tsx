@@ -9,6 +9,7 @@ import { Pill } from '@/components/ui/Pill'
 import { CompletionRing, SelectionCheck } from '@/components/ui/CompletionRing'
 import { cn } from '@/lib/cn'
 import { useIntlTag } from '@/lib/i18n/localeStore'
+import { formatCurrencyRounded } from '@/lib/i18n/numberFormat'
 import { useLongPress } from '@/lib/useLongPress'
 import { bucketOf, formatDue } from '@/lib/taskFormat'
 import type { Task } from '@/queries/tasks'
@@ -179,6 +180,16 @@ export function MatterListRow({
           >
             {formatDue(task.dueAt, { t, tag, now })}
           </span>
+          {/* What it costs, on the row rather than only inside the editor.
+              A matter that carries a figure is a matter you decide about
+              differently, and until this was here the Matters tab was the one
+              screen in the app that knew the amount and never said it — the
+              money tab totalled it, the row beside it showed a bare title. */}
+          {task.amount ? (
+            <span className="shrink-0 text-body-sm tabular text-ink-subtle">
+              {formatCurrencyRounded(task.amount.amountMinor, task.amount.currency, tag)}
+            </span>
+          ) : null}
           {openSubtasks > 0 ? (
             <span className="flex items-center gap-0.5 text-body-sm tabular text-ink-subtle">
               <ListChecks size={13} />

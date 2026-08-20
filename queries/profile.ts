@@ -26,6 +26,8 @@ export interface ProfilePatch {
   theme?: Theme
   /** IANA zone, e.g. `Africa/Cairo`. The server validates it. */
   timezone?: string
+  /** True when `timezone` came from this device rather than from the picker. */
+  timezoneFollowsDevice?: boolean
   /** BCP 47 tag, e.g. `en-GB`. The effective language, device-derived or chosen. */
   locale?: string
   /** True when `locale` came from this device rather than from the picker. */
