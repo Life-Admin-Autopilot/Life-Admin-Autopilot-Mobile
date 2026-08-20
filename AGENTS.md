@@ -173,6 +173,8 @@ Raster images are `.webp`/`.avif` (no `.png`/`.jpg`). Always set explicit `width
 
 Conventional commits (`feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`, `perf:`, `ci:`). Branches `feat/<slug>`, `fix/<slug>` — lowercase, hyphenated. **Never `--no-verify`.** No `console.log` — use `lib/logger.ts`.
 
+**Commits and pull requests carry no tool attribution.** No `Co-Authored-By:` trailer naming an AI assistant or any other tool; no "generated with", "created by \<tool\>", or similar notice in a commit message, a PR body, a file header or a code comment. A commit's author is the person who made it and nothing else is added. This holds on every branch, including ones nobody expects to read again — if a tool appends a trailer by default, strip it before committing rather than leaving it for someone else, and don't offer to add one.
+
 ### TypeScript
 
 No `as any` (`@typescript-eslint/no-explicit-any: error`). Use `unknown` + Zod narrowing. No `React.FC` — type props with a named `interface`. Public exports get explicit signatures; locals can infer.
