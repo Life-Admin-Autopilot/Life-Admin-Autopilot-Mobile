@@ -67,15 +67,27 @@ export const toast = {
       ),
     ),
   // A decision, not a notice — the square panel with two weighted answers
-  // (components/ui/DecisionToast). Sticks until answered or dismissed: a
-  // question that auto-dismisses mid-read is worse than no question. Both
-  // buttons dismiss the panel themselves after running their action.
+  // (components/ui/DecisionToast). Both buttons dismiss the panel themselves
+  // after running their action.
+  //
+  // Sticks by default, and that default is still right for a plain question:
+  // the answer exists nowhere else, so a panel that fades mid-read has thrown
+  // the question away.
+  //
+  // `duration` exists for the one case where that is no longer true. A CLASH is
+  // not a question the app is holding — it is a fact about two saved matters,
+  // and it is also on the dashboard, in the conflicts sheet, on the matter's own
+  // detail sheet and in the bell. So the panel is an announcement of something
+  // durable rather than the only copy of it, and letting it pass costs nothing.
+  // Pass a duration ONLY when the decision genuinely survives the dismissal.
   decide: (opts: {
     tone: 'clash' | 'question'
     title: string
     description?: string
     primary: { label: string; onPress: () => void }
     secondary: { label: string; onPress: () => void }
+    /** Auto-dismiss after N ms. Omit to stick until answered. */
+    duration?: number
   }): string => {
     const id = sonnerToast.custom(
       (toastId) =>
@@ -86,6 +98,11 @@ export const toast = {
             tone: opts.tone,
             title: opts.title,
             description: opts.description,
+            // The panel owns the clock — see DecisionToast. Sonner's own timer
+            // pauses on hover and its countdown bar does not, so handing the
+            // duration to both left a drained bar over a panel that stayed.
+            duration: opts.duration,
+            onExpire: () => sonnerToast.dismiss(toastId),
             primary: {
               label: opts.primary.label,
               onPress: () => {
@@ -102,6 +119,8 @@ export const toast = {
             },
           }),
         ),
+      // Always Infinity: dismissal is the panel's job now, and two timers on
+      // one toast is how they disagree.
       { duration: Infinity },
     )
     return String(id)

@@ -65,9 +65,20 @@
     "restored": "تمت الاستعادة.",
     "undoFailed": "تعذّر التراجع."
   },
-  "briefing": {
-    "clashTimeSuffix": "خلال ساعتين من أمر آخر",
-    "clashDuplicateSuffix": "مكرر لأمر آخر",
-    "moreClashes": "{count, plural, zero {لا تعارضات أخرى} one {تعارض إضافي واحد} two {تعارضان إضافيان} few {# تعارضات إضافية} many {# تعارضًا إضافيًا} other {# تعارض إضافي}} في قائمتك."
+  "briefing": {},
+  "conflicts": {
+    "title": "التعارضات",
+    "eyebrow": "أمور متداخلة",
+    "clashesWith": "يتعارض مع",
+    "undated": "بلا تاريخ",
+    "moved": "تم النقل.",
+    "moveFailed": "تعذّر نقله.",
+    "openMatter": "افتح الأمر",
+    "emptyTitle": "لا تعارض حاليًا",
+    "emptyBody": "الأمور التي تريد الوقت نفسه ستظهر هنا.",
+    "errorTitle": "تعذّر تحميل التعارضات",
+    "retry": "أعد المحاولة",
+    "cardTitle": "{count, plural, zero {لا تعارضات في المواعيد} one {تعارض واحد في المواعيد} two {تعارضان في المواعيد} few {# تعارضات في المواعيد} many {# تعارضًا في المواعيد} other {# تعارض في المواعيد}}",
+    "viewAll": "{count, plural, zero {لا شيء للمراجعة} one {راجعه} two {راجعهما} few {راجع الكل #} many {راجع الكل #} other {راجع الكل #}}"
   }
 }

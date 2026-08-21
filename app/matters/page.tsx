@@ -25,6 +25,7 @@ import { api, ApiError } from '@/lib/api/client'
 import { cn } from '@/lib/cn'
 import { LIST_ITEM_VARIANTS } from '@/lib/motion'
 import { usePendingProposal, useProposeCategorization } from '@/queries/categorize'
+import { useClearRequestedMatter, useRequestedMatter } from '@/lib/openMatterStore'
 import { useClaimTabBarSlot } from '@/lib/tabBarStore'
 import { toast } from '@/lib/toast'
 import type { SearchResult } from '@/queries/mattersAi'
@@ -129,11 +130,31 @@ export default function MattersPage() {
   // promises the matter ALREADY OPEN, not a list to hunt through. Same one-shot
   // initialiser (and the same location-not-useSearchParams reason) as ?filter
   // above.
-  const [detailId, setDetailId] = useState<string | null>(() =>
+  const [localDetailId, setLocalDetailId] = useState<string | null>(() =>
     typeof window !== 'undefined'
       ? new URLSearchParams(window.location.search).get('open')
       : null,
   )
+
+  // A request made while THIS screen is already up.
+  //
+  // The initialiser above runs once, on mount, which is all a cold arrival from
+  // a notification needs — and is why the clash pop-up's "Reschedule" appeared
+  // to do nothing when the user was already looking at the list: the push
+  // changed the URL and remounted nothing. The request is read here at render
+  // time instead, so it works from either starting point. See
+  // lib/openMatterStore.ts.
+  const requestedId = useRequestedMatter()
+  const clearRequested = useClearRequestedMatter()
+  const detailId = localDetailId ?? requestedId
+
+  // One place closes the sheet, and it has to clear BOTH — a local id left set
+  // would reopen on the next render, and a request left pending would reopen the
+  // next time the user came back to this screen.
+  const closeDetail = useCallback(() => {
+    setLocalDetailId(null)
+    clearRequested()
+  }, [clearRequested])
   // A deep-linked matter may not be on the visible page — wrong filter, later
   // page, or just created by the voice worker seconds ago. Fetched by id as a
   // fallback so the sheet can still open; the cache-backed row wins whenever
@@ -267,12 +288,12 @@ export default function MattersPage() {
       })
       .catch(() => {
         // Gone or never existed - close rather than hold an empty sheet open.
-        if (!cancelled) setDetailId(null)
+        if (!cancelled) closeDetail()
       })
     return () => {
       cancelled = true
     }
-  }, [detailId, detail, list.isLoading])
+  }, [detailId, detail, list.isLoading, closeDetail])
 
   // Only time grouping needs the pin: domain and priority don't change when a
   // matter is completed, so a held row keeps its section there for free.
@@ -554,7 +575,7 @@ export default function MattersPage() {
             onToggleSelect={toggleSelect}
             onOpen={(t, rect) => {
               setTriggerRect(rect)
-              setDetailId(t.id)
+              setLocalDetailId(t.id)
             }}
             onToggleDone={toggleDone}
             onLongPress={enterSelect}
@@ -622,7 +643,7 @@ export default function MattersPage() {
                           // the same way opening a scanned document does.
                           onOpen={(t, rect) => {
                             setTriggerRect(rect)
-                            setDetailId(t.id)
+                            setLocalDetailId(t.id)
                           }}
                           onToggleDone={toggleDone}
                           onLongPress={enterSelect}
@@ -676,7 +697,7 @@ export default function MattersPage() {
       <MatterDetailSheet
         task={detail}
         trigger={triggerRect}
-        onClose={() => setDetailId(null)}
+        onClose={closeDetail}
         onDeleted={(token, title) => offerUndo(t('toast.deletedOne', { title }), token)}
       />
       <CreateMatterSheet

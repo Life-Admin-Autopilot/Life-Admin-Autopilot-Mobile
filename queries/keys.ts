@@ -24,6 +24,11 @@ export const queryKeys = {
   /** Every task's conflicts. A clash is symmetric, so moving one matter changes
    *  the answer for the matter it was clashing WITH, not just for itself. */
   taskConflictsAll: ['tasks', 'conflicts'] as const,
+  /** Every clash in the account, whatever raised it — the conflicts sheet.
+   *  Kept OUTSIDE the `tasks` namespace deliberately: this is one row per PAIR,
+   *  not per task, so `taskConflictsAll` must not sweep it away as though it
+   *  were another per-task entry. Both are invalidated together instead. */
+  conflictsAll: ['conflicts', 'all'] as const,
   // A factory, not a flat key: the Matters list caches per filter set, so the
   // list needs its own namespace while `all` stays the blunt invalidation
   // handle every task mutation reaches for.

@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl'
 import { DayProgress } from '@/components/dashboard/DayProgress'
 import { FirstRunState } from '@/components/dashboard/FirstRunState'
 import { BriefingCard } from '@/components/dashboard/BriefingCard'
+import { ConflictsCard } from '@/components/dashboard/ConflictsCard'
 import { MoneyCard } from '@/components/dashboard/MoneyCard'
 import { HomeHero } from '@/components/dashboard/HomeHero'
 import { MatterRow } from '@/components/dashboard/MatterRow'
@@ -17,6 +18,7 @@ import { useIntlTag } from '@/lib/i18n/localeStore'
 import { bucketOf, formatDue } from '@/lib/taskFormat'
 import { formatLoad, totalLoad } from '@/lib/taskEstimate'
 import type { DailyDigest } from '@/queries/digest'
+import type { AppConflict } from '@/queries/planning'
 import type { Subtask, Task } from '@/queries/tasks'
 
 // The home screen answers ONE question: what needs me right now?
@@ -62,6 +64,16 @@ export interface DashboardViewProps {
    * mutates. Omitted, the rows fall back to linking to /matters.
    */
   onOpenTask?: (task: Task, rect: DOMRect) => void
+  /** Every clash in the account, from any source. Drives ConflictsCard. */
+  conflicts?: AppConflict[]
+  /**
+   * Open the conflicts sheet, passing the tapped element's rect. Optional for
+   * the same reason as `onOpenTask`: the preview route renders this tree against
+   * fixtures, and without a handler the card simply does not render.
+   */
+  onOpenConflicts?: (rect: DOMRect) => void
+  /** Open one matter from a clash line. */
+  onOpenConflictMatter?: (taskId: string) => void
 }
 
 export function DashboardView({
@@ -80,6 +92,9 @@ export function DashboardView({
   onCompleteSubtask,
   onPush,
   onOpenTask,
+  conflicts,
+  onOpenConflicts,
+  onOpenConflictMatter,
 }: DashboardViewProps) {
   const t = useTranslations('dashboard')
   // formatDue reads `due.*` out of the matters catalogue, not this one — the
@@ -149,6 +164,17 @@ export function DashboardView({
 
       {/* Below the hero, above the plate: it frames the day the rows then detail. */}
       <BriefingCard />
+
+      {/* Above the day's work, because a clash is the one thing on this screen
+          where two commitments the user already made cannot both happen. Renders
+          itself away when there is nothing clashing. */}
+      {conflicts?.length && onOpenConflicts && onOpenConflictMatter ? (
+        <ConflictsCard
+          conflicts={conflicts}
+          onOpenMatter={onOpenConflictMatter}
+          onOpenAll={onOpenConflicts}
+        />
+      ) : null}
 
       {/* The only way into /money — the tab bar is full at five slots. It renders
           nothing until there is a real figure, so it costs an empty account no

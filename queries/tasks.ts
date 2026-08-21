@@ -346,6 +346,9 @@ export function useUpdateTask() {
       // this" banner would keep accusing it of a collision that no longer
       // exists, until something else happened to refetch it.
       void qc.invalidateQueries({ queryKey: queryKeys.taskConflictsAll })
+      // The account-wide list behind the dashboard row and the conflicts sheet.
+      // Its own namespace, so the sweep above does not reach it — see keys.ts.
+      void qc.invalidateQueries({ queryKey: queryKeys.conflictsAll })
     },
   })
 }

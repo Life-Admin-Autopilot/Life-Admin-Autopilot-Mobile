@@ -29,7 +29,7 @@
 // Institutional voice: state the action, no chatter — the product noun is
 // "matter". A completion is a status change, not an event.
 
-import { AlertTriangle, Check, X } from 'lucide-react'
+import { Check, X } from 'lucide-react'
 import { DraftConfirm } from '@/components/chat/DraftConfirm'
 import { SavedConflictCard } from '@/components/chat/SavedConflictCard'
 import { useTranslations } from 'next-intl'
@@ -57,22 +57,6 @@ interface ToolCallCardProps {
 
 // The matter a row refers to: prefer the persisted task title from the result,
 // fall back to the call args, then a short id, then the bulk-delete summary.
-/**
- * The clashing matters from a tool call that declined to write.
- *
- * Reads `status`/`conflicts` off the tool RESULT rather than inferring anything
- * from the call's own status, because "the server said no on purpose" and "the
- * call broke" are the same `failed` to everything upstream — the difference only
- * exists in the payload the tool sent back.
- */
-function heldForConflicts(call: AiToolCall): { taskId: string; title: string; reason: string }[] | null {
-  const result = call.result as
-    | { status?: string; conflicts?: { taskId: string; title: string; reason: string }[] }
-    | null
-  if (result?.status !== 'awaiting_confirmation') return null
-  return result.conflicts?.length ? result.conflicts : null
-}
-
 function matterLabel(call: AiToolCall): string {
   if (call.name === 'deleteAllTasks') return summarizeBulkDelete(call)
   // The step, not its parent. `addSubtask` and `toggleSubtask` return the whole
@@ -151,30 +135,17 @@ export function ToolCallCard({ call, onConfirm, onDecline, pendingAction = null 
     )
   }
 
-  // HELD BACK, not failed. `updateTask` refuses to move a matter onto another
-  // one until the user has been told, and returns the clashing matters instead of
-  // writing. That arrives as an unsuccessful tool result, so without this branch
-  // it renders as "Action failed" — which is untrue twice over: nothing failed,
-  // and the reason the user needs is thrown away. Checked BEFORE the failed row
-  // for exactly that reason.
-  const held = heldForConflicts(call)
-  if (held) {
-    return (
-      <div className="flex flex-col gap-1.5 rounded-2xl bg-warning/10 p-3">
-        <div className="flex items-center gap-1.5">
-          <AlertTriangle size={13} className="shrink-0 text-warning" />
-          <span className="text-label uppercase tracking-wide text-warning">Not saved</span>
-        </div>
-        <ul className="flex flex-col gap-1">
-          {held.map((conflict) => (
-            <li key={conflict.taskId} className="text-caption text-ink" dir="auto">
-              {conflict.reason} <span className="text-ink-muted">“{conflict.title}”</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    )
-  }
+  // There was a "Not saved" branch here, for the days when updateTask refused to
+  // move a matter onto another one and returned `status: 'awaiting_confirmation'`
+  // instead of writing. The contract is save-first now — the write always lands
+  // and the clash comes back beside it — so nothing produces that status, and the
+  // branch only ever rendered out of old transcripts.
+  //
+  // It is gone rather than kept as a safety net, because it was checked BEFORE
+  // the saved-onto-a-clash card below and offered no way out: a warning with no
+  // reschedule, no free times and no keep. A dead branch that outranks the live
+  // one is a trap, not a fallback. An old transcript now renders its clash
+  // through the same card as everything else.
 
   // failed / declined — a muted ledger row.
   if (call.status === 'failed' || call.status === 'declined') {

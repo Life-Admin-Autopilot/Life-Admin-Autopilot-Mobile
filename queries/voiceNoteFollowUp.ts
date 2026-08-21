@@ -23,6 +23,8 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 
 import { api, ApiError } from '@/lib/api/client'
+import { keepConflict } from '@/lib/conflictKept'
+import { requestOpenMatter } from '@/lib/openMatterStore'
 import type { Translate } from '@/lib/i18n/translate'
 import { logger } from '@/lib/logger'
 import { toast } from '@/lib/toast'
@@ -48,12 +50,21 @@ const POLL_DELAYS_MS = [2_000, 2_000, 2_000, 3_000, 5_000] as const
 /** After this, the feed takes over. */
 const POLL_GIVE_UP_MS = 3 * 60 * 1000
 
+/**
+ * How long the clash panel stays.
+ *
+ * Long enough to read two matter names and reach a button without hurrying, and
+ * short enough that a user who has already decided is not made to dismiss it.
+ * Nothing is lost when it goes — see the note on the `duration` it is passed to.
+ */
+const CLASH_PANEL_MS = 6_000
+
 /** Exactly the keys the outcome sentence asks for — see lib/i18n/translate.ts. */
 type OutcomeTranslate = Translate<
   | 'workerFailed'
   | 'retry'
   | 'review'
-  | 'changeIt'
+  | 'reschedule'
   | 'keepAnyway'
   | 'answerNow'
   | 'later'
@@ -114,17 +125,22 @@ async function announceDecisions(
         tone: 'clash',
         title: row.title,
         description: `${row.body ?? ''} — ${found.conflicts[0].reason}`.replace(/^ — /, ''),
-        primary: { label: t('changeIt'), onPress: () => onOpenMatter(taskId) },
+        // The chat card's two words, deliberately. A clash raised by speaking and
+        // one raised by the agent are the same event, and naming the same action
+        // twice ("Change it" here, "Reschedule" there) makes them look like two
+        // features with two rules.
+        primary: { label: t('reschedule'), onPress: () => onOpenMatter(taskId) },
         secondary: {
           label: t('keepAnyway'),
           // Keeping IS the answer: the matter already holds the time, so the
           // only thing left to clear is the open question about it.
-          onPress: () => {
-            void api(`/me/clarifications/${clarificationId}/drop`, { method: 'POST' }).catch(
-              (err: unknown) => logger.warn('voiceNote:keep-anyway-drop-failed', { err }),
-            )
-          },
+          onPress: () => keepConflict(taskId, clarificationId),
         },
+        // Passes, rather than waits. The clash is a fact about two saved matters
+        // and stays on the dashboard and in the conflicts sheet after this fades,
+        // so the panel announces it instead of being the only copy of it. See the
+        // note on `decide` in lib/toast.ts.
+        duration: CLASH_PANEL_MS,
       })
     } else {
       toast.decide({
@@ -191,14 +207,14 @@ async function announceOutcome(
     return
   }
 
+  // UNDERCOUNTS, and cannot be fixed from here. `extractedTasks` holds the
+  // auto-save lane only; a matter the worker filed WITH a question attached is a
+  // real task in the list, but it lives in the clarify lane, which is stripped
+  // from the wire shape. So a note whose one matter clashed reports
+  // `extractedTasks: []` while the matter is on the user's dashboard.
   const filed = note.extractedTasks.length
   const held = note.reviewItems.length
   const needsInput = held > 0 || note.status === 'needs_review'
-
-  if (filed === 0 && !needsInput) {
-    toast.info(t('nothingCaptured'))
-    return
-  }
 
   const title = t('outcomeFiled', { count: filed })
   const description = needsInput
@@ -207,26 +223,53 @@ async function announceOutcome(
       : t('outcomeNeedsInputUnknown')
     : undefined
 
-  if (needsInput) {
-    // The pop-up IS the delivery while the app is open — the push only fires in
-    // the background. Each question the worker held becomes a square decision
-    // panel (clash → change/keep, gap → answer/later); the plain toast survives
-    // only as the fallback for when the notification rows cannot be read, so
-    // "needs your input" is never said with nowhere to go.
-    const raised = await announceDecisions(since, t, onOpenMatter, onReview).catch(
-      (err: unknown) => {
-        logger.warn('voiceNote:decision-fetch-failed', { err })
-        return 0
-      },
-    )
-    if (raised === 0) {
-      toast.info(title, { description, action: { label: t('review'), onPress: onReview } })
-    } else if (filed > 0) {
-      toast.success(title)
-    }
-  } else {
-    toast.success(title)
+  // The pop-up IS the delivery while the app is open — the push only fires in
+  // the background. Each question the worker held becomes a square decision
+  // panel (clash → reschedule/keep, gap → answer/later); the plain toast
+  // survives only as the fallback for when the notification rows cannot be read,
+  // so "needs your input" is never said with nowhere to go.
+  //
+  // Asked on EVERY finished note, not only on one that looks like it needs
+  // input, because `needsInput` cannot see a clash. A clash is routed to the
+  // clarify lane (VoiceItemGate), the note's status is set from the REVIEW lane
+  // alone (VoiceExtractionCommit), and `clarifyItems` is stripped from the wire
+  // shape — so a note whose only problem is a double-booking arrives `ready`
+  // with an empty `reviewItems` and every signal here reads "all clear". The
+  // notification rows are the one place the question is visible to a client, and
+  // they are what this reads. Gating on the status meant the matter saved
+  // silently and the clash was only ever discoverable in the bell.
+  const raised = await announceDecisions(since, t, onOpenMatter, onReview).catch(
+    (err: unknown) => {
+      logger.warn('voiceNote:decision-fetch-failed', { err })
+      return 0
+    },
+  )
+
+  if (raised > 0) {
+    // The panels carry the detail. The count is only spoken when it is safe to —
+    // see the note on `filed`: a clash-only note reports zero and saying "0
+    // matters filed" beside a panel about a matter that exists is worse than
+    // saying nothing about the count at all.
+    if (filed > 0) toast.success(title)
+    return
   }
+
+  if (needsInput) {
+    toast.info(title, { description, action: { label: t('review'), onPress: onReview } })
+    return
+  }
+
+  // Now it is safe to say nothing was captured: no panel was raised, so no
+  // question was held, so the clarify lane really is empty and `filed` really is
+  // the whole story. Asked in this order deliberately — the check used to run
+  // FIRST, which is how a note whose single matter clashed announced itself as
+  // "Nothing was captured" and returned before the clash could be raised.
+  if (filed === 0) {
+    toast.info(t('nothingCaptured'))
+    return
+  }
+
+  toast.success(title)
 }
 
 /**
@@ -327,7 +370,10 @@ export function useVoiceNoteFollowUp(): (noteId: string) => void {
             startedAt,
             translateRef.current,
             retry,
-            (taskId) => router.push(`/matters?open=${taskId}`),
+            (taskId) => {
+              requestOpenMatter(taskId)
+              router.push('/matters/')
+            },
             () => router.push('/uncertainties'),
           )
         } catch (err) {

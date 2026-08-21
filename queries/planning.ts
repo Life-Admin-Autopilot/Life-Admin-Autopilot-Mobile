@@ -247,6 +247,52 @@ export async function previewDraftConflicts(draft: {
   }
 }
 
+/** One matter, as named by the account-wide conflict list. */
+export interface ConflictSide {
+  taskId: string
+  title: string
+  dueAt: string | null
+}
+
+/**
+ * One clash, both sides named.
+ *
+ * Every other conflict shape in this file describes only the matter that was run
+ * INTO, because the surface rendering it already knows which matter it is about.
+ * A list of every clash in the account has no such context, and either side may
+ * be the one the user moves — so the server sends the pair.
+ */
+export interface AppConflict {
+  a: ConflictSide
+  b: ConflictSide
+  reason: string
+  /** The lower-urgency side: the one the sheet offers to move first. */
+  yieldsTaskId: string
+}
+
+/**
+ * Every clash in the account, whatever raised it.
+ *
+ * The sibling hooks all ask about ONE matter, which means a clash is only ever
+ * found by the surface that happened to create or edit it — a pop-up let fade or
+ * a chat card scrolled past had nowhere to be found again.
+ *
+ * Nothing here knows or cares whether a clash came from voice, chat, the create
+ * sheet or a document scan. The server does not track that either: a conflict is
+ * two saved matters overlapping, so asking again is what keeps the answer true,
+ * and every source is covered without the list knowing any of them exist.
+ */
+export function useAllConflicts() {
+  return useQuery({
+    queryKey: queryKeys.conflictsAll,
+    queryFn: () => api<{ conflicts: AppConflict[] }>('/me/conflicts').then((r) => r.conflicts ?? []),
+    // The dashboard row reads the count on every visit, and a scan over the open
+    // matters is not free. Mutations invalidate this explicitly (queries/tasks),
+    // so staleness here only delays a clash somebody else's device created.
+    staleTime: 60 * 1000,
+  })
+}
+
 /** Conflicts for one existing task, re-checked after an edit. */
 export function useTaskConflicts(taskId: string | null) {
   return useQuery({

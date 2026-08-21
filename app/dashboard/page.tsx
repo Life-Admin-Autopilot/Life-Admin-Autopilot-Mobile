@@ -1,14 +1,18 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import { AppHeader } from '@/components/layout/AppHeader'
 import { DashboardView } from '@/components/dashboard/DashboardView'
+import { ConflictsSheet } from '@/components/conflicts/ConflictsSheet'
 import { MatterDetailSheet } from '@/components/matters/MatterDetailSheet'
 import { useSessionStore, selectUser } from '@/lib/auth/sessionStore'
 import { toast } from '@/lib/toast'
 import { useDigest } from '@/queries/digest'
+import { requestOpenMatter } from '@/lib/openMatterStore'
+import { useAllConflicts } from '@/queries/planning'
 import {
   useCompleteTask,
   useSnoozeTask,
@@ -62,6 +66,9 @@ export default function DashboardPage() {
   const list = useTasks({ status: ['open'] }, 'due-asc')
   const counts = useTaskCounts()
   const digest = useDigest()
+  // Account-wide, so the row and the sheet agree. The briefing carries its own
+  // conflicts field, but only for today — see BriefingCard.
+  const conflicts = useAllConflicts()
 
   const completeTask = useCompleteTask()
   const snoozeTask = useSnoozeTask()
@@ -77,7 +84,13 @@ export default function DashboardPage() {
   // value so the open sheet re-reads the task from the list — completing a
   // subtask inside it then shows the new state instead of a stale snapshot.
   const [detailId, setDetailId] = useState<string | null>(null)
+  const router = useRouter()
   const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null)
+  // Its own rect, not shared with the matter sheet: both can be opened from the
+  // same screen and a shared slot would collapse the second one out of whatever
+  // opened the first.
+  const [conflictsRect, setConflictsRect] = useState<DOMRect | null>(null)
+  const [conflictsOpen, setConflictsOpen] = useState(false)
   const detail = detailId ? openTasks.find((task) => task.id === detailId) ?? null : null
 
   // "Not today" snoozes; it does not delete, and it does not touch the real
@@ -138,6 +151,27 @@ export default function DashboardPage() {
         onOpenTask={(task, rect) => {
           setTriggerRect(rect)
           setDetailId(task.id)
+        }}
+        conflicts={conflicts.data ?? []}
+        onOpenConflicts={(rect) => {
+          setConflictsRect(rect)
+          setConflictsOpen(true)
+        }}
+        onOpenConflictMatter={(taskId) => {
+          requestOpenMatter(taskId)
+          router.push('/matters/')
+        }}
+      />
+      {/* Every clash in the account, whatever raised it — the second home for a
+          pop-up that was let fade or a chat card scrolled past. */}
+      <ConflictsSheet
+        open={conflictsOpen}
+        onClose={() => setConflictsOpen(false)}
+        trigger={conflictsRect}
+        onOpenMatter={(taskId) => {
+          setConflictsRect(null)
+          requestOpenMatter(taskId)
+          router.push('/matters/')
         }}
       />
       {/* Deleting from here removes the matter from the very list the dashboard

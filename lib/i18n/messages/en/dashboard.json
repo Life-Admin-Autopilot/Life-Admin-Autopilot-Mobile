@@ -65,9 +65,20 @@
     "restored": "Restored.",
     "undoFailed": "Could not undo that."
   },
-  "briefing": {
-    "clashTimeSuffix": "within two hours of another matter",
-    "clashDuplicateSuffix": "duplicate of another matter",
-    "moreClashes": "{count, plural, one {# more clash} other {# more clashes}} in your list."
+  "briefing": {},
+  "conflicts": {
+    "title": "Conflicts",
+    "eyebrow": "Matters that overlap",
+    "clashesWith": "clashes with",
+    "undated": "No date",
+    "moved": "Moved.",
+    "moveFailed": "Could not move that.",
+    "openMatter": "Open matter",
+    "emptyTitle": "Nothing is clashing",
+    "emptyBody": "Matters that want the same time will collect here.",
+    "errorTitle": "Could not load your conflicts",
+    "retry": "Retry",
+    "cardTitle": "{count, plural, one {# scheduling clash} other {# scheduling clashes}}",
+    "viewAll": "{count, plural, one {Review it} other {Review all #}}"
   }
 }

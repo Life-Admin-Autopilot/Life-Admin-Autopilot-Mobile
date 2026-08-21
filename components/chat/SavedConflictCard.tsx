@@ -8,29 +8,10 @@ import { WhenField } from '@/components/planning/WhenField'
 import { formatDayMonthMaybeYear, formatTime } from '@/lib/i18n/dateFormat'
 import { useIntlTag } from '@/lib/i18n/localeStore'
 import { toast } from '@/lib/toast'
+import { isConflictKept, keepConflict } from '@/lib/conflictKept'
 import { previewConflicts, type DraftConflict } from '@/queries/planning'
 import { useUpdateTask, type Task } from '@/queries/tasks'
 import { api } from '@/lib/api/client'
-
-const CONFLICT_KEPT_KEY = 'kitto:conflict_kept'
-
-function getKeptConflicts(): string[] {
-  try {
-    const raw = window.localStorage.getItem(CONFLICT_KEPT_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
-}
-
-function saveKeptConflict(taskId: string) {
-  try {
-    const current = getKeptConflicts()
-    if (!current.includes(taskId)) {
-      window.localStorage.setItem(CONFLICT_KEPT_KEY, JSON.stringify([...current, taskId]))
-    }
-  } catch {}
-}
 
 /**
  * A matter chat SAVED onto a clash — and the way out of it.
@@ -75,9 +56,9 @@ export function SavedConflictCard({
     at: initialSuggestions,
     why: initialReason,
   })
-  const [kept, setKept] = useState(() => getKeptConflicts().includes(taskId))
+  const [kept, setKept] = useState(() => isConflictKept(taskId))
   const [checking, setChecking] = useState(false)
-  const [checkingLive, setCheckingLive] = useState(() => !getKeptConflicts().includes(taskId))
+  const [checkingLive, setCheckingLive] = useState(() => !isConflictKept(taskId))
   const [showDatePicker, setShowDatePicker] = useState(false)
 
   // Mount-time re-check, once. The tool result this card renders from is a
@@ -299,7 +280,11 @@ export function SavedConflictCard({
             <button
               onClick={() => {
                 setKept(true)
-                saveKeptConflict(taskId)
+                // The same helper the voice pop-up calls. Chat raises no
+                // Clarification, so there is no question id to settle — but the
+                // local record is written identically, which is what stops one
+                // "Keep it anyway" meaning two different things.
+                keepConflict(taskId)
               }}
               disabled={checking || update.isPending}
               className="flex-1 rounded-pill bg-surface-field px-4 py-2 text-body-sm text-ink-muted disabled:opacity-50"

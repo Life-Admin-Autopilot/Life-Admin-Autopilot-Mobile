@@ -354,6 +354,33 @@
     }
   }
 
+  /*
+   * The clash panel's countdown (components/ui/DecisionToast.tsx).
+   *
+   * A decision that dismisses itself has to SHOW that it will, or its
+   * disappearance reads as the app losing the question. The bar is the only
+   * honest way to say "this is going, and here is how long you have" without
+   * printing a number nobody wants to watch.
+   *
+   * `linear`, not eased: this is a clock, and a bar that slows near the end is
+   * lying about the time left. Duration is set inline per toast so one keyframe
+   * serves any lifetime, and `forwards` holds it empty rather than snapping
+   * back full for the frame before sonner unmounts it.
+   *
+   * scaleX from the inline edge, so it drains toward the end of the line in
+   * both directions — RTL included.
+   */
+  --animate-decision-countdown: decision-countdown linear forwards;
+
+  @keyframes decision-countdown {
+    from {
+      transform: scaleX(1);
+    }
+    to {
+      transform: scaleX(0);
+    }
+  }
+
   /* ---- Shadows — whisper-soft and diffuse, never a hard edge ---- */
   --shadow-card: 0 2px 8px rgb(20 20 40 / 0.04), 0 1px 3px rgb(20 20 40 / 0.03);
   --shadow-elevated: 0 8px 28px rgb(20 20 40 / 0.08), 0 2px 6px rgb(20 20 40 / 0.05);
