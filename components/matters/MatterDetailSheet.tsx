@@ -332,11 +332,21 @@ function Editor({
             onPick={(next) => patch({ dueAt: next.toISOString() })}
           />
         </div>
-      ) : (
+      ) : draft.dueAt === task.dueAt ? (
         /* The Knowledge Agent's re-check. Sits above the fields that cause a
-           clash, so an edit that creates one is answered where it was made. */
+           clash, so an edit that creates one is answered where it was made.
+           
+           Only while the time is UNCHANGED, because this one reports the matter
+           as SAVED. The two blocks are mutually exclusive, so moving to a free
+           slot cleared the live check above and fell straight through to here —
+           which promptly re-raised the clash at the OLD time. The user picked a
+           time that was demonstrably free and watched a scheduling-clash banner
+           reappear underneath their own edit.
+           
+           With a pending time change the live check is the only honest answer,
+           including when its answer is nothing. */
         <ConflictNotice taskId={task.id} />
-      )}
+      ) : null}
 
       <SheetSection label={t('section.domain')}>
         <div className="flex flex-wrap gap-1.5">

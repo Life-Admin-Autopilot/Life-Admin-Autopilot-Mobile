@@ -29,5 +29,7 @@
   "retryFailed": "تعذّرت المحاولة مرة أخرى الآن.",
   "unavailableTitle": "الإدخال الصوتي غير متاح",
   "unavailableBody": "تحويل الكلام إلى نص متوقف حاليًا، ولن يمكن قراءة التسجيل. اكتب الأمر بدلًا من ذلك.",
-  "unavailableAction": "اكتبه بدلًا من ذلك"
+  "unavailableAction": "اكتبه بدلًا من ذلك",
+  "setDate": "حدّد موعدًا",
+  "noDateNeeded": "بلا موعد"
 }

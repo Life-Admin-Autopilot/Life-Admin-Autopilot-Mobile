@@ -86,6 +86,14 @@ export function UncertaintyStack() {
 // answer chip (no AI) or a typed answer (one bounded server-side interpret).
 // Resolving morphs to the next card. The queue is snapshotted at mount so
 // optimistic removals don't reshuffle the walk.
+//
+// That snapshot had one hole, and it is the reason arriving from the bell showed
+// "All clear" over a question that existed. `useClarifications` holds a 30-second
+// cache, so a visit inside that window renders the CACHED list first and refetches
+// behind it. Arrive with an empty cache and the walk is captured as empty, `done`
+// is immediately true, and the celebration paints. The fresh list lands a moment
+// later — and `useState(initial)` ignores it, because that is what a snapshot
+// does. Only a remount fixed it, which is why the SECOND visit worked.
 function Walker({ initial }: { initial: Clarification[] }) {
   const t = useTranslations('uncertainty')
   const tCommon = useTranslations('common')
@@ -96,11 +104,25 @@ function Walker({ initial }: { initial: Clarification[] }) {
   const drop = useDropClarification()
   const width = useIslandWidth()
 
-  const [queue] = useState(initial)
+  const [queue, setQueue] = useState(initial)
   const [index, setIndex] = useState(0)
   const [showCustom, setShowCustom] = useState(false)
   const [custom, setCustom] = useState('')
   const [measured, setMeasured] = useState<Record<string, number>>({})
+
+  // Fill an empty snapshot from a list that arrived after mount — and ONLY that.
+  //
+  // Adjusting state during render rather than in an effect is deliberate: React
+  // re-renders before committing, so the empty frame never paints, where an effect
+  // would show the celebration and then snatch it away.
+  //
+  // The two guards are what keep the original promise intact. `index === 0` means
+  // the walk has not started, and `queue.length === 0` means nothing was captured
+  // to reshuffle. Once either is false this never runs again, so answering still
+  // walks a stable list and the completion screen still belongs to the user.
+  if (index === 0 && queue.length === 0 && initial.length > 0) {
+    setQueue(initial)
+  }
 
   const done = index >= queue.length
   const current = done ? null : (queue[index] ?? null)

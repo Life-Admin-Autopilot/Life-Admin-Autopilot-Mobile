@@ -12,5 +12,6 @@
   "backToDashboard": "العودة إلى اللوحة",
   "stillClashes": "هذا الوقت ما زال يتعارض مع «{title}».",
   "stillClashesNoSlot": "لا يوجد وقت قريب فارغ — افتح الأمر واختر وقتًا آخر.",
-  "moveTo": "انقله إلى {time}"
+  "reschedule": "إعادة جدولة",
+  "keepAnyway": "اتركه كما هو"
 }

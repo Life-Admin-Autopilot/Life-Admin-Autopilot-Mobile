@@ -29,5 +29,7 @@
   "retryFailed": "Could not try that again just now.",
   "unavailableTitle": "Voice is unavailable",
   "unavailableBody": "Speech-to-text is paused right now, so a recording could not be read back. Type the matter instead.",
-  "unavailableAction": "Type it instead"
+  "unavailableAction": "Type it instead",
+  "setDate": "Set a date",
+  "noDateNeeded": "No date needed"
 }

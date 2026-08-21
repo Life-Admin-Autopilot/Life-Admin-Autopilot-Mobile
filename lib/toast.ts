@@ -70,16 +70,20 @@ export const toast = {
   // (components/ui/DecisionToast). Both buttons dismiss the panel themselves
   // after running their action.
   //
-  // Sticks by default, and that default is still right for a plain question:
-  // the answer exists nowhere else, so a panel that fades mid-read has thrown
-  // the question away.
+  // Sticks by default, and the default is deliberately the cautious one: a panel
+  // that fades while it is the ONLY copy of a question has thrown that question
+  // away.
   //
-  // `duration` exists for the one case where that is no longer true. A CLASH is
-  // not a question the app is holding — it is a fact about two saved matters,
-  // and it is also on the dashboard, in the conflicts sheet, on the matter's own
-  // detail sheet and in the bell. So the panel is an announcement of something
-  // durable rather than the only copy of it, and letting it pass costs nothing.
-  // Pass a duration ONLY when the decision genuinely survives the dismissal.
+  // `duration` is for decisions that survive their own dismissal, and both voice
+  // panels now qualify. A CLASH is a fact about two saved matters — also on the
+  // dashboard, in the conflicts sheet and on the matter's own detail sheet. A
+  // voice QUESTION is a persisted Clarification — also in the bell and in the
+  // uncertainty stack. In both cases the panel announces something durable
+  // rather than holding the only record of it.
+  //
+  // The rule this leaves behind: pass a duration only once you can name where the
+  // decision still lives afterwards. A caller that cannot answer that should let
+  // it stick.
   decide: (opts: {
     tone: 'clash' | 'question'
     title: string

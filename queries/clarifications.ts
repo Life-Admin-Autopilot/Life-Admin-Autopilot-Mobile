@@ -6,11 +6,12 @@
 
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
+import { useRouter } from 'next/navigation'
 
 import { api } from '@/lib/api/client'
-import { formatTime } from '@/lib/i18n/dateFormat'
-import { useIntlTag } from '@/lib/i18n/localeStore'
 import { staticMessages } from '@/lib/i18n/staticMessages'
+import { CLASH_PANEL_MS } from '@/lib/decisionPanel'
+import { requestOpenMatter } from '@/lib/openMatterStore'
 import { toast } from '@/lib/toast'
 import { translateBackendError } from '@/lib/translateBackendError'
 import { queryKeys } from '@/queries/keys'
@@ -126,11 +127,11 @@ export interface ResolveOutcome {
 
 export function useResolveClarification() {
   const queryClient = useQueryClient()
+  const router = useRouter()
   // A hook, so `useTranslations` is available — the right tool here. The
   // re-check copy carries a matter's title and a clock time, and
   // staticMessages() is lookup-only for exactly that reason.
   const t = useTranslations('uncertainty')
-  const tag = useIntlTag()
 
   return useMutation({
     mutationFn: (vars: { id: string; answer: ClarificationAnswer; timezone?: string }) =>
@@ -144,26 +145,40 @@ export function useResolveClarification() {
       const taskId = outcome.task?.id
       if (!clash || !taskId) return
 
-      const slot = outcome.suggestions?.[0]
-
-      // A toast rather than a card, because the stack has already advanced —
-      // the answer was accepted and the next question is on screen. Interrupting
-      // that with a modal would punish the user for answering.
-      toast.info(t('stillClashes', { title: clash.title }), {
-        description: slot ? undefined : t('stillClashesNoSlot'),
-        action: slot
-          ? {
-              label: t('moveTo', { time: formatTime(new Date(slot), tag) }),
-              onPress: () => {
-                void api(`/me/tasks/${taskId}`, { method: 'PATCH', body: { dueAt: slot } })
-                  .then(() => {
-                    void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all })
-                    void queryClient.invalidateQueries({ queryKey: queryKeys.digestAll })
-                  })
-                  .catch(reportFailure)
-              },
-            }
-          : undefined,
+      // THE SAME PANEL A CLASH RAISES ANYWHERE ELSE.
+      //
+      // This used to be a plain info toast carrying one "Move to 16:30" action,
+      // which was the odd one out: every other surface answers a clash with the
+      // two-answer decision panel, and one pre-picked time is not a decision. It
+      // also read as a notice — the thing you glance at and let go — for the one
+      // outcome the user most needs to act on, having just chosen the time that
+      // caused it.
+      //
+      // Reschedule opens the MATTER rather than patching a time in place. That is
+      // the same route the voice clash panel takes, and it is what puts the real
+      // editor, the free-slot chips and the live re-check in front of the user
+      // instead of a single instant chosen for them.
+      //
+      // A toast still, not a modal: the stack has already advanced and the next
+      // question is on screen. Interrupting that would punish answering.
+      toast.decide({
+        tone: 'clash',
+        title: t('stillClashes', { title: clash.title }),
+        // `clash.reason` is server-written English prose, so it is deliberately
+        // NOT shown — the user may be reading the rest of this in Arabic.
+        description: outcome.suggestions?.length ? undefined : t('stillClashesNoSlot'),
+        primary: {
+          label: t('reschedule'),
+          onPress: () => {
+            requestOpenMatter(taskId)
+            router.push('/matters/')
+          },
+        },
+        // Nothing to settle: the question was answered, and the clash is a fact
+        // about two saved matters that stays visible on the dashboard and in the
+        // conflicts sheet. This button says "I know" and nothing more.
+        secondary: { label: t('keepAnyway'), onPress: () => {} },
+        duration: CLASH_PANEL_MS,
       })
     },
     onError: (err, _v, ctx) => {

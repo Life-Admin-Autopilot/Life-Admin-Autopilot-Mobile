@@ -12,5 +12,6 @@
   "backToDashboard": "Back to dashboard",
   "stillClashes": "That time still clashes with “{title}”.",
   "stillClashesNoSlot": "Nothing nearby is free — open the matter to pick another time.",
-  "moveTo": "Move to {time}"
+  "reschedule": "Reschedule",
+  "keepAnyway": "Keep it anyway"
 }

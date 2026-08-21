@@ -24,12 +24,15 @@ import { useTranslations } from 'next-intl'
 
 import { api, ApiError } from '@/lib/api/client'
 import { keepConflict } from '@/lib/conflictKept'
+import { markAnnounced, wasAnnounced } from '@/lib/announcedQuestions'
+import { CLASH_PANEL_MS } from '@/lib/decisionPanel'
 import { requestOpenMatter } from '@/lib/openMatterStore'
 import type { Translate } from '@/lib/i18n/translate'
 import { logger } from '@/lib/logger'
 import { toast } from '@/lib/toast'
 import { queryKeys } from '@/queries/keys'
 import type { AppNotification } from '@/queries/notifications'
+import type { Clarification } from '@/queries/clarifications'
 import { previewConflicts } from '@/queries/planning'
 import {
   isTerminalVoiceNoteStatus,
@@ -50,14 +53,6 @@ const POLL_DELAYS_MS = [2_000, 2_000, 2_000, 3_000, 5_000] as const
 /** After this, the feed takes over. */
 const POLL_GIVE_UP_MS = 3 * 60 * 1000
 
-/**
- * How long the clash panel stays.
- *
- * Long enough to read two matter names and reach a button without hurrying, and
- * short enough that a user who has already decided is not made to dismiss it.
- * Nothing is lost when it goes — see the note on the `duration` it is passed to.
- */
-const CLASH_PANEL_MS = 6_000
 
 /** Exactly the keys the outcome sentence asks for — see lib/i18n/translate.ts. */
 type OutcomeTranslate = Translate<
@@ -68,6 +63,8 @@ type OutcomeTranslate = Translate<
   | 'keepAnyway'
   | 'answerNow'
   | 'later'
+  | 'setDate'
+  | 'noDateNeeded'
   | 'retryQueued'
   | 'retryUnavailable'
   | 'retryFailed'
@@ -83,10 +80,18 @@ type OutcomeTranslate = Translate<
  * The worker wrote one `uncertainty` notification per question, carrying the
  * question, the matter's name and BOTH ids — so the rows written since this
  * watch began ARE the pop-up's content, and tapping the panel or tapping the
- * bell row later land in exactly the same places. Whether a question is a
- * CLASH ("change it / keep it") or a plain gap ("answer / later") is decided
- * by checking the matter's time live, not by parsing the question's wording —
- * the question is in the user's language and wording is nobody's contract.
+ * bell row later land in exactly the same places.
+ *
+ * Three panels, and which one is chosen is read from DATA, never from the
+ * question's wording — the question is written in the user's language, so
+ * wording is nobody's contract:
+ *
+ *   - CLASH ("reschedule / keep it") — the matter's time is checked live.
+ *   - MISSING DATE ("set a date / no date needed") — the question's own `kind`.
+ *     Both of these send the user to the MATTER, because picking a time there
+ *     gets the app's real editor and a clash surfaces the way it does on every
+ *     other surface, rather than a second date UI built into a toast.
+ *   - anything else ("answer / later") — the card stack, where the chips are.
  *
  * Returns how many panels it raised; zero means the caller should fall back to
  * the plain needs-input toast rather than saying nothing.
@@ -97,7 +102,35 @@ async function announceDecisions(
   onOpenMatter: (taskId: string) => void,
   onOpenStack: () => void,
 ): Promise<number> {
-  const res = await api<{ notifications: AppNotification[] }>('/me/notifications')
+  // Both lists, once. The notification carries the ids and the wording; only the
+  // clarification carries `kind`, and `kind` is what separates "we need a date"
+  // from "did you mean this?" — two questions with completely different answers.
+  const [res, open] = await Promise.all([
+    api<{ notifications: AppNotification[] }>('/me/notifications'),
+    api<{ clarifications: Clarification[] }>('/me/clarifications').catch(() => ({
+      clarifications: [] as Clarification[],
+    })),
+  ])
+
+  const byId = new Map((open.clarifications ?? []).map((c) => [c.id, c]))
+
+  /**
+   * Is this the question that has no date AT ALL?
+   *
+   * `kind` alone is not enough, and getting that wrong is how the wrong panel
+   * reached the wrong question. THREE voice questions are kind `date`: "when is
+   * this due?" (no date), "what time on Monday?" (a date, a guessed clock time),
+   * and the clash. Keying on `kind` gave the assumed-time question a panel
+   * offering "No date needed" — which was false, because the matter had a date,
+   * and which would have dropped the very question that existed to confirm the
+   * guess.
+   *
+   * Option ZERO is the honest discriminator, because it is by construction the
+   * reading the matter was filed under: null only when the matter is undated.
+   */
+  const needsADate = (c: Clarification | undefined): boolean =>
+    c?.kind === 'date' && !c.options?.[0]?.dueAt
+
   const rows = (res.notifications ?? [])
     .filter(
       (n) =>
@@ -109,12 +142,18 @@ async function announceDecisions(
         // worse than very occasionally re-raising a recent one.
         new Date(n.createdAt).getTime() >= since - 60_000,
     )
+    // Never twice for the same question. The window above carries a minute of
+    // clock-skew slack, which is exactly wide enough for a second recording to
+    // re-announce the first one's question — see lib/announcedQuestions.ts. An
+    // ignored question is not answered by this: it keeps its place in the bell.
+    .filter((n) => !wasAnnounced(n.clarificationId!))
     // Two at most. A note that raised five questions is a stack problem, and
     // the stack is one tap away on any of these panels.
     .slice(0, 2)
 
   for (const row of rows) {
     const taskId = row.taskId!
+    markAnnounced(row.clarificationId!)
     const clarificationId = row.clarificationId!
     // Sparse body: check the matter exactly as it stands now.
     const found = await previewConflicts(taskId, {})
@@ -142,6 +181,22 @@ async function announceDecisions(
         // note on `decide` in lib/toast.ts.
         duration: CLASH_PANEL_MS,
       })
+    } else if (needsADate(byId.get(clarificationId))) {
+      // Filed with no date. Sent to the matter rather than answered in place, so
+      // the date is picked with the editor every other surface uses and a clash
+      // it causes is shown the way a clash is always shown. Setting it there
+      // closes this question on the server — see ClarificationCascade.
+      toast.decide({
+        tone: 'question',
+        title: row.title,
+        description: row.body,
+        primary: { label: t('setDate'), onPress: () => onOpenMatter(taskId) },
+        secondary: {
+          label: t('noDateNeeded'),
+          onPress: () => keepConflict(taskId, clarificationId),
+        },
+        duration: CLASH_PANEL_MS,
+      })
     } else {
       toast.decide({
         tone: 'question',
@@ -149,6 +204,11 @@ async function announceDecisions(
         description: row.body,
         primary: { label: t('answerNow'), onPress: onOpenStack },
         secondary: { label: t('later'), onPress: () => {} },
+        // Passes, like the clash panel beside it. Every question this raises is a
+        // persisted Clarification, so it waits in the bell and in the uncertainty
+        // stack whatever the panel does — and two voice panels that behave
+        // differently for no reason the user can see is its own small confusion.
+        duration: CLASH_PANEL_MS,
       })
     }
   }
