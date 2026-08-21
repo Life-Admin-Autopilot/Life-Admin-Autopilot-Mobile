@@ -57,8 +57,13 @@ export interface AuthUser {
   hasOnboarded: boolean
   onboardingAnswers?: OnboardingAnswer[]
   emailVerifiedAt?: string
-  /** IANA zone. Absent means "trust the device". */
+  /** IANA zone. Always set on accounts created since the server got a default. */
   timezone?: string
+  /**
+   * True while `timezone` is still the server's default rather than a zone the
+   * user picked. Absent on accounts that predate the flag, which read as true.
+   */
+  timezoneFollowsDevice?: boolean
   /** BCP 47 tag. */
   /** Effective language. Absent only on accounts that predate the picker. */
   locale?: string

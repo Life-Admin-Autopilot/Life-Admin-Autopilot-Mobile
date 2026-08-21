@@ -69,7 +69,7 @@ function SyncAccountLocale() {
 }
 
 /**
- * Store the device's timezone on the account when it has none.
+ * Keep the account's timezone on the device's, until the user picks one.
  *
  * The client never needed this — every screen formats against
  * `deviceTimeZone()`, and Profile even renders `user.timezone ?? detectedZone`,
@@ -81,27 +81,35 @@ function SyncAccountLocale() {
  * resolve "local" against — so the Google sync refuses outright with
  * "Set your timezone", and refused for every user who ever connected an account.
  *
- * Only fills a BLANK. The picker in Settings writes an explicit choice, and
+ * This used to trigger on `timezone` being EMPTY, and that test stopped working
+ * the moment the server started provisioning `Africa/Cairo` at signup: the field
+ * is never blank now, so device detection would have gone quietly dead and left
+ * every non-Egyptian account sitting on the default. It keys off
+ * `timezoneFollowsDevice` instead, exactly as SyncAccountLocale keys off
+ * `localeFollowsDevice`. An absent flag is a pre-flag account and counts as
+ * following, which reproduces the old fill-a-blank behaviour for those.
+ *
+ * It cannot fight the picker: choosing a zone in Profile clears the flag, and
  * someone who deliberately set Europe/Berlin while travelling must not have it
- * silently pulled back to wherever the phone is — the same rule
- * SyncAccountLocale follows for an explicitly chosen language.
+ * pulled back to wherever the phone is.
  */
 function SyncAccountTimezone() {
   const signedIn = useSessionStore((s) => s.user != null)
+  const followsDevice = useSessionStore((s) => s.user?.timezoneFollowsDevice !== false)
   const timezone = useSessionStore((s) => s.user?.timezone ?? null)
   const update = useUpdateProfile()
 
   useEffect(() => {
-    if (!signedIn || timezone) return
+    if (!signedIn || !followsDevice) return
     const device = deviceTimeZone()
-    if (!device) return
+    if (!device || device === timezone) return
     // Converges: the write lands in the session store, this runs again, and the
-    // `timezone` guard stops it. A failure leaves the field blank to retry.
-    update.mutate({ timezone: device })
+    // equality check stops it. A failure leaves the old value to retry later.
+    update.mutate({ timezone: device, timezoneFollowsDevice: true })
     // `update` is a stable mutation handle; listing it would re-fire on its own
     // internal state changes rather than on a real timezone change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signedIn, timezone])
+  }, [signedIn, followsDevice, timezone])
 
   return null
 }
