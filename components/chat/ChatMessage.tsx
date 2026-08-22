@@ -11,6 +11,7 @@ import { AssistantText } from '@/components/chat/AssistantText'
 import { StreamingStatus } from '@/components/chat/StreamingStatus'
 import { ToolCallCard } from '@/components/chat/ToolCallCard'
 import { ClarificationDeck } from '@/components/chat/ClarificationDeck'
+import { raisesQuestions } from '@/lib/ai/clarificationHolds'
 import { taskFieldsOf } from '@/lib/ai/toolCallSummary'
 import type { AiMessage } from '@/lib/ai/types'
 import { cn } from '@/lib/cn'
@@ -57,13 +58,19 @@ export function ChatMessage({
   // reading "needs a detail", "won't remind", and the guessed time long after
   // the user had corrected all three. The clarification card carries the facts
   // now, and updates them when it is answered.
+  //
+  // `raisesQuestions`, not `name === 'holdForClarification'`: createTask now
+  // comes back carrying question rows too, whenever the server spotted a gap in
+  // what was just filed. Same situation as a hold — one matter, saved, with
+  // something still to ask — so it takes the same card, for the same reason a
+  // held matter gets no separate receipt.
   const receipts = message.toolCalls.filter(
-    (c) => c.status !== 'pending_confirmation' && c.name !== 'holdForClarification',
+    (c) => c.status !== 'pending_confirmation' && !raisesQuestions(c),
   )
   const confirms = message.toolCalls.filter(
-    (c) => c.name !== 'holdForClarification' && c.status === 'pending_confirmation',
+    (c) => !raisesQuestions(c) && c.status === 'pending_confirmation',
   )
-  const clarifications = message.toolCalls.filter((c) => c.name === 'holdForClarification')
+  const clarifications = message.toolCalls.filter(raisesQuestions)
 
   // A receipt that filed a matter renders as a card (see ToolCallCard). The
   // container needs to know before it lays the stack out.

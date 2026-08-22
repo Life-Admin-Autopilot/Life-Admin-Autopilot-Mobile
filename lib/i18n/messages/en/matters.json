@@ -170,7 +170,8 @@
     "select": "Select {title}",
     "deselect": "Deselect {title}",
     "complete": "Complete {title}",
-    "reopen": "Reopen {title}"
+    "reopen": "Reopen {title}",
+    "clash": "Clash"
   },
   "steps": {
     "add": "Add a step",

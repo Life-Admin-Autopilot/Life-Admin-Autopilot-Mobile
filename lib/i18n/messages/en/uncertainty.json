@@ -13,5 +13,26 @@
   "stillClashes": "That time still clashes with “{title}”.",
   "stillClashesNoSlot": "Nothing nearby is free — open the matter to pick another time.",
   "reschedule": "Reschedule",
-  "keepAnyway": "Keep it anyway"
+  "keepAnyway": "Keep it anyway",
+  "ask": {
+    "whatTimeOn": "What time on {day}?",
+    "closeTo": "This is close to “{title}”. Keep both?",
+    "alreadyHave": "You already have “{title}”. File this one as well?",
+    "didYouMean": "Did you mean to file “{title}”?",
+    "whenDue": "When is “{title}” due?",
+    "howMuch": "How much is “{title}”?"
+  },
+  "chip": {
+    "at": "{time}",
+    "morning": "Morning — {time}",
+    "afternoon": "Afternoon — {time}",
+    "evening": "Evening — {time}",
+    "keepThisTime": "Keep this time",
+    "laterThatDay": "Later that day — {time}",
+    "dayAt": "{day} — {time}",
+    "keepBoth": "Keep both",
+    "yesThatIsRight": "Yes, that's right",
+    "noDateNeeded": "No date needed",
+    "tomorrowAt": "Tomorrow — {time}"
+  }
 }

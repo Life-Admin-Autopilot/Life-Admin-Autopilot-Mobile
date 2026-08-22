@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Pill } from '@/components/ui/Pill'
 import { ChoiceChip } from '@/components/onboarding/QuestionChips'
 import { timeChipLabel } from '@/lib/i18n/dateFormat'
+import { serverText } from '@/lib/i18n/serverText'
 import { useIntlTag } from '@/lib/i18n/localeStore'
 import { MorphSurface, type MorphShape } from '@/components/ui/MorphSurface'
 import {
@@ -218,8 +219,10 @@ function Walker({ initial }: { initial: Clarification[] }) {
               </span>
             </div>
             <p className="mt-3 truncate text-body-sm text-ink-muted">{current!.draft.title}</p>
+            {/* The key when the server composed the question, the stored string
+                when the model did. See lib/i18n/serverText. */}
             <h2 className="mt-1 text-pretty font-display text-heading-serif text-ink">
-              {current!.question}
+              {serverText(current!.question, current!.questionKey, current!.questionParams, t, tag)}
             </h2>
 
             {current!.sourceText ? <OriginalRequest text={current!.sourceText} /> : null}
@@ -246,8 +249,19 @@ function Walker({ initial }: { initial: Clarification[] }) {
               </div>
             ) : (
               <div className="mt-4 flex flex-wrap gap-2">
+                {/* `timeChipLabel` stays for the keyless chips: it can only
+                    re-format a clock time it finds inside an English label,
+                    which is all that was possible before the key existed. */}
                 {current!.options.map((o, i) => (
-                  <ChoiceChip key={i} label={timeChipLabel(o.label, o.dueAt, tag)} onClick={() => pickOption(i)} />
+                  <ChoiceChip
+                    key={i}
+                    label={
+                      o.labelKey
+                        ? serverText(o.label, o.labelKey, o.labelParams, t, tag)
+                        : timeChipLabel(o.label, o.dueAt, tag)
+                    }
+                    onClick={() => pickOption(i)}
+                  />
                 ))}
               </div>
             )}

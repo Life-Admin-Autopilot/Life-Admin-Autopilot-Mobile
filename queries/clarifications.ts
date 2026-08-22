@@ -22,6 +22,9 @@ export interface ClarificationOption {
   dueAt?: string
   title?: string
   notes?: string
+  /** See {@link Clarification.questionKey} — same rule, for one chip. */
+  labelKey?: string
+  labelParams?: Record<string, string>
 }
 export interface ClarificationDraft {
   title: string
@@ -37,7 +40,20 @@ export interface Clarification {
   taskId: string
   status: 'open' | 'resolved' | 'dropped'
   draft: ClarificationDraft
+  /**
+   * Ready to render, and in the user's language ONLY on the chat lane — the model
+   * writes those, in the language of the message it is answering. Voice questions
+   * are composed by the server and arrive in English; see {@link questionKey}.
+   */
   question: string
+  /**
+   * Present when the SERVER wrote the question, absent when the model did. Render
+   * `t(questionKey, questionParams)` in preference to {@link question}, and fall
+   * back to `question` whenever it is missing — rows raised before this shipped
+   * have no key, and neither does anything from chat.
+   */
+  questionKey?: string
+  questionParams?: Record<string, string>
   kind: 'date' | 'detail' | 'choice'
   /** 'high' → the task's reminder waits for confirmation. 'low' → it may fire on the guess. */
   costOfWrong: 'low' | 'high'

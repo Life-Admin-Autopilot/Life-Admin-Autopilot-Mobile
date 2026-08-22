@@ -8,6 +8,7 @@
 // Contrast with the chat agent (queries/ai.ts), whose tools write the moment it
 // calls them. Capture goes through here; conversation goes through there.
 
+import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, ApiError } from '@/lib/api/client'
@@ -291,6 +292,36 @@ export function useAllConflicts() {
     // so staleness here only delays a clash somebody else's device created.
     staleTime: 60 * 1000,
   })
+}
+
+/**
+ * Every task id that is on top of another one, as a set.
+ *
+ * <b>Why the LIST needed this.</b> A clash was reported everywhere except the
+ * one screen where two matters sit next to each other: the dashboard card, the
+ * conflicts sheet, the detail sheet and a toast at the moment of saving all knew,
+ * and the Matters list showed "Tomorrow, 6:00 PM" twice in a row with nothing to
+ * say they were the same 6pm. The toast is gone by the time anyone scrolls the
+ * list, so that screen was where the fact went to disappear.
+ *
+ * Shares `useAllConflicts`'s query, so a hundred rows asking still make one
+ * request — react-query dedupes on the key.
+ */
+export function useClashingTaskIds(): ReadonlySet<string> {
+  const { data } = useAllConflicts()
+
+  return useMemo(() => {
+    const ids = new Set<string>()
+    for (const clash of data ?? []) {
+      // BOTH sides. `yieldsTaskId` names the one that should move, which is a
+      // suggestion about resolving the clash rather than a claim that the other
+      // matter is uninvolved — marking one row of a colliding pair would read as
+      // an error on that matter alone.
+      if (clash.a?.taskId) ids.add(clash.a.taskId)
+      if (clash.b?.taskId) ids.add(clash.b.taskId)
+    }
+    return ids
+  }, [data])
 }
 
 /** Conflicts for one existing task, re-checked after an edit. */

@@ -170,7 +170,8 @@
     "select": "تحديد {title}",
     "deselect": "إلغاء تحديد {title}",
     "complete": "إنجاز {title}",
-    "reopen": "إعادة فتح {title}"
+    "reopen": "إعادة فتح {title}",
+    "clash": "متعارض"
   },
   "steps": {
     "add": "أضف خطوة",

@@ -1,6 +1,6 @@
 'use client'
 
-import { ListChecks } from 'lucide-react'
+import { AlertTriangle, ListChecks } from 'lucide-react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { useTranslations } from 'next-intl'
 
@@ -11,6 +11,7 @@ import { cn } from '@/lib/cn'
 import { useIntlTag } from '@/lib/i18n/localeStore'
 import { formatCurrencyRounded } from '@/lib/i18n/numberFormat'
 import { useLongPress } from '@/lib/useLongPress'
+import { useClashingTaskIds } from '@/queries/planning'
 import { bucketOf, formatDue } from '@/lib/taskFormat'
 import type { Task } from '@/queries/tasks'
 
@@ -80,6 +81,9 @@ export function MatterListRow({
   const overdue = !done && bucketOf(task, now) === 'overdue'
   const priorityTone = PRIORITY_TONE[task.priority]
   const openSubtasks = task.subtasks.filter((s) => !s.done).length
+  // Done matters are never marked: a clash is about two things wanting the
+  // same time, and one of them has already happened.
+  const clashes = useClashingTaskIds().has(task.id) && !done
 
   return (
     <div
@@ -180,6 +184,22 @@ export function MatterListRow({
           >
             {formatDue(task.dueAt, { t, tag, now })}
           </span>
+          {/* Beside the time, because the time is what is wrong with it. Two
+              rows both reading "Tomorrow, 6:00 PM" is the exact shape of the
+              report that prompted this: the clash was known to the dashboard,
+              the conflicts sheet and the detail sheet, and the one screen
+              showing the two matters side by side said nothing.
+
+              An icon and a word, in `warning` rather than `danger` — the same
+              restraint the overdue styling keeps. Tapping the row opens the
+              matter, where ConflictNotice names what it collides with; this is
+              the signal that there is something to open. */}
+          {clashes ? (
+            <span className="flex shrink-0 items-center gap-1 text-body-sm text-warning">
+              <AlertTriangle size={13} />
+              {t('row.clash')}
+            </span>
+          ) : null}
           {/* What it costs, on the row rather than only inside the editor.
               A matter that carries a figure is a matter you decide about
               differently, and until this was here the Matters tab was the one

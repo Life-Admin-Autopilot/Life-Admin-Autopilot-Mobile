@@ -36,6 +36,16 @@ export interface HoldOption {
   index: number
   /** The option's resolved instant, when it carries one — display re-renders the time per locale. */
   dueAt?: string
+  /**
+   * An `uncertainty` catalogue key, on chips the SERVER composed.
+   *
+   * Absent on every chip the model wrote: those are already in the language of
+   * the message they answer, and `label` is the whole of them. Present on the
+   * gap questions raised behind a `createTask`, which are composed in English
+   * and rendered in the reader's language — see `lib/i18n/serverText.ts`.
+   */
+  labelKey?: string
+  labelParams?: Record<string, string>
 }
 
 /**
@@ -76,6 +86,17 @@ export interface ParsedHold {
   clarificationId: string | null
   /** Empty when the tool sent none — the card supplies translated copy. */
   question: string
+  /**
+   * An `uncertainty` catalogue key, on questions the SERVER composed.
+   *
+   * The model writes its questions in the language of the message it is
+   * answering, so those need no key and carry none. A gap the server spotted
+   * behind a `createTask` is composed in English at save time and translated at
+   * READING time, which is also what lets it survive the user switching
+   * language afterwards.
+   */
+  questionKey?: string
+  questionParams?: Record<string, string>
   title: string
   domain: TaskDomain | null
   options: HoldOption[]
@@ -150,8 +171,40 @@ function optionList(raw: unknown): unknown[] {
 // option.
 function optionsOf(raw: unknown): HoldOption[] {
   return optionList(raw)
-    .map((option, index) => ({ label: labelOf(option), index, dueAt: dueAtOf(option) }))
+    .map((option, index) => ({
+      label: labelOf(option),
+      index,
+      dueAt: dueAtOf(option),
+      ...i18nOf(option, 'labelKey', 'labelParams'),
+    }))
     .filter((option) => option.label.length > 0)
+}
+
+/**
+ * The catalogue key and its params, when the wire carried them.
+ *
+ * Spread into the row rather than set unconditionally, so a model-written chip
+ * stays exactly the object it has always been rather than growing two undefined
+ * fields — which matters because these are compared and snapshot in tests.
+ */
+function i18nOf(
+  raw: unknown,
+  keyField: string,
+  paramsField: string,
+): { labelKey?: string; labelParams?: Record<string, string> } {
+  if (!isRecord(raw)) return {}
+  const key = trimmed(raw[keyField])
+  if (key.length === 0) return {}
+
+  const params = raw[paramsField]
+  const values: Record<string, string> = {}
+  if (isRecord(params)) {
+    for (const [name, value] of Object.entries(params)) {
+      if (typeof value === 'string') values[name] = value
+    }
+  }
+
+  return { labelKey: key, labelParams: values }
 }
 
 /** The option's resolved instant, when the object shape carries one. */
@@ -174,6 +227,14 @@ function wireRows(result: Record<string, unknown> | null | undefined): Record<st
   const many = Array.isArray(result.clarifications) ? result.clarifications.filter(isRecord) : []
   if (many.length > 0) return many
   return isRecord(result.clarification) ? [result.clarification] : []
+}
+
+/** The same, named for the question rather than for a chip. */
+function questionI18nOf(
+  row: unknown,
+): { questionKey?: string; questionParams?: Record<string, string> } {
+  const { labelKey, labelParams } = i18nOf(row, 'questionKey', 'questionParams')
+  return labelKey ? { questionKey: labelKey, questionParams: labelParams } : {}
 }
 
 /** Every question one hold call raised. One entry for the single-question case. */
@@ -206,29 +267,36 @@ export function parseHoldRows(call: AiToolCall): ParsedHold[] {
     // row to resolve against. `clarificationId` is read as a courtesy; the hold
     // that saves a receipt always ships the receipt itself.
     //
-    // `legacy` is the catch-all, and it FAILS OPEN: it builds an answerable
-    // question out of the args, which is exactly the phantom this split exists
-    // to kill. That is safe only because of an invariant on the server —
-    // ClarificationHoldService returns zero receipts on the queue-full branch
-    // and nowhere else, so "no receipts" and `queueFull: true` are one condition
-    // and there is no third state. Confirmed against the persisted history: no
-    // hold result in the database lands here. What `legacy` actually carries is
-    // transcripts written before receipts rode back on the result at all.
+    // The test is POSITIVE: a shape has to earn a question, and everything
+    // unrecognized is a statement. It used to be the other way round, with
+    // `legacy` as a catch-all that FAILED OPEN and built an answerable question
+    // out of the args — and the third state the comment here swore did not
+    // exist turned out to be the commonest one in the database.
     //
-    // So if a SECOND decline path is ever added — a per-matter cap, quiet hours,
-    // a dedupe that suppresses a repeat question — it will arrive as ok:true
-    // with no receipts and no flag, and this branch will invent a question for
-    // it. The fix at that point is to invert the test: name the positive
-    // conditions for a question and treat every unrecognized shape as a
-    // statement. Do not add the new flag to the `filed` test and stop there;
-    // the next one after it will land here too.
+    // 2026-08-22, live: "هسافر اوروبا بكره او بعده" made Gemini emit
+    // holdForClarification TWICE, once with `options` as a real JSON array and
+    // once with the same array as a string. The tool declares `options` as a
+    // str, so the array form was rejected before it reached us and came back
+    // `status: "executed", result: null` — no task, no receipt, no error. Under
+    // the old test `null?.ok === false` is `undefined === false`, which is
+    // false, so it fell through to `legacy` and rendered a second, identical,
+    // answerable question above the real one. The card read "2 QUESTIONS" over
+    // a matter that had exactly one.
+    //
+    // A null result is not the only way in. Across the whole persisted history
+    // the shapes are: 10 holds with receipts (they never reach this branch),
+    // one `ok:false`, and three `result: null`. NOTHING has ever arrived as
+    // ok:true-with-no-receipts, so `legacy` — which exists only for transcripts
+    // written before receipts rode back at all — costs nothing to narrow to the
+    // one shape it was for, and the next decline path the server grows lands on
+    // `failed` instead of inventing a question for itself.
     const looseId = trimmed(result?.clarificationId)
     const origin: HoldOrigin =
-      call.status === 'failed' || result?.ok === false
-        ? 'failed'
-        : result?.queueFull === true
-          ? 'filed'
-          : 'legacy'
+      result?.queueFull === true
+        ? 'filed'
+        : call.status !== 'failed' && result?.ok === true
+          ? 'legacy'
+          : 'failed'
     return [
       {
         ...shared,
@@ -255,6 +323,7 @@ export function parseHoldRows(call: AiToolCall): ParsedHold[] {
       taskId: trimmed(row.taskId) || callTaskId,
       clarificationId: id.length > 0 ? id : null,
       question: trimmed(row.question),
+      ...questionI18nOf(row),
       options: optionsOf(row.options),
     }
   })
@@ -283,6 +352,29 @@ function normalizedTitle(title: string): string {
  * NOT repair survives and is stated — it is the only trace that something the
  * user said was dropped.
  */
+/**
+ * Did this call leave a question on the user's screen?
+ *
+ * `holdForClarification` always intends to, and is routed to the clarification
+ * card even when it failed — its own origin states tell that story.
+ *
+ * `createTask` now can too. The server checks a chat-filed matter for the gaps
+ * the agent did not mention — no date, an invented hour, a money matter with no
+ * figure — and raises the question itself, returning the rows it filed. Those
+ * are the same receipts a hold returns, about a task that is likewise already
+ * saved, so they belong on the same card. Without this the question was real,
+ * answerable in Needs You, and completely invisible in the conversation that
+ * caused it.
+ *
+ * Deliberately keyed on the RESULT, not the tool name: a createTask that raised
+ * nothing is an ordinary receipt and must keep rendering as one.
+ */
+export function raisesQuestions(call: AiToolCall): boolean {
+  if (call.name === 'holdForClarification') return true
+  const rows = call.result?.clarifications
+  return Array.isArray(rows) && rows.some(isRecord)
+}
+
 export function parseHolds(calls: readonly AiToolCall[]): ParsedHold[] {
   const rows = calls.flatMap(parseHoldRows)
 
@@ -341,6 +433,14 @@ export interface HoldAnswer {
   optionIndex: number | null
   /** The picked option's instant, for locale-correct display of the answer. */
   dueAt?: string
+  /**
+   * Carried over from the chip that was tapped, so the answer collapses to the
+   * same words the user pressed. Without it a server-composed chip read
+   * "Tomorrow — 09:00" in Arabic once it was answered, having read
+   * "غداً — ٠٩:٠٠" a moment earlier.
+   */
+  labelKey?: string
+  labelParams?: Record<string, string>
 }
 
 /**

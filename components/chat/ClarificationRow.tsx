@@ -20,6 +20,7 @@ import { useTranslations } from 'next-intl'
 
 import { cn } from '@/lib/cn'
 import { timeChipLabel } from '@/lib/i18n/dateFormat'
+import { serverText } from '@/lib/i18n/serverText'
 import { useIntlTag } from '@/lib/i18n/localeStore'
 import type { HoldAnswer, HoldOption, ParsedHold } from '@/lib/ai/clarificationHolds'
 
@@ -55,15 +56,34 @@ export function ClarificationRow({
   onSubmit,
 }: ClarificationRowProps) {
   const t = useTranslations('chat')
+  // The `uncertainty` catalogue, for the rows the SERVER composed. A question
+  // the model wrote is already in the user's language and never touches this;
+  // one raised behind a createTask arrives as a key and is translated here, at
+  // reading time. Same helper, same keys, as the Needs You card stack.
+  const tServer = useTranslations('uncertainty')
   const tag = useIntlTag()
   const { answer, draft, typing, saved } = state
   const hasOptions = hold.options.length > 0
   const showInput = !hasOptions || typing
+  const question =
+    serverText(hold.question, hold.questionKey, hold.questionParams, tServer, tag) ||
+    t('clarify.fallbackQuestion')
+  // Takes the shared shape rather than HoldOption, because the collapsed tick
+  // renders a HoldAnswer through it — same words the user tapped, same language.
+  const chipLabel = (chip: {
+    label: string
+    dueAt?: string
+    labelKey?: string
+    labelParams?: Record<string, string>
+  }) =>
+    chip.labelKey
+      ? serverText(chip.label, chip.labelKey, chip.labelParams, tServer, tag)
+      : timeChipLabel(chip.label, chip.dueAt, tag)
 
   return (
     <div className="flex flex-col gap-2.5">
       <p className="text-body-sm font-semibold text-ink" dir="auto">
-        {hold.question || t('clarify.fallbackQuestion')}
+        {question}
       </p>
 
       {saved ? (
@@ -73,7 +93,7 @@ export function ClarificationRow({
         <div className="flex items-center gap-1.5">
           <Check size={13} strokeWidth={2.5} className="shrink-0 text-accent" />
           <span className="truncate text-caption text-ink-muted" dir="auto">
-            {answer ? timeChipLabel(answer.label, answer.dueAt, tag) : null}
+            {answer ? chipLabel(answer) : null}
           </span>
         </div>
       ) : (
@@ -96,7 +116,7 @@ export function ClarificationRow({
                         : 'border-border bg-surface text-ink hover:bg-surface-sunken',
                     )}
                   >
-                    {timeChipLabel(option.label, option.dueAt, tag)}
+                    {chipLabel(option)}
                   </button>
                 )
               })}
@@ -111,7 +131,7 @@ export function ClarificationRow({
                 if (event.key === 'Enter') onSubmit()
               }}
               placeholder={t('clarify.replyPlaceholder')}
-              aria-label={hold.question || t('clarify.fallbackQuestion')}
+              aria-label={question}
               disabled={disabled}
               dir="auto"
               className="h-10 min-w-0 rounded-xl bg-surface-field px-3.5 text-body-sm text-ink outline-none placeholder:text-ink-muted disabled:opacity-50"

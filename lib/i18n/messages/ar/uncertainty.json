@@ -13,5 +13,26 @@
   "stillClashes": "هذا الوقت ما زال يتعارض مع «{title}».",
   "stillClashesNoSlot": "لا يوجد وقت قريب فارغ — افتح الأمر واختر وقتًا آخر.",
   "reschedule": "إعادة جدولة",
-  "keepAnyway": "اتركه كما هو"
+  "keepAnyway": "اتركه كما هو",
+  "ask": {
+    "whatTimeOn": "الساعة كام يوم {day}؟",
+    "closeTo": "هذا قريب من «{title}». أحتفظ بالاثنين؟",
+    "alreadyHave": "لديك بالفعل «{title}». أضيف هذا أيضًا؟",
+    "didYouMean": "هل قصدت تسجيل «{title}»؟",
+    "whenDue": "متى موعد «{title}»؟",
+    "howMuch": "كم قيمة «{title}»؟"
+  },
+  "chip": {
+    "at": "{time}",
+    "morning": "صباحًا — {time}",
+    "afternoon": "بعد الظهر — {time}",
+    "evening": "مساءً — {time}",
+    "keepThisTime": "اترك هذا الوقت",
+    "laterThatDay": "في وقت لاحق من اليوم — {time}",
+    "dayAt": "{day} الساعة {time}",
+    "keepBoth": "احتفظ بالاثنين",
+    "yesThatIsRight": "نعم، هذا صحيح",
+    "noDateNeeded": "لا حاجة لموعد",
+    "tomorrowAt": "بكرة — {time}"
+  }
 }
