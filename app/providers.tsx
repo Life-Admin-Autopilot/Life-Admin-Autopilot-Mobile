@@ -12,6 +12,7 @@ import { PhoneFrame } from '@/components/layout/PhoneFrame'
 import { ChatIsland } from '@/components/chat/ChatIsland'
 import { LocaleProvider } from '@/components/i18n/LocaleProvider'
 import { VoiceIsland } from '@/components/voice/VoiceIsland'
+import { SIGNED_OUT_ROUTE } from '@/lib/appRoutes'
 import { bootSessionStore, selectStatus, useSessionStore } from '@/lib/auth/sessionStore'
 import { deviceTimeZone } from '@/lib/i18n/dateFormat'
 import { adoptUserLocale, deviceLocale } from '@/lib/i18n/localeStore'
@@ -127,8 +128,12 @@ const PUBLIC_ROUTES = ['/welcome', '/sign-in', '/sign-up']
  * not the route.
  *
  * `status === 'loading'` is deliberately excluded: that is the state during boot
- * hydration, and redirecting on it would bounce every cold start to /welcome
- * before the stored tokens have even been read.
+ * hydration, and redirecting on it would bounce every cold start to the sign-in
+ * screen before the stored tokens have even been read.
+ *
+ * It lands on SIGNED_OUT_ROUTE, which is what the paragraph above always claimed
+ * and the code did not: it sent people to /welcome, whose primary button offers
+ * to create the account they already have.
  */
 function RedirectOnSignOut() {
   const status = useSessionStore(selectStatus)
@@ -138,7 +143,7 @@ function RedirectOnSignOut() {
   useEffect(() => {
     if (status !== 'unauthenticated') return
     if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) return
-    router.replace('/welcome')
+    router.replace(SIGNED_OUT_ROUTE)
   }, [status, pathname, router])
 
   return null

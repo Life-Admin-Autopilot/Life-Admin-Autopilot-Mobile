@@ -202,7 +202,7 @@ export function refreshSession(): Promise<boolean> {
     // a fresh pair after clear() resurrects the session: the tokens land back in
     // localStorage, the next boot validates them against /auth/me, status flips
     // to 'authenticated', and the guest guard bounces the signed-out user off
-    // /welcome to /dashboard — for good.
+    // /sign-in to /dashboard — for good.
     //
     // Returns null when nothing moved and this call should proceed.
     const supersededBy = (): boolean | null => {

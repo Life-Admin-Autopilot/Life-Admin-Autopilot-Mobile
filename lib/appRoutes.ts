@@ -9,6 +9,27 @@
 // would both collide with it and offer the assistant to someone who has no
 // session behind it.
 
+/**
+ * Where a session ending puts you.
+ *
+ * <b>Sign-in, not /welcome.</b> /welcome is the FRONT DOOR — the mascot, the
+ * creed, and "Create account" as its primary button. That is the right screen
+ * for someone who has never been here, and the wrong one for someone who just
+ * signed out: they have an account, they were offered the button for making a
+ * second one, and getting back in cost an extra tap through a screen selling
+ * them something they already own.
+ *
+ * Every route that can be reached with no session was reached WITH one a moment
+ * ago — a first-time visitor arrives at `/` and is sent to /welcome from there,
+ * never to /dashboard. So "the session ended" and "you have an account" are the
+ * same fact, and this is the screen that acts on it.
+ *
+ * Deliberately NOT used by two places. `app/page.tsx` is the front door's own
+ * entrance and keeps /welcome. Deleting an account keeps it too: there is
+ * nothing left to sign in to, and offering the form would be a dead end.
+ */
+export const SIGNED_OUT_ROUTE = '/sign-in'
+
 export const ROUTE_TAB = {
   '/dashboard': 'dashboard',
   '/matters': 'matters',

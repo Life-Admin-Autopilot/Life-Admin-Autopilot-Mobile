@@ -27,6 +27,7 @@ import {
   SettingRow,
   SettingToggleRow,
 } from '@/components/ui/SettingRow'
+import { SIGNED_OUT_ROUTE } from '@/lib/appRoutes'
 import { selectUser, useSessionStore, type Theme } from '@/lib/auth/sessionStore'
 import { LOCALE_META } from '@/lib/i18n/locales'
 import { useLocale } from '@/lib/i18n/localeStore'
@@ -138,7 +139,7 @@ export default function ProfilePage() {
     signOut.mutate(undefined, {
       onSuccess: () => {
         toast.success(t('signedOut'))
-        router.replace('/welcome')
+        router.replace(SIGNED_OUT_ROUTE)
       },
     })
   }

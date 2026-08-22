@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
+import { SIGNED_OUT_ROUTE } from '@/lib/appRoutes'
 import { useSessionStore, selectStatus, selectUser } from '@/lib/auth/sessionStore'
 
 // Client-side route gating for the static-export SPA. Each guard declares what
@@ -22,7 +23,11 @@ export function useAuthGate(guard: Guard) {
     if (status === 'loading') return
 
     if (status === 'unauthenticated') {
-      if (guard !== 'guest') router.replace('/welcome')
+      // A protected route with no session was a protected route WITH one a
+      // moment ago — nobody arrives at /dashboard without signing in first — so
+      // the way back is the sign-in form, not the front door's create-account
+      // pitch. See SIGNED_OUT_ROUTE.
+      if (guard !== 'guest') router.replace(SIGNED_OUT_ROUTE)
       return
     }
 
