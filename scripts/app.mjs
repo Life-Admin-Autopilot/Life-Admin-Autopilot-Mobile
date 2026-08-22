@@ -86,7 +86,11 @@ async function main() {
       warn(
         backend.started
           ? `The backend at ${backend.dir} ignored EXTRA_CORS_ORIGINS. Add ${siteUrl} to its allowlist.`
-          : `That backend was already running, so it predates this origin. Restart it: ${backend.dir}/tools/dev/stack.sh down, then npm run app again.`,
+          // Not stack.sh: backend.mjs deliberately prefers up.sh and only falls
+          // back to stack.sh on macOS, so naming stack.sh here sent everyone
+          // else to a script that cannot run on their machine — while the
+          // backend they actually need to restart was started by up.sh.
+          : `That backend was already running, so it predates this origin. Stop it (Ctrl+C where ${backend.dir}/tools/dev/up.sh is running) and run npm run app again.`,
       )
     }
   }

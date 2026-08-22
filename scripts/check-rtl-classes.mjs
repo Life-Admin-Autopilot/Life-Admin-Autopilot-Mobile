@@ -16,12 +16,19 @@
 //     are the volume rocker and power button, and hardware does not mirror.
 //   - `left-1/2` / `right-1/2` — paired with -translate-x-1/2 this is a centring
 //     idiom, not a side, and has no logical equivalent.
+//   - a line carrying `rtl-allow-physical` in a comment, on it or just above it.
+//     For the one-off: a whole-file entry above would blind the checker to every
+//     future mistake in that file, which is too big a hammer for one class.
 
 import { readFileSync, readdirSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, sep } from 'node:path'
 
 const ROOTS = ['app', 'components']
 const EXEMPT_FILES = new Set(['components/layout/PhoneFrame.tsx'])
+
+// Marker for a single deliberate physical class. The reason goes in the same
+// comment, because a bare marker is indistinguishable from a suppressed bug.
+const ALLOW_LINE = 'rtl-allow-physical'
 
 // The value alternation must include the fraction form (`1/2`) BEFORE the
 // bare-number form, or `left-1/2` matches as `left-1` and the centring
@@ -63,7 +70,12 @@ const violations = []
 
 for (const root of ROOTS) {
   for (const file of walk(root)) {
-    const rel = relative(process.cwd(), file)
+    // Forward slashes, ALWAYS. `relative` returns the platform separator, so on
+    // Windows this read `components\layout\PhoneFrame.tsx` and never matched the
+    // exemption written with `/` — the PhoneFrame entry above had simply never
+    // worked on this machine, and its four deliberate classes failed the check
+    // on every run. A permanently-red gate is one nobody reads.
+    const rel = relative(process.cwd(), file).split(sep).join('/')
     if (EXEMPT_FILES.has(rel)) continue
 
     const lines = readFileSync(file, 'utf8').split('\n')
@@ -71,6 +83,10 @@ for (const root of ROOTS) {
       // Skip comment lines — prose about "the right side" is not a class.
       const trimmed = line.trim()
       if (trimmed.startsWith('//') || trimmed.startsWith('*')) return
+
+      // The marker sits on the class line or in the comment explaining it, which
+      // is usually the line above — that is where the reason is already written.
+      if (line.includes(ALLOW_LINE) || (lines[i - 1] ?? '').includes(ALLOW_LINE)) return
 
       for (const match of line.matchAll(PATTERN)) {
         const found = match[0]

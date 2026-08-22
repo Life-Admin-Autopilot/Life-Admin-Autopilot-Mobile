@@ -34,20 +34,52 @@
 // adding the line would trade a cosmetic bug for a silent delivery one. FCM's
 // own "Miscellaneous" fallback channel is used until that channel is created.
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-const ICON_NAME = 'ic_stat_kitto.xml'
-const ICON_SOURCE = join(REPO_ROOT, 'native/android/res/drawable', ICON_NAME)
-const ICON_DEST_DIR = join(REPO_ROOT, 'android/app/src/main/res/drawable')
+const ICON_NAME = 'ic_stat_kitto.png'
+// One per density, built from the mascot by scripts/build-notification-icon.mjs.
+// A single drawable/ copy would be scaled by Android from whatever density it
+// happened to be authored at, which on a status-bar icon is visibly soft.
+const ICON_DENSITIES = [
+  'drawable-mdpi',
+  'drawable-hdpi',
+  'drawable-xhdpi',
+  'drawable-xxhdpi',
+  'drawable-xxxhdpi',
+]
+const ICON_SOURCE_ROOT = join(REPO_ROOT, 'native/android/res')
+const ICON_DEST_ROOT = join(REPO_ROOT, 'android/app/src/main/res')
+// The first density decides whether the icon exists at all.
+const ICON_SOURCE = join(ICON_SOURCE_ROOT, ICON_DENSITIES[0], ICON_NAME)
 
 const MANIFEST = join(REPO_ROOT, 'android/app/src/main/AndroidManifest.xml')
 
-const PERMISSION = 'android.permission.SCHEDULE_EXACT_ALARM'
-const PERMISSION_LINE = `    <uses-permission android:name="${PERMISSION}" />`
+// Android only ever shows the user a permission the app DECLARES, so a missing
+// line here is not a prompt the user can decline — the capability is absent,
+// with nothing in the app or in Settings to explain why.
+const PERMISSIONS = [
+  // syncReminders.ts schedules with allowWhileIdle -> setExactAndAllowWhileIdle,
+  // which throws SecurityException on Android 12+ without this. The local
+  // reminder path then dies at the moment it fires, long after anything that
+  // could report it.
+  'android.permission.SCHEDULE_EXACT_ALARM',
+  // Voice capture is getUserMedia({ audio }) inside the webview
+  // (lib/ai/useVoiceRecorder.ts), not a native plugin. Capacitor grants the
+  // webview's request only if the APP holds this one, so without it getUserMedia
+  // rejects and the mic never appears under App info -> Permissions at all.
+  'android.permission.RECORD_AUDIO',
+  // Chromium's capture stack refuses to open a device without BOTH of these:
+  //   cr_media: Requires MODIFY_AUDIO_SETTINGS and RECORD_AUDIO.
+  //             No audio device will be available for recording
+  // RECORD_AUDIO alone gets the app listed under Settings -> Microphone and even
+  // GRANTED, so the permission screen looks correct while getUserMedia still
+  // rejects. It is an install-time permission, so there is no prompt to add.
+  'android.permission.MODIFY_AUDIO_SETTINGS',
+]
 
 const ICON_META_NAME = 'com.google.firebase.messaging.default_notification_icon'
 const ICON_META_BLOCK =
@@ -69,13 +101,32 @@ function main() {
 
 function copyIcon() {
   if (!existsSync(ICON_SOURCE)) {
-    console.warn(`! No ${ICON_NAME} at native/android/res/drawable — status-bar icon will be a white square.`)
+    console.warn(`! No ${ICON_NAME} under native/android/res — status-bar icon will be a white square.`)
+    console.warn('  Build it with: npm run icons')
     return
   }
 
-  mkdirSync(ICON_DEST_DIR, { recursive: true })
-  copyFileSync(ICON_SOURCE, join(ICON_DEST_DIR, ICON_NAME))
-  console.log(`✓ ${ICON_NAME} → android/app/src/main/res/drawable/`)
+  let copied = 0
+  for (const density of ICON_DENSITIES) {
+    const from = join(ICON_SOURCE_ROOT, density, ICON_NAME)
+    if (!existsSync(from)) continue
+
+    const to = join(ICON_DEST_ROOT, density)
+    mkdirSync(to, { recursive: true })
+    copyFileSync(from, join(to, ICON_NAME))
+    copied += 1
+  }
+
+  // A leftover vector of the same name in the density-less drawable/ folder
+  // would still win for any density it does not have a PNG for, which is how
+  // the old generic bell kept showing up after the mascot icon was added.
+  const stale = join(ICON_DEST_ROOT, 'drawable', 'ic_stat_kitto.xml')
+  if (existsSync(stale)) {
+    rmSync(stale)
+    console.log('· removed the superseded ic_stat_kitto.xml')
+  }
+
+  console.log(`✓ ${ICON_NAME} → ${copied} density folder(s)`)
 }
 
 /** Idempotent: this runs after every sync, and a sync does not always regenerate. */
@@ -83,13 +134,18 @@ function patchManifest() {
   let xml = readFileSync(MANIFEST, 'utf8')
   const changes = []
 
-  if (xml.includes(PERMISSION)) {
-    console.log('· SCHEDULE_EXACT_ALARM already present')
-  } else {
+  for (const permission of PERMISSIONS) {
+    const short = permission.replace('android.permission.', '')
+    if (xml.includes(permission)) {
+      console.log(`· ${short} already present`)
+      continue
+    }
+
     // Before the closing tag rather than after <manifest>, so it sits with the
     // INTERNET permission Capacitor writes at the bottom.
-    xml = xml.replace('</manifest>', `${PERMISSION_LINE}\n</manifest>`)
-    changes.push('SCHEDULE_EXACT_ALARM')
+    xml = xml.replace('</manifest>', `    <uses-permission android:name="${permission}" />
+</manifest>`)
+    changes.push(short)
   }
 
   if (xml.includes(ICON_META_NAME)) {

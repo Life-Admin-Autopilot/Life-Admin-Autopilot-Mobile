@@ -46,7 +46,7 @@ export function ZoomPanSurface({ containerRef, contentRef, content, className, c
         //
         // left-0, NOT start-0: the transform math is physical, so in RTL a
         // logical inset would anchor the layer to the right edge and every
-        // translate would be measured from the wrong corner.
+        // translate would be measured from the wrong corner. rtl-allow-physical
         className="invisible absolute left-0 top-0 will-change-transform"
       >
         {children}

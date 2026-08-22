@@ -7,6 +7,20 @@ import type { CapacitorConfig } from '@capacitor/cli'
 // snapshot instead.
 const liveReloadUrl = process.env.CAP_LIVE_RELOAD_URL
 
+// Set by `npm run cap:sync:android:dev`. A BUNDLED dev build is served from
+// https://localhost (Capacitor's androidScheme default), so a plain http://
+// backend is refused by the webview before it reaches the network:
+//   "Mixed Content: ... requested an insecure resource
+//    'http://10.0.2.2:4000/auth/signup'. This request has been blocked"
+// It reads as "no connection" in the app, which sends you looking at CORS and
+// the emulator's network — neither of which is involved.
+//
+// Deliberately NOT unconditional: production points at an https API
+// (.env.production), where allowing mixed content would only weaken the app.
+// This is the bundled-build sibling of the `cleartext` concession below, which
+// covers live-reload only.
+const androidDevHttp = process.env.KITTO_ANDROID_DEV_HTTP === '1'
+
 const config: CapacitorConfig = {
   // Must be globally unique across the App Store — `com.lifepilot.app` was
   // already registered to another account, so a Personal Team could not claim
@@ -26,6 +40,7 @@ const config: CapacitorConfig = {
         server: { url: liveReloadUrl, cleartext: true },
       }
     : {}),
+  ...(androidDevHttp ? { android: { allowMixedContent: true } } : {}),
 }
 
 export default config

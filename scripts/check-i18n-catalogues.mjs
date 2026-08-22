@@ -35,6 +35,9 @@ const SAME_IN_BOTH = new Set([
   'profile.email.placeholder',
   // Nothing but placeholders and an en dash — there is no word in it to translate.
   'matters.range.between',
+  // A bare {time}. The chip is the clock reading and nothing else; the digits
+  // are localised by the formatter that produces the value, not here.
+  'uncertainty.chip.at',
 ])
 
 function flatten(value, prefix = '') {

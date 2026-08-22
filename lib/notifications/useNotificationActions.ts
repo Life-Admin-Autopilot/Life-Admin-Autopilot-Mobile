@@ -2,12 +2,13 @@
 
 import { useEffect } from 'react'
 import { LocalNotifications } from '@capacitor/local-notifications'
+import { PushNotifications } from '@capacitor/push-notifications'
 import { Capacitor } from '@capacitor/core'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/queries/keys'
-import { REMINDER_ACTIONS, registerNotificationActions } from './actionTypes'
+import { REMINDER_ACTION_TYPE, REMINDER_ACTIONS, registerNotificationActions } from './actionTypes'
 import { registerPushDevice } from './registerPushDevice'
 import { requestNotificationPermission, setServerDelivery, syncReminders } from './syncReminders'
 
@@ -82,6 +83,56 @@ export function useNotificationActions(): void {
         return
       }
       listeners.push(handle)
+
+      // A push that lands while the app is IN THE FOREGROUND is handed to the
+      // app instead of being posted to the tray — that is Android's behaviour,
+      // not a bug — and until this existed nothing was subscribed, so logcat
+      // read "No listeners found for event pushNotificationReceived" and the
+      // reminder was simply lost.
+      //
+      // There is no second chance for it either: setServerDelivery(true) above
+      // has already switched local scheduling off so the two channels cannot
+      // double-buzz, which leaves the foreground case with no delivery path at
+      // all. Re-posting it locally is that path.
+      const pushHandle = await PushNotifications.addListener(
+        'pushNotificationReceived',
+        (notification) => {
+          // No `schedule` field: LocalNotifications posts it immediately.
+          // REMINDER_ACTION_TYPE is reused so Done / Not today behave exactly as
+          // they do on a backgrounded reminder — the listener above handles both.
+          void LocalNotifications.schedule({
+            notifications: [
+              {
+                // Notification ids are a 32-bit int. Seconds since epoch stays
+                // inside that and cannot collide with stableId(), which hashes
+                // a "<taskId>:<epoch>" string rather than counting time.
+                id: Math.floor(Date.now() / 1000) % 2_147_483_647,
+                title: notification.title ?? '',
+                body: notification.body ?? '',
+                // The same drawable the FCM path gets from the
+                // default_notification_icon meta-data that
+                // scripts/patch-android-manifest.mjs writes. Without it Android
+                // falls back to the launcher icon and redraws it from its alpha
+                // alone, so the two channels show visibly different marks for
+                // what is the same reminder.
+                smallIcon: 'ic_stat_kitto',
+                actionTypeId: REMINDER_ACTION_TYPE,
+                extra: { taskId: notification.data?.taskId },
+              },
+            ],
+          })
+
+          // The matter it refers to just changed state server-side, and the
+          // open app is showing the version from before the reminder fired.
+          void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all })
+        },
+      )
+      if (cancelled) {
+        void pushHandle.remove()
+        return
+      }
+      listeners.push(pushHandle)
+
       await syncReminders()
     }
 
