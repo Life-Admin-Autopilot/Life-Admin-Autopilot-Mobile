@@ -68,7 +68,23 @@ async function invalidateAfterTools(
 ): Promise<void> {
   // queryTasks reads; it never invalidates anything.
   const mutating = [...executed].filter((name) => name !== 'queryTasks')
-  if (mutating.length === 0) return
+
+  // THE DEFAULT IS TO INVALIDATE. Skipping needs positive evidence that the turn
+  // only read — which means a resolved name, and every resolved name being
+  // `queryTasks`.
+  //
+  // It used to be the other way round: an empty set meant "nothing happened", so
+  // a turn whose tool events never reached the client invalidated nothing. The
+  // chat said the matter was created, and it had been — but the list stayed
+  // inside its 30-second cache with nothing marking it stale, so it only appeared
+  // after a full reload built a new QueryClient. Reported exactly that way.
+  //
+  // The client cannot be sure what a turn did: the tool frames cross Langflow and
+  // its translator before reaching here. So it stops guessing "nothing" and pays
+  // one refetch instead — trivial beside the model call that just happened, and
+  // the alternative is silently showing data we know may be stale.
+  const knownReadOnly = executed.size > 0 && mutating.length === 0
+  if (knownReadOnly) return
 
   const jobs = [
     qc.invalidateQueries({ queryKey: queryKeys.tasks.all }),
@@ -281,7 +297,12 @@ export function useAskAi(): UseAskAiResult {
         await qc.invalidateQueries({ queryKey: queryKeys.ai.quota() })
         await invalidateAfterTools(qc, executed)
       } catch (err: unknown) {
-        if (controller.signal.aborted) return
+        if (controller.signal.aborted) {
+          // Walking away does not un-write what already ran. This used to return
+          // first, so a turn abandoned mid-reply left its matters invisible.
+          void invalidateAfterTools(qc, executed)
+          return
+        }
         const message =
           err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err)
         setError(message)
@@ -410,7 +431,11 @@ export function useAskAi(): UseAskAiResult {
         await qc.invalidateQueries({ queryKey: queryKeys.ai.quota() })
         await invalidateAfterTools(qc, executed)
       } catch (err: unknown) {
-        if (controller.signal.aborted) return
+        if (controller.signal.aborted) {
+          // Same reason as the ask path: the wipe may already have run.
+          void invalidateAfterTools(qc, executed)
+          return
+        }
         const message =
           err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err)
         setError(message)
